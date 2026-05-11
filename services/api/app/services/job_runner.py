@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -5,6 +6,8 @@ from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.version_store import VersionStore
 from services.workers.cad_worker.openvsp_generator.backend import CadBackend, FakeCadBackend
 from services.workers.cad_worker.openvsp_generator.generate_aircraft import generate_aircraft
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -27,8 +30,7 @@ class JobRunner:
 
     def generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
         job_id = str(uuid4())
-        version_no = self.store.next_version_no(design_id)
-        output_dir = self.store.version_dir(design_id, version_no)
+        version_no, output_dir = self.store.create_version_dir(design_id)
         job = JobRecord(
             id=job_id,
             design_id=design_id,
@@ -48,6 +50,7 @@ class JobRunner:
             job.current_step = "ready"
             job.files = {key: str(path) for key, path in result.files.items()}
         except Exception as exc:
+            logger.exception("Generation job failed for design_id=%s version_no=%s", design_id, version_no)
             job.status = "failed"
             job.current_step = "failed"
             job.error_message = str(exc)

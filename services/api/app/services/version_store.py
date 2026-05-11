@@ -1,22 +1,48 @@
 import json
+import re
+import threading
 from pathlib import Path
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.spec_io import dump_aircraft_spec
 
+_DESIGN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
 
 class VersionStore:
     def __init__(self, root: Path = Path("storage")) -> None:
         self.root = root
+        self._lock = threading.Lock()
+
+    def _validate_design_id(self, design_id: str) -> str:
+        if not _DESIGN_ID_PATTERN.fullmatch(design_id):
+            raise ValueError("design_id must match ^[A-Za-z0-9_-]+$")
+        return design_id
 
     def next_version_no(self, design_id: str) -> int:
+        design_id = self._validate_design_id(design_id)
         versions_root = self.root / "designs" / design_id / "versions"
         if not versions_root.exists():
             return 1
         existing = [int(path.name) for path in versions_root.iterdir() if path.is_dir() and path.name.isdigit()]
         return max(existing, default=0) + 1
 
+    def create_version_dir(self, design_id: str) -> tuple[int, Path]:
+        design_id = self._validate_design_id(design_id)
+        versions_root = self.root / "designs" / design_id / "versions"
+        with self._lock:
+            versions_root.mkdir(parents=True, exist_ok=True)
+            version_no = self.next_version_no(design_id)
+            while True:
+                path = versions_root / str(version_no)
+                try:
+                    path.mkdir(exist_ok=False)
+                    return version_no, path
+                except FileExistsError:
+                    version_no += 1
+
     def version_dir(self, design_id: str, version_no: int) -> Path:
+        design_id = self._validate_design_id(design_id)
         return self.root / "designs" / design_id / "versions" / str(version_no)
 
     def write_spec(self, design_id: str, version_no: int, spec: AircraftSpec) -> Path:
