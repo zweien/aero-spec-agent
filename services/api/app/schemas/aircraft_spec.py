@@ -6,10 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 Source = Literal["user", "inferred", "rule_default", "system_default"]
 
 
-class Scalar(BaseModel):
+class ScalarBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    value: float | int | str
     unit: str | None = None
     source: Source
     confidence: float = Field(ge=0.0, le=1.0)
@@ -17,10 +16,25 @@ class Scalar(BaseModel):
     source_text: str | None = None
 
     @model_validator(mode="after")
-    def user_values_need_high_confidence(self) -> "Scalar":
+    def user_values_need_high_confidence(self) -> "ScalarBase":
         if self.source == "user" and self.confidence < 0.7:
             raise ValueError("user supplied values must have confidence >= 0.7")
         return self
+
+
+class NumericScalar(ScalarBase):
+    value: float
+
+
+class IntegerScalar(ScalarBase):
+    value: int
+
+
+class TextScalar(ScalarBase):
+    value: str
+
+
+Scalar = NumericScalar | IntegerScalar | TextScalar
 
 
 class Aircraft(BaseModel):
@@ -34,41 +48,41 @@ class Aircraft(BaseModel):
 class Mission(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    cruise_speed: Scalar | None = None
-    payload: Scalar | None = None
-    priority: Scalar | None = None
+    cruise_speed: NumericScalar | None = None
+    payload: NumericScalar | None = None
+    priority: TextScalar | None = None
 
 
 class Fuselage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    length: Scalar
-    max_diameter: Scalar | None = None
+    length: NumericScalar
+    max_diameter: NumericScalar | None = None
 
 
 class Wing(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    position: Scalar
-    span: Scalar
-    root_chord: Scalar
-    tip_chord: Scalar
-    sweep: Scalar | None = None
-    dihedral: Scalar | None = None
-    airfoil: Scalar | None = None
+    position: TextScalar
+    span: NumericScalar
+    root_chord: NumericScalar
+    tip_chord: NumericScalar
+    sweep: NumericScalar | None = None
+    dihedral: NumericScalar | None = None
+    airfoil: TextScalar | None = None
 
 
 class Tail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: Scalar
+    type: TextScalar
 
 
 class Engine(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    count: Scalar
-    position: Scalar | None = None
+    count: IntegerScalar
+    position: TextScalar | None = None
 
 
 class AircraftSpec(BaseModel):
