@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, model_validator
 
 
 Source = Literal["user", "inferred", "rule_default", "system_default"]
@@ -23,15 +23,15 @@ class ScalarBase(BaseModel):
 
 
 class NumericScalar(ScalarBase):
-    value: float
+    value: StrictFloat | StrictInt
 
 
 class IntegerScalar(ScalarBase):
-    value: int
+    value: StrictInt
 
 
 class TextScalar(ScalarBase):
-    value: str
+    value: StrictStr
 
 
 Scalar = NumericScalar | IntegerScalar | TextScalar

@@ -70,3 +70,21 @@ def test_rejects_text_engine_count_value():
 
     with pytest.raises(ValueError, match="value"):
         load_aircraft_spec(data)
+
+
+@pytest.mark.parametrize("invalid_value", ["12", True])
+def test_rejects_non_numeric_wing_span_values(invalid_value):
+    data = deepcopy(valid_spec_data())
+    data["wing"]["span"]["value"] = invalid_value
+
+    with pytest.raises(ValueError, match="value"):
+        load_aircraft_spec(data)
+
+
+@pytest.mark.parametrize("invalid_value", ["2", 2.0, True])
+def test_rejects_non_integer_engine_count_values(invalid_value):
+    data = deepcopy(valid_spec_data())
+    data["engine"]["count"]["value"] = invalid_value
+
+    with pytest.raises(ValueError, match="value"):
+        load_aircraft_spec(data)
