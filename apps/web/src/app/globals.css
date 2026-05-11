@@ -27,6 +27,11 @@ button {
   font-weight: 600;
 }
 
+button:disabled {
+  background: #8da7f5;
+  cursor: not-allowed;
+}
+
 textarea {
   min-height: 180px;
   resize: vertical;
@@ -105,6 +110,12 @@ textarea {
 
 .message.assistant {
   background: #eef3ff;
+}
+
+.error-message {
+  overflow-wrap: anywhere;
+  background: #fff1f0;
+  color: #9f1d1d;
 }
 
 .viewer-panel {

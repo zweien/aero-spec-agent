@@ -18,6 +18,8 @@ type VersionResponse = {
   files: string[];
 };
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
 const EXAMPLE_SPEC = `schema_version: "0.1"
 aircraft:
   name: twin_engine_uav
@@ -73,6 +75,8 @@ engine:
 `;
 
 export default function Home() {
+  const [error, setError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [job, setJob] = useState<JobResponse | null>(null);
   const [files, setFiles] = useState<string[]>([]);
 
@@ -87,18 +91,37 @@ export default function Home() {
   );
 
   async function handleGenerate() {
-    const response = await fetch("http://localhost:8000/api/designs/demo/generate", {
-      method: "POST",
-      body: EXAMPLE_SPEC,
-    });
-    const nextJob = (await response.json()) as JobResponse;
-    setJob(nextJob);
+    setError(null);
+    setIsGenerating(true);
 
-    const versionResponse = await fetch(
-      `http://localhost:8000/api/designs/demo/versions/${nextJob.version_no}`
-    );
-    const version = (await versionResponse.json()) as VersionResponse;
-    setFiles(version.files);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/designs/demo/generate`, {
+        method: "POST",
+        body: EXAMPLE_SPEC,
+      });
+
+      if (!response.ok) {
+        throw new Error(`生成请求失败：HTTP ${response.status}`);
+      }
+
+      const nextJob = (await response.json()) as JobResponse;
+      setJob(nextJob);
+
+      const versionResponse = await fetch(
+        `${API_BASE_URL}/api/designs/demo/versions/${nextJob.version_no}`
+      );
+
+      if (!versionResponse.ok) {
+        throw new Error(`版本请求失败：HTTP ${versionResponse.status}`);
+      }
+
+      const version = (await versionResponse.json()) as VersionResponse;
+      setFiles(version.files);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "生成失败");
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   return (
@@ -108,7 +131,7 @@ export default function Home() {
         <span>固定翼无人机概念设计 MVP</span>
       </nav>
       <div className="main-grid">
-        <ChatPanel onGenerate={handleGenerate} />
+        <ChatPanel error={error} isGenerating={isGenerating} onGenerate={handleGenerate} />
         <CadViewer glbPath={job?.files.glb} />
         <ParameterPanel parameters={parameters} />
       </div>
