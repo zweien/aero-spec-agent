@@ -17,6 +17,25 @@ textarea {
   font: inherit;
 }
 
+button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 6px;
+  background: #1f5eff;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+textarea {
+  min-height: 180px;
+  resize: vertical;
+  border: 1px solid #d9dde3;
+  border-radius: 6px;
+  padding: 12px;
+  color: #15171a;
+}
+
 .workbench {
   display: grid;
   grid-template-rows: 56px 1fr 52px;
@@ -38,6 +57,22 @@ textarea {
   border-bottom: 0;
   color: #4c5563;
   font-size: 13px;
+  overflow: hidden;
+}
+
+.bottom-panel span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(240px, 320px);
+  gap: 16px;
+  min-height: 0;
+  padding: 16px;
 }
 
 .panel {
@@ -45,4 +80,108 @@ textarea {
   min-height: 0;
   background: #ffffff;
   padding: 16px;
+  border: 1px solid #d9dde3;
+  border-radius: 8px;
+}
+
+.panel header {
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.chat-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.message {
+  overflow-wrap: anywhere;
+  border-radius: 6px;
+  padding: 12px;
+  color: #394150;
+  line-height: 1.5;
+}
+
+.message.assistant {
+  background: #eef3ff;
+}
+
+.viewer-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.viewer-surface {
+  display: grid;
+  place-items: center;
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px dashed #b8c0cc;
+  border-radius: 8px;
+  background: #10141d;
+  color: #dbe5f5;
+  padding: 20px;
+  text-align: center;
+}
+
+.viewer-surface span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.parameter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+}
+
+.parameter-row {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border-bottom: 1px solid #edf0f4;
+  padding-bottom: 10px;
+}
+
+.parameter-row span,
+.parameter-row strong,
+.parameter-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.parameter-row strong {
+  color: #15171a;
+}
+
+.parameter-row small {
+  color: #657082;
+}
+
+@media (max-width: 960px) {
+  .workbench {
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .topbar,
+  .bottom-panel {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 16px;
+  }
+
+  .bottom-panel span {
+    white-space: normal;
+  }
+
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .viewer-surface {
+    min-height: 300px;
+  }
 }
