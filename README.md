@@ -41,7 +41,11 @@ curl -sS -X POST \
   http://127.0.0.1:8000/api/designs/demo/generate
 ```
 
-Expected generation result: `status` is `ready`, `progress` is `100`, and files are written under `storage/designs/demo/versions/1`.
+Expected generation result: `status` is `ready`, `progress` is `100`, and files are written under `storage/designs/demo/versions/{version_no}`. With clean demo storage, the first run writes `storage/designs/demo/versions/1`; repeated runs increment to `versions/2`, `versions/3`, and so on. To reset the demo counter before local verification, remove only the demo storage directory:
+
+```bash
+rm -rf storage/designs/demo
+```
 
 Install and build the frontend:
 
