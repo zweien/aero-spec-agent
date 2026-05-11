@@ -6,3 +6,4 @@ storage/
 node_modules/
 .next/
 dist/
+.gstack/

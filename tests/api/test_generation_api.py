@@ -37,3 +37,16 @@ def test_version_endpoint_returns_files(client: TestClient):
     assert response.status_code == 200
     assert "aircraft_spec.yaml" in response.json()["files"]
     assert response.json()["validation_report"]["engine.count"]["status"] == "pass"
+
+
+def test_cors_allows_configured_local_web_origin(client: TestClient):
+    response = client.options(
+        "/api/designs/demo/generate",
+        headers={
+            "Origin": "http://127.0.0.1:3900",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3900"
