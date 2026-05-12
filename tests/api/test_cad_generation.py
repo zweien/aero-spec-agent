@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from services.api.app.services.spec_io import load_aircraft_spec
@@ -13,5 +14,12 @@ def test_fake_backend_writes_expected_artifacts(tmp_path: Path):
     assert result.files["vsp3"].name == "aircraft.vsp3"
     assert result.files["step"].name == "aircraft.step"
     assert result.files["glb"].name == "aircraft.glb"
+    assert set(result.files) == {"vsp3", "step", "glb", "validation_report", "generation_log"}
     assert result.validation_report["wing.span"]["status"] == "pass"
     assert result.validation_report["engine.count"]["actual"] == 2
+    assert result.validation_report["backend"] == "fake"
+    assert result.validation_report["vsp3"]["exists"] is True
+
+    validation_report = json.loads((tmp_path / "validation_report.json").read_text(encoding="utf-8"))
+    assert validation_report["backend"] == "fake"
+    assert validation_report["vsp3"]["exists"] is True

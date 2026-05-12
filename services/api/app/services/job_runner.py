@@ -4,7 +4,8 @@ from uuid import uuid4
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.version_store import VersionStore
-from services.workers.cad_worker.openvsp_generator.backend import CadBackend, FakeCadBackend
+from services.workers.cad_worker.openvsp_generator.backend import CadBackend
+from services.workers.cad_worker.openvsp_generator.backend_factory import get_cad_backend
 from services.workers.cad_worker.openvsp_generator.generate_aircraft import generate_aircraft
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ class JobRecord:
 class JobRunner:
     def __init__(self, store: VersionStore, backend: CadBackend | None = None) -> None:
         self.store = store
-        self.backend = backend or FakeCadBackend()
+        self.backend = backend or get_cad_backend()
         self.jobs: dict[str, JobRecord] = {}
 
     def generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:

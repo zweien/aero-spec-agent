@@ -1,0 +1,2 @@
+class CadGenerationError(RuntimeError):
+    pass
