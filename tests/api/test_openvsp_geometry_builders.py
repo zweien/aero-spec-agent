@@ -190,11 +190,14 @@ def test_create_tail_returns_horizontal_and_vertical_tail_results():
         "span": pytest.approx(1.92),
         "chord": pytest.approx(0.66),
         "x_rel_location": pytest.approx(2.94),
+        "x_rel_rotation": 90.0,
     }
     assert ("AddGeom", "WING", "", "geom-1") in fake_vsp.calls
     assert ("AddGeom", "WING", "", "geom-2") in fake_vsp.calls
     assert fake_vsp.value_for("geom-1", "TotalSpan", "WingGeom") == pytest.approx(3.36)
     assert fake_vsp.value_for("geom-2", "TotalSpan", "WingGeom") == pytest.approx(1.92)
+    assert ("FindParm", "geom-2", "X_Rel_Rotation", "XForm") in fake_vsp.calls
+    assert fake_vsp.value_for("geom-2", "X_Rel_Rotation", "XForm") == 90.0
 
 
 def test_create_engine_nacelles_returns_two_symmetric_pods():

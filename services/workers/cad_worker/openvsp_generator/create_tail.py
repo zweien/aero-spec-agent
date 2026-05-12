@@ -21,6 +21,7 @@ def create_tail(adapter: Any, spec: Any) -> list[GeometryBuildResult]:
         span=wing_span * 0.16,
         chord=root_chord * 0.55,
         x_rel_location=tail_x,
+        x_rel_rotation=90.0,
     )
 
     return [horizontal_tail, vertical_tail]
@@ -33,6 +34,7 @@ def _create_tail_surface(
     span: float,
     chord: float,
     x_rel_location: float,
+    x_rel_rotation: float | None = None,
 ) -> GeometryBuildResult:
     geom_id = adapter.add_geom("WING")
 
@@ -40,13 +42,19 @@ def _create_tail_surface(
     adapter.set_param(geom_id, "Root_Chord", "XSec_1", chord)
     adapter.set_param(geom_id, "Tip_Chord", "XSec_1", chord)
     adapter.set_param(geom_id, "X_Rel_Location", "XForm", x_rel_location)
+    if x_rel_rotation is not None:
+        adapter.set_param(geom_id, "X_Rel_Rotation", "XForm", x_rel_rotation)
+
+    applied_parameters: dict[str, object] = {
+        "span": span,
+        "chord": chord,
+        "x_rel_location": x_rel_location,
+    }
+    if x_rel_rotation is not None:
+        applied_parameters["x_rel_rotation"] = x_rel_rotation
 
     return GeometryBuildResult(
         name=name,
         geom_id=geom_id,
-        applied_parameters={
-            "span": span,
-            "chord": chord,
-            "x_rel_location": x_rel_location,
-        },
+        applied_parameters=applied_parameters,
     )
