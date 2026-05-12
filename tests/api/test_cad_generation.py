@@ -24,7 +24,13 @@ def test_fake_backend_writes_expected_artifacts(tmp_path: Path):
     }
     assert result.validation_report["backend_name"] == "fake"
     assert result.validation_report["vsp3"]["exists"] is True
+    assert result.validation_report["vsp3.exists"] == {
+        "expected": True,
+        "actual": True,
+        "status": "pass",
+    }
 
     validation_report = json.loads((tmp_path / "validation_report.json").read_text(encoding="utf-8"))
     assert validation_report["backend"]["actual"] == "fake"
     assert validation_report["vsp3"]["exists"] is True
+    assert validation_report["vsp3.exists"]["status"] == "pass"

@@ -52,6 +52,7 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend)
             validation_report["vsp3"].update(value)
         else:
             validation_report[key] = value
+    validation_report["vsp3.exists"] = verification_entry(True, artifacts.vsp3.exists())
     validation_report["wing.span"] = verification_entry(
         float(spec.wing.span.value),
         wing_span_actual,

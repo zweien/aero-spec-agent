@@ -63,8 +63,10 @@ class OpenVspBackend:
         adapter.write_vsp_file(vsp3)
 
         applied_parameters = _stable_applied_parameters(build_results)
+        vsp3_validation = verify_vsp3_file(vsp3)
         validation = {
-            "vsp3": verify_vsp3_file(vsp3),
+            "vsp3": vsp3_validation,
+            "vsp3.exists": vsp3_validation,
             "wing.span": verification_entry(
                 float(spec.wing.span.value),
                 applied_parameters.get("wing.span"),

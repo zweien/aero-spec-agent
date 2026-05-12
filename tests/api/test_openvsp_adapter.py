@@ -4,7 +4,10 @@ from typing import Any
 
 import pytest
 
-from services.workers.cad_worker.openvsp_generator.errors import CadGenerationError
+from services.workers.cad_worker.openvsp_generator.errors import (
+    CadGenerationError,
+    OpenVspUnavailableError,
+)
 from services.workers.cad_worker.openvsp_generator.openvsp_adapter import OpenVspAdapter
 
 
@@ -98,5 +101,5 @@ def test_adapter_raises_clear_error_when_openvsp_module_is_missing(
     monkeypatch.setattr(importlib, "import_module", fake_import_module)
     adapter = OpenVspAdapter()
 
-    with pytest.raises(CadGenerationError, match="OpenVSP Python bindings"):
+    with pytest.raises(OpenVspUnavailableError, match="OpenVSP Python bindings"):
         adapter.clear_model()

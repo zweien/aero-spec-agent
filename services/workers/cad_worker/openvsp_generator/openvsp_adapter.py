@@ -2,7 +2,10 @@ import importlib
 from pathlib import Path
 from typing import Any
 
-from services.workers.cad_worker.openvsp_generator.errors import CadGenerationError
+from services.workers.cad_worker.openvsp_generator.errors import (
+    CadGenerationError,
+    OpenVspUnavailableError,
+)
 
 
 class OpenVspAdapter:
@@ -15,7 +18,7 @@ class OpenVspAdapter:
             try:
                 self._module = importlib.import_module("openvsp")
             except ModuleNotFoundError as exc:
-                raise CadGenerationError(
+                raise OpenVspUnavailableError(
                     "OpenVSP Python bindings are required. Install OpenVSP with "
                     "Python bindings before using CAD_BACKEND=openvsp."
                 ) from exc

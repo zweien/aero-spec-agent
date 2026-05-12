@@ -98,6 +98,7 @@ def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_only(tmp_path: P
         6.4
     )
     assert artifacts.metadata["validation"]["vsp3"]["status"] == "pass"
+    assert artifacts.metadata["validation"]["vsp3.exists"]["status"] == "pass"
 
 
 def test_openvsp_backend_updates_model_before_writing_vsp3(tmp_path: Path):
@@ -127,6 +128,11 @@ def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(
         "status": "pass",
     }
     assert result.validation_report["backend_name"] == "openvsp"
+    assert result.validation_report["vsp3.exists"] == {
+        "expected": True,
+        "actual": True,
+        "status": "pass",
+    }
     assert result.validation_report["wing.span"]["actual"] == 12.0
     assert result.validation_report["engine.count"]["actual"] == 2
     assert result.generation_log["components"]["fuselage"] == "geom-1"
