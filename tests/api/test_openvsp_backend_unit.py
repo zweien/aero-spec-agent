@@ -1,0 +1,99 @@
+from pathlib import Path
+from typing import Any
+
+from services.api.app.services.spec_io import load_aircraft_spec
+from services.workers.cad_worker.openvsp_generator.backend import OpenVspBackend
+from services.workers.cad_worker.openvsp_generator.generate_aircraft import generate_aircraft
+from tests.api.test_openvsp_geometry_builders import valid_spec_data
+
+
+class FakeOpenVspModule:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Any, ...]] = []
+        self.next_index = 1
+
+    def ClearVSPModel(self) -> None:
+        self.calls.append(("ClearVSPModel",))
+
+    def AddGeom(self, kind: str, parent_id: str) -> str:
+        geom_id = f"geom-{self.next_index}"
+        self.next_index += 1
+        self.calls.append(("AddGeom", kind, parent_id, geom_id))
+        return geom_id
+
+    def FindParm(self, geom_id: str, parm_name: str, group_name: str) -> str:
+        parm_id = f"parm:{geom_id}:{parm_name}:{group_name}"
+        self.calls.append(("FindParm", geom_id, parm_name, group_name))
+        return parm_id
+
+    def SetParmVal(self, parm_id: str, value: float | int | str) -> None:
+        self.calls.append(("SetParmVal", parm_id, value))
+
+    def Update(self) -> None:
+        self.calls.append(("Update",))
+
+    def WriteVSPFile(self, path: str) -> None:
+        self.calls.append(("WriteVSPFile", path))
+        Path(path).write_text("fake openvsp model\n", encoding="utf-8")
+
+
+def _spec():
+    return load_aircraft_spec(valid_spec_data())
+
+
+def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_only(tmp_path: Path):
+    fake_vsp = FakeOpenVspModule()
+
+    artifacts = OpenVspBackend(vsp_module=fake_vsp).generate(_spec(), tmp_path)
+
+    assert artifacts.vsp3.exists()
+    assert artifacts.vsp3.stat().st_size > 0
+    assert artifacts.step is None
+    assert artifacts.glb is None
+    assert artifacts.metadata["backend"] == "openvsp"
+    assert artifacts.metadata["components"] == {
+        "fuselage": "geom-1",
+        "main_wing": "geom-2",
+        "horizontal_tail": "geom-3",
+        "vertical_tail": "geom-4",
+        "left_engine": "geom-5",
+        "right_engine": "geom-6",
+    }
+    assert artifacts.metadata["applied_parameters"]["wing.span"] == 12.0
+    assert artifacts.metadata["applied_parameters"]["wing.root_chord"] == 1.2
+    assert artifacts.metadata["applied_parameters"]["fuselage.length"] == 7.0
+    assert artifacts.metadata["applied_parameters"]["engine.count"] == 2
+    assert artifacts.metadata["validation"]["vsp3"]["status"] == "pass"
+
+
+def test_openvsp_backend_updates_model_before_writing_vsp3(tmp_path: Path):
+    fake_vsp = FakeOpenVspModule()
+
+    OpenVspBackend(vsp_module=fake_vsp).generate(_spec(), tmp_path)
+
+    call_names = [call[0] for call in fake_vsp.calls]
+    assert call_names.index("Update") < call_names.index("WriteVSPFile")
+
+
+def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(
+    tmp_path: Path,
+):
+    fake_vsp = FakeOpenVspModule()
+
+    result = generate_aircraft(
+        spec=_spec(),
+        output_dir=tmp_path,
+        backend=OpenVspBackend(vsp_module=fake_vsp),
+    )
+
+    assert set(result.files) == {"vsp3"}
+    assert result.validation_report["backend"] == {
+        "expected": "openvsp",
+        "actual": "openvsp",
+        "status": "pass",
+    }
+    assert result.validation_report["backend_name"] == "openvsp"
+    assert result.validation_report["wing.span"]["actual"] == 12.0
+    assert result.validation_report["engine.count"]["actual"] == 2
+    assert result.generation_log["components"]["fuselage"] == "geom-1"
+    assert result.generation_log["applied_parameters"]["wing.span"] == 12.0

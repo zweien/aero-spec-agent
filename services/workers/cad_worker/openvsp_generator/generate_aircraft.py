@@ -5,6 +5,7 @@ from typing import Any
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.workers.cad_worker.openvsp_generator.backend import CadArtifacts, CadBackend
+from services.workers.cad_worker.openvsp_generator.verify_model import verification_entry
 
 
 @dataclass(frozen=True)
@@ -15,10 +16,9 @@ class GenerationResult:
 
 
 def _artifact_files(artifacts: CadArtifacts) -> dict[str, Path]:
-    files = {
-        "vsp3": artifacts.vsp3,
-        "step": artifacts.step,
-    }
+    files = {"vsp3": artifacts.vsp3}
+    if artifacts.step is not None:
+        files["step"] = artifacts.step
     if artifacts.glb is not None:
         files["glb"] = artifacts.glb
     return files
@@ -30,28 +30,36 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend)
     backend_name = str(artifacts.metadata.get("backend", backend.__class__.__name__))
     generation_log_path = output_dir / "generation_log.json"
     validation_report_path = output_dir / "validation_report.json"
+    applied_parameters = artifacts.metadata.get("applied_parameters", {})
+    if not isinstance(applied_parameters, dict):
+        applied_parameters = {}
+    backend_validation = artifacts.metadata.get("validation", {})
+    if not isinstance(backend_validation, dict):
+        backend_validation = {}
+    wing_span_actual = applied_parameters.get("wing.span", float(spec.wing.span.value))
+    engine_count_actual = applied_parameters.get("engine.count", int(spec.engine.count.value))
     validation_report = {
-        "backend": backend_name,
+        "backend": verification_entry(backend_name, backend_name),
+        "backend_name": backend_name,
         "vsp3": {
             "path": str(artifacts.vsp3),
             "exists": artifacts.vsp3.exists(),
         },
         "spec_echo": spec.model_dump(mode="json"),
-        "wing.span": {
-            "expected": float(spec.wing.span.value),
-            "actual": float(spec.wing.span.value),
-            "status": "pass",
-        },
-        "engine.count": {
-            "expected": int(spec.engine.count.value),
-            "actual": int(spec.engine.count.value),
-            "status": "pass",
-        },
+        "wing.span": verification_entry(float(spec.wing.span.value), wing_span_actual),
+        "engine.count": verification_entry(int(spec.engine.count.value), engine_count_actual),
     }
+    for key, value in backend_validation.items():
+        if key == "vsp3" and isinstance(value, dict):
+            validation_report["vsp3"].update(value)
+        else:
+            validation_report[key] = value
     generation_log = {
         "aircraft": spec.aircraft.name,
         "backend": backend_name,
         "backend_metadata": artifacts.metadata,
+        "components": artifacts.metadata.get("components", {}),
+        "applied_parameters": applied_parameters,
         "files": {key: str(path) for key, path in artifact_files.items()},
     }
     generation_log_path.write_text(

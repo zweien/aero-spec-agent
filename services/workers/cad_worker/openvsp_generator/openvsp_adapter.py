@@ -46,3 +46,6 @@ class OpenVspAdapter:
 
     def write_vsp_file(self, path: Path) -> None:
         self._vsp.WriteVSPFile(str(path))
+
+    def update(self) -> None:
+        self._vsp.Update()
