@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any
 
 from services.api.app.services.spec_io import load_aircraft_spec
-from services.workers.cad_worker.openvsp_generator.backend import OpenVspBackend
+from services.workers.cad_worker.openvsp_generator.backend import CadArtifacts, OpenVspBackend
 from services.workers.cad_worker.openvsp_generator.generate_aircraft import generate_aircraft
 from tests.api.test_openvsp_geometry_builders import valid_spec_data
 
@@ -97,3 +97,52 @@ def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(
     assert result.validation_report["engine.count"]["actual"] == 2
     assert result.generation_log["components"]["fuselage"] == "geom-1"
     assert result.generation_log["applied_parameters"]["wing.span"] == 12.0
+
+
+def test_generate_aircraft_prefers_applied_parameters_over_backend_validation(
+    tmp_path: Path,
+):
+    class StaleValidationBackend:
+        def generate(self, _spec, output_dir: Path) -> CadArtifacts:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            vsp3 = output_dir / "aircraft.vsp3"
+            vsp3.write_text("fake openvsp model\n", encoding="utf-8")
+            return CadArtifacts(
+                vsp3=vsp3,
+                metadata={
+                    "backend": "openvsp",
+                    "applied_parameters": {
+                        "wing.span": 12.0,
+                        "engine.count": 2,
+                    },
+                    "validation": {
+                        "wing.span": {
+                            "expected": 12.0,
+                            "actual": 99.0,
+                            "status": "fail",
+                        },
+                        "engine.count": {
+                            "expected": 2,
+                            "actual": 99,
+                            "status": "fail",
+                        },
+                    },
+                },
+            )
+
+    result = generate_aircraft(
+        spec=_spec(),
+        output_dir=tmp_path,
+        backend=StaleValidationBackend(),
+    )
+
+    assert result.validation_report["wing.span"] == {
+        "expected": 12.0,
+        "actual": 12.0,
+        "status": "pass",
+    }
+    assert result.validation_report["engine.count"] == {
+        "expected": 2,
+        "actual": 2,
+        "status": "pass",
+    }

@@ -46,14 +46,20 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend)
             "exists": artifacts.vsp3.exists(),
         },
         "spec_echo": spec.model_dump(mode="json"),
-        "wing.span": verification_entry(float(spec.wing.span.value), wing_span_actual),
-        "engine.count": verification_entry(int(spec.engine.count.value), engine_count_actual),
     }
     for key, value in backend_validation.items():
         if key == "vsp3" and isinstance(value, dict):
             validation_report["vsp3"].update(value)
         else:
             validation_report[key] = value
+    validation_report["wing.span"] = verification_entry(
+        float(spec.wing.span.value),
+        wing_span_actual,
+    )
+    validation_report["engine.count"] = verification_entry(
+        int(spec.engine.count.value),
+        engine_count_actual,
+    )
     generation_log = {
         "aircraft": spec.aircraft.name,
         "backend": backend_name,
