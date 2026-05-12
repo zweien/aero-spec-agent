@@ -26,7 +26,7 @@ class JobRecord:
 class JobRunner:
     def __init__(self, store: VersionStore, backend: CadBackend | None = None) -> None:
         self.store = store
-        self.backend = backend or get_cad_backend()
+        self.backend = backend if backend is not None else get_cad_backend()
         self.jobs: dict[str, JobRecord] = {}
 
     def generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:

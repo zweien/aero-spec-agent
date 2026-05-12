@@ -62,9 +62,4 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend)
         json.dumps(validation_report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    files = {
-        **artifact_files,
-        "validation_report": validation_report_path,
-        "generation_log": generation_log_path,
-    }
-    return GenerationResult(files=files, generation_log=generation_log, validation_report=validation_report)
+    return GenerationResult(files=artifact_files, generation_log=generation_log, validation_report=validation_report)

@@ -14,7 +14,7 @@ def test_fake_backend_writes_expected_artifacts(tmp_path: Path):
     assert result.files["vsp3"].name == "aircraft.vsp3"
     assert result.files["step"].name == "aircraft.step"
     assert result.files["glb"].name == "aircraft.glb"
-    assert set(result.files) == {"vsp3", "step", "glb", "validation_report", "generation_log"}
+    assert set(result.files) == {"vsp3", "step", "glb"}
     assert result.validation_report["wing.span"]["status"] == "pass"
     assert result.validation_report["engine.count"]["actual"] == 2
     assert result.validation_report["backend"] == "fake"
