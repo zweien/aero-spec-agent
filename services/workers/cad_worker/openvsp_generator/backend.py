@@ -119,7 +119,14 @@ def _stable_applied_parameters(
                 applied,
                 result.name,
                 result,
-                ["x_rel_location", "y_rel_location", "z_rel_location", "length", "diameter"],
+                [
+                    "x_rel_location",
+                    "y_rel_location",
+                    "z_rel_location",
+                    "length",
+                    "diameter",
+                    "fineness_ratio",
+                ],
             )
         else:
             _copy_parameters(

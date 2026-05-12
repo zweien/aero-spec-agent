@@ -78,20 +78,48 @@ def valid_spec_data() -> dict[str, Any]:
 
 
 class FakeOpenVspModule:
+    _ALLOWED_PARAMETERS = {
+        "FUSELAGE": {
+            ("Length", "Design"),
+            ("Diameter", "Design"),
+        },
+        "WING": {
+            ("TotalSpan", "WingGeom"),
+            ("Root_Chord", "XSec_1"),
+            ("Tip_Chord", "XSec_1"),
+            ("Sweep", "XSec_1"),
+            ("Dihedral", "XSec_1"),
+            ("X_Rel_Location", "XForm"),
+            ("X_Rel_Rotation", "XForm"),
+            ("Z_Rel_Location", "XForm"),
+        },
+        "POD": {
+            ("X_Rel_Location", "XForm"),
+            ("Y_Rel_Location", "XForm"),
+            ("Z_Rel_Location", "XForm"),
+            ("Length", "Design"),
+            ("FineRatio", "Design"),
+        },
+    }
+
     def __init__(self) -> None:
         self.calls: list[tuple[Any, ...]] = []
+        self.geom_kinds: dict[str, str] = {}
         self.next_index = 1
 
     def AddGeom(self, kind: str, parent_id: str) -> str:
         geom_id = f"geom-{self.next_index}"
         self.next_index += 1
+        self.geom_kinds[geom_id] = kind
         self.calls.append(("AddGeom", kind, parent_id, geom_id))
         return geom_id
 
     def FindParm(self, geom_id: str, parm_name: str, group_name: str) -> str:
-        parm_id = f"parm:{geom_id}:{parm_name}:{group_name}"
         self.calls.append(("FindParm", geom_id, parm_name, group_name))
-        return parm_id
+        kind = self.geom_kinds[geom_id]
+        if (parm_name, group_name) not in self._ALLOWED_PARAMETERS[kind]:
+            return ""
+        return f"parm:{geom_id}:{parm_name}:{group_name}"
 
     def SetParmVal(self, parm_id: str, value: float | int | str) -> None:
         self.calls.append(("SetParmVal", parm_id, value))
@@ -212,10 +240,16 @@ def test_create_engine_nacelles_returns_two_symmetric_pods():
     assert right_engine.applied_parameters["engine.count"] == 2
     assert left_engine.applied_parameters["y_rel_location"] == pytest.approx(-3.0)
     assert right_engine.applied_parameters["y_rel_location"] == pytest.approx(3.0)
+    assert left_engine.applied_parameters["diameter"] == pytest.approx(0.375)
+    assert right_engine.applied_parameters["diameter"] == pytest.approx(0.375)
+    assert left_engine.applied_parameters["fineness_ratio"] == pytest.approx(3.2)
+    assert right_engine.applied_parameters["fineness_ratio"] == pytest.approx(3.2)
     assert fake_vsp.value_for("geom-1", "Y_Rel_Location", "XForm") == pytest.approx(-3.0)
     assert fake_vsp.value_for("geom-2", "Y_Rel_Location", "XForm") == pytest.approx(3.0)
     assert fake_vsp.value_for("geom-1", "Length", "Design") == pytest.approx(1.2)
-    assert fake_vsp.value_for("geom-2", "Diameter", "Design") == pytest.approx(0.375)
+    assert fake_vsp.value_for("geom-2", "FineRatio", "Design") == pytest.approx(3.2)
+    assert ("FindParm", "geom-2", "FineRatio", "Design") in fake_vsp.calls
+    assert ("FindParm", "geom-2", "Diameter", "Design") not in fake_vsp.calls
 
 
 def test_create_engine_nacelles_rejects_unsupported_engine_count():

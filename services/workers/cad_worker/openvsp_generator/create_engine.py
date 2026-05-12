@@ -61,12 +61,13 @@ def _create_engine_nacelle(
     diameter: float,
 ) -> GeometryBuildResult:
     geom_id = adapter.add_geom("POD")
+    fineness_ratio = length / diameter if diameter else 0.0
 
     adapter.set_param(geom_id, "X_Rel_Location", "XForm", x_rel_location)
     adapter.set_param(geom_id, "Y_Rel_Location", "XForm", y_rel_location)
     adapter.set_param(geom_id, "Z_Rel_Location", "XForm", z_rel_location)
     adapter.set_param(geom_id, "Length", "Design", length)
-    adapter.set_param(geom_id, "Diameter", "Design", diameter)
+    adapter.set_param(geom_id, "FineRatio", "Design", fineness_ratio)
 
     return GeometryBuildResult(
         name=name,
@@ -78,5 +79,6 @@ def _create_engine_nacelle(
             "z_rel_location": z_rel_location,
             "length": length,
             "diameter": diameter,
+            "fineness_ratio": fineness_ratio,
         },
     )

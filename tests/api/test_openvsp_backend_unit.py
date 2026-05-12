@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from services.api.app.services.spec_io import load_aircraft_spec
 from services.workers.cad_worker.openvsp_generator.backend import CadArtifacts, OpenVspBackend
 from services.workers.cad_worker.openvsp_generator.generate_aircraft import generate_aircraft
@@ -8,8 +10,33 @@ from tests.api.test_openvsp_geometry_builders import valid_spec_data
 
 
 class FakeOpenVspModule:
+    _ALLOWED_PARAMETERS = {
+        "FUSELAGE": {
+            ("Length", "Design"),
+            ("Diameter", "Design"),
+        },
+        "WING": {
+            ("TotalSpan", "WingGeom"),
+            ("Root_Chord", "XSec_1"),
+            ("Tip_Chord", "XSec_1"),
+            ("Sweep", "XSec_1"),
+            ("Dihedral", "XSec_1"),
+            ("X_Rel_Location", "XForm"),
+            ("X_Rel_Rotation", "XForm"),
+            ("Z_Rel_Location", "XForm"),
+        },
+        "POD": {
+            ("X_Rel_Location", "XForm"),
+            ("Y_Rel_Location", "XForm"),
+            ("Z_Rel_Location", "XForm"),
+            ("Length", "Design"),
+            ("FineRatio", "Design"),
+        },
+    }
+
     def __init__(self) -> None:
         self.calls: list[tuple[Any, ...]] = []
+        self.geom_kinds: dict[str, str] = {}
         self.next_index = 1
 
     def ClearVSPModel(self) -> None:
@@ -18,13 +45,16 @@ class FakeOpenVspModule:
     def AddGeom(self, kind: str, parent_id: str) -> str:
         geom_id = f"geom-{self.next_index}"
         self.next_index += 1
+        self.geom_kinds[geom_id] = kind
         self.calls.append(("AddGeom", kind, parent_id, geom_id))
         return geom_id
 
     def FindParm(self, geom_id: str, parm_name: str, group_name: str) -> str:
-        parm_id = f"parm:{geom_id}:{parm_name}:{group_name}"
         self.calls.append(("FindParm", geom_id, parm_name, group_name))
-        return parm_id
+        kind = self.geom_kinds[geom_id]
+        if (parm_name, group_name) not in self._ALLOWED_PARAMETERS[kind]:
+            return ""
+        return f"parm:{geom_id}:{parm_name}:{group_name}"
 
     def SetParmVal(self, parm_id: str, value: float | int | str) -> None:
         self.calls.append(("SetParmVal", parm_id, value))
@@ -63,6 +93,10 @@ def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_only(tmp_path: P
     assert artifacts.metadata["applied_parameters"]["wing.root_chord"] == 1.2
     assert artifacts.metadata["applied_parameters"]["fuselage.length"] == 7.0
     assert artifacts.metadata["applied_parameters"]["engine.count"] == 2
+    assert artifacts.metadata["applied_parameters"]["left_engine.diameter"] == 0.375
+    assert artifacts.metadata["applied_parameters"]["left_engine.fineness_ratio"] == pytest.approx(
+        3.2
+    )
     assert artifacts.metadata["validation"]["vsp3"]["status"] == "pass"
 
 
