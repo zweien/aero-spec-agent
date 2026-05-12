@@ -95,7 +95,7 @@ def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_only(tmp_path: P
     assert artifacts.metadata["applied_parameters"]["engine.count"] == 2
     assert artifacts.metadata["applied_parameters"]["left_engine.diameter"] == 0.375
     assert artifacts.metadata["applied_parameters"]["left_engine.fineness_ratio"] == pytest.approx(
-        3.2
+        6.4
     )
     assert artifacts.metadata["validation"]["vsp3"]["status"] == "pass"
 

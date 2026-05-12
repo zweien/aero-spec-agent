@@ -5,6 +5,7 @@ import pytest
 
 from services.api.app.services.spec_io import load_aircraft_spec
 from services.workers.cad_worker.openvsp_generator.create_engine import (
+    _create_engine_nacelle,
     create_engine_nacelles,
 )
 from services.workers.cad_worker.openvsp_generator.create_fuselage import (
@@ -12,7 +13,10 @@ from services.workers.cad_worker.openvsp_generator.create_fuselage import (
 )
 from services.workers.cad_worker.openvsp_generator.create_tail import create_tail
 from services.workers.cad_worker.openvsp_generator.create_wing import create_main_wing
-from services.workers.cad_worker.openvsp_generator.errors import UnsupportedGeometryError
+from services.workers.cad_worker.openvsp_generator.errors import (
+    CadGenerationError,
+    UnsupportedGeometryError,
+)
 from services.workers.cad_worker.openvsp_generator.openvsp_adapter import OpenVspAdapter
 
 
@@ -242,14 +246,30 @@ def test_create_engine_nacelles_returns_two_symmetric_pods():
     assert right_engine.applied_parameters["y_rel_location"] == pytest.approx(3.0)
     assert left_engine.applied_parameters["diameter"] == pytest.approx(0.375)
     assert right_engine.applied_parameters["diameter"] == pytest.approx(0.375)
-    assert left_engine.applied_parameters["fineness_ratio"] == pytest.approx(3.2)
-    assert right_engine.applied_parameters["fineness_ratio"] == pytest.approx(3.2)
+    assert left_engine.applied_parameters["fineness_ratio"] == pytest.approx(6.4)
+    assert right_engine.applied_parameters["fineness_ratio"] == pytest.approx(6.4)
     assert fake_vsp.value_for("geom-1", "Y_Rel_Location", "XForm") == pytest.approx(-3.0)
     assert fake_vsp.value_for("geom-2", "Y_Rel_Location", "XForm") == pytest.approx(3.0)
     assert fake_vsp.value_for("geom-1", "Length", "Design") == pytest.approx(1.2)
-    assert fake_vsp.value_for("geom-2", "FineRatio", "Design") == pytest.approx(3.2)
+    assert fake_vsp.value_for("geom-2", "FineRatio", "Design") == pytest.approx(6.4)
     assert ("FindParm", "geom-2", "FineRatio", "Design") in fake_vsp.calls
     assert ("FindParm", "geom-2", "Diameter", "Design") not in fake_vsp.calls
+
+
+def test_create_engine_nacelle_rejects_non_positive_diameter():
+    adapter, _fake_vsp = make_adapter()
+
+    with pytest.raises(CadGenerationError, match="diameter"):
+        _create_engine_nacelle(
+            adapter,
+            name="left_engine",
+            engine_count=2,
+            x_rel_location=0.3,
+            y_rel_location=-3.0,
+            z_rel_location=-0.3375,
+            length=1.2,
+            diameter=0.0,
+        )
 
 
 def test_create_engine_nacelles_rejects_unsupported_engine_count():

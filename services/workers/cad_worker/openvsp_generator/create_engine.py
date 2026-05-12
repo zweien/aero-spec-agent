@@ -1,6 +1,9 @@
 from typing import Any
 
-from services.workers.cad_worker.openvsp_generator.errors import UnsupportedGeometryError
+from services.workers.cad_worker.openvsp_generator.errors import (
+    CadGenerationError,
+    UnsupportedGeometryError,
+)
 from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuildResult
 
 
@@ -61,7 +64,9 @@ def _create_engine_nacelle(
     diameter: float,
 ) -> GeometryBuildResult:
     geom_id = adapter.add_geom("POD")
-    fineness_ratio = length / diameter if diameter else 0.0
+    if diameter <= 0:
+        raise CadGenerationError("Engine nacelle diameter must be positive")
+    fineness_ratio = length / (diameter / 2.0)
 
     adapter.set_param(geom_id, "X_Rel_Location", "XForm", x_rel_location)
     adapter.set_param(geom_id, "Y_Rel_Location", "XForm", y_rel_location)
