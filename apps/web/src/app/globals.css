@@ -123,14 +123,32 @@ textarea {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.viewer-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.viewer-panel header small {
+  color: #657082;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .viewer-surface {
+  position: relative;
   display: grid;
-  place-items: center;
+  align-items: stretch;
   min-height: 420px;
   overflow: hidden;
   border: 1px dashed #b8c0cc;
   border-radius: 8px;
-  background: #10141d;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    #10141d;
+  background-size: 28px 28px;
   color: #dbe5f5;
   padding: 20px;
   text-align: center;
@@ -139,6 +157,87 @@ textarea {
 .viewer-surface span {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.aircraft-preview {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 150px auto;
+  gap: 14px;
+  min-height: 0;
+  width: 100%;
+}
+
+.aircraft-preview svg {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  border-radius: 6px;
+}
+
+.preview-top {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.preview-side {
+  background: rgba(5, 9, 15, 0.45);
+}
+
+.preview-axis,
+.preview-ground {
+  stroke: rgba(219, 229, 245, 0.24);
+  stroke-width: 0.03;
+}
+
+.preview-fuselage {
+  fill: #d8e2f0;
+  stroke: #ffffff;
+  stroke-width: 0.035;
+}
+
+.preview-wing {
+  fill: rgba(96, 165, 250, 0.78);
+  stroke: #a9d3ff;
+  stroke-width: 0.035;
+}
+
+.preview-tail {
+  fill: rgba(139, 216, 189, 0.78);
+  stroke: #c3f4df;
+  stroke-width: 0.035;
+}
+
+.preview-engine {
+  fill: #f2b84b;
+  stroke: #ffe4a4;
+  stroke-width: 0.035;
+}
+
+.preview-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.preview-metrics span {
+  border: 1px solid rgba(219, 229, 245, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 6px 10px;
+  color: #eef5ff;
+  font-size: 12px;
+}
+
+.artifact-note {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  color: rgba(219, 229, 245, 0.64);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .parameter-panel {
