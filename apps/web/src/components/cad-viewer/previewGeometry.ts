@@ -69,17 +69,17 @@ export type AircraftPreview = {
   };
 };
 
-function numberValue(scalar: Scalar | null | undefined, fallback: number): number {
+export function numberValue(scalar: Scalar | null | undefined, fallback: number): number {
   const value = Number(scalar?.value);
   return Number.isFinite(value) ? value : fallback;
 }
 
-function textValue(scalar: Scalar | null | undefined, fallback: string): string {
+export function textValue(scalar: Scalar | null | undefined, fallback: string): string {
   const value = scalar?.value;
   return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : fallback;
 }
 
-function wingZ(position: string, fuselageDiameter: number): number {
+export function wingZ(position: string, fuselageDiameter: number): number {
   if (position === "high") {
     return fuselageDiameter * 0.45;
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { AircraftThreePreview } from "./AircraftThreePreview";
 import {
   buildAircraftPreview,
   type AircraftPreviewSpec,
@@ -17,15 +18,16 @@ export function CadViewer({ glbPath, spec }: CadViewerProps) {
     <section className="panel viewer-panel">
       <header>
         <span>CAD 预览</span>
-        {preview ? (
+        {spec && preview ? (
           <small>
             {preview.labels.wingSpan} / {preview.labels.engineCount} 发
           </small>
         ) : null}
       </header>
       <div className="viewer-surface">
-        {preview ? (
+        {spec && preview ? (
           <div className="aircraft-preview" aria-label="飞机几何预览">
+            <AircraftThreePreview spec={spec} />
             <svg className="preview-top" viewBox={preview.viewBox} role="img">
               <title>飞机俯视预览</title>
               <line className="preview-axis" x1="0" y1="-7" x2="0" y2="7" />

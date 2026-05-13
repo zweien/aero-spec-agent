@@ -174,10 +174,24 @@ textarea {
 
 .aircraft-preview {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 150px auto;
+  grid-template-rows: minmax(260px, 1fr) 120px auto;
   gap: 14px;
   min-height: 0;
   width: 100%;
+}
+
+.three-preview-canvas {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 260px;
+  border-radius: 6px;
+  background: radial-gradient(circle at 50% 35%, rgba(96, 165, 250, 0.22), transparent 48%);
+  cursor: grab;
+}
+
+.three-preview-canvas:active {
+  cursor: grabbing;
 }
 
 .aircraft-preview svg {
