@@ -61,3 +61,11 @@ class VersionStore:
             "files": files,
             "validation_report": validation,
         }
+
+    def version_file(self, design_id: str, version_no: int, filename: str) -> Path:
+        if Path(filename).name != filename or filename in {"", ".", ".."}:
+            raise ValueError("filename must be a file name, not a path")
+        path = self.version_dir(design_id, version_no) / filename
+        if not path.is_file():
+            raise FileNotFoundError(filename)
+        return path

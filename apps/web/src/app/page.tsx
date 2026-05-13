@@ -23,6 +23,7 @@ type VersionResponse = {
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8900";
+const DEMO_DESIGN_ID = "demo";
 
 const EXAMPLE_SPEC = `schema_version: "0.1"
 aircraft:
@@ -100,7 +101,7 @@ export default function Home() {
     setIsGenerating(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/designs/demo/generate`, {
+      const response = await fetch(`${API_BASE_URL}/api/designs/${DEMO_DESIGN_ID}/generate`, {
         method: "POST",
         body: EXAMPLE_SPEC,
       });
@@ -113,7 +114,7 @@ export default function Home() {
       setJob(nextJob);
 
       const versionResponse = await fetch(
-        `${API_BASE_URL}/api/designs/demo/versions/${nextJob.version_no}`
+        `${API_BASE_URL}/api/designs/${DEMO_DESIGN_ID}/versions/${nextJob.version_no}`
       );
 
       if (!versionResponse.ok) {
@@ -141,7 +142,13 @@ export default function Home() {
         <CadViewer glbPath={job?.files.glb} spec={previewSpec} />
         <ParameterPanel parameters={parameters} />
       </div>
-      <VersionPanel jobStatus={job?.status} versionNo={job?.version_no} files={files} />
+      <VersionPanel
+        apiBaseUrl={API_BASE_URL}
+        designId={DEMO_DESIGN_ID}
+        files={files}
+        jobStatus={job?.status}
+        versionNo={job?.version_no}
+      />
     </main>
   );
 }

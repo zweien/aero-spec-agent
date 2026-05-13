@@ -39,6 +39,31 @@ def test_version_endpoint_returns_files(client: TestClient):
     assert response.json()["validation_report"]["engine.count"]["status"] == "pass"
 
 
+def test_version_file_endpoint_returns_generated_artifact(client: TestClient):
+    spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
+    job = client.post("/api/designs/demo-file/generate", content=spec_text).json()
+
+    response = client.get(f"/api/designs/demo-file/versions/{job['version_no']}/files/aircraft.vsp3")
+
+    assert response.status_code == 200
+    assert response.text.startswith("fake vsp3 for twin_engine_uav")
+
+
+def test_version_file_endpoint_rejects_path_traversal(client: TestClient):
+    response = client.get("/api/designs/demo-file/versions/1/files/..%2F..%2F.env")
+
+    assert response.status_code == 400
+
+
+def test_version_file_endpoint_returns_404_for_missing_file(client: TestClient):
+    spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
+    job = client.post("/api/designs/demo-missing-file/generate", content=spec_text).json()
+
+    response = client.get(f"/api/designs/demo-missing-file/versions/{job['version_no']}/files/missing.glb")
+
+    assert response.status_code == 404
+
+
 def test_cors_allows_configured_local_web_origin(client: TestClient):
     response = client.options(
         "/api/designs/demo/generate",

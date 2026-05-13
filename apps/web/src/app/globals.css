@@ -72,6 +72,19 @@ textarea {
   white-space: nowrap;
 }
 
+.bottom-panel a {
+  color: #1f5eff;
+  text-decoration: none;
+}
+
+.bottom-panel a:hover {
+  text-decoration: underline;
+}
+
+.file-list {
+  flex: 1;
+}
+
 .main-grid {
   display: grid;
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(240px, 320px);

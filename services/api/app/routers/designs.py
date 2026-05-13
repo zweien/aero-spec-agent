@@ -1,5 +1,6 @@
 import yaml
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
@@ -41,3 +42,18 @@ def get_version(design_id: str, version_no: int):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="version not found") from exc
+
+
+@router.get("/designs/{design_id}/versions/{version_no}/files/{filename:path}")
+def get_version_file(design_id: str, version_no: int, filename: str):
+    try:
+        path = runner.store.version_file(
+            design_id=design_id,
+            version_no=version_no,
+            filename=filename,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="file not found") from exc
+    return FileResponse(path)
