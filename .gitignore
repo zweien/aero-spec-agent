@@ -8,3 +8,6 @@ node_modules/
 dist/
 .gstack/
 .bak
+.env
+*.egg-info/
+docs/screenshots/
