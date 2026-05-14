@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { CadViewer } from "@/components/cad-viewer/CadViewer";
 import {
@@ -8,141 +8,195 @@ import {
   type CadPreviewSource,
 } from "@/components/cad-viewer/cadPreviewSource";
 import type { AircraftPreviewSpec } from "@/components/cad-viewer/previewGeometry";
-import { ChatPanel } from "@/components/chat/ChatPanel";
+import {
+  ChatPanel,
+  type ChatMessage,
+} from "@/components/chat/ChatPanel";
 import { ParameterPanel } from "@/components/parameter-panel/ParameterPanel";
+import type { AircraftSpecData } from "@/components/parameter-panel/ParameterPanel";
 import { VersionPanel } from "@/components/version-panel/VersionPanel";
-
-type JobResponse = {
-  id: string;
-  status: string;
-  version_no: number;
-  files: Record<string, string>;
-};
 
 type VersionResponse = {
   files: string[];
   validation_report?: {
-    spec_echo?: AircraftPreviewSpec;
+    spec_echo?: Record<string, unknown>;
   };
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8900";
-const DEMO_DESIGN_ID = "demo";
-
-const EXAMPLE_SPEC = `schema_version: "0.1"
-aircraft:
-  name: twin_engine_uav
-  type: fixed_wing_uav
-  layout: conventional
-mission:
-  cruise_speed:
-    value: 120
-    unit: km/h
-    source: user
-    confidence: 1.0
-  payload:
-    value: 30
-    unit: kg
-    source: user
-    confidence: 1.0
-fuselage:
-  length:
-    value: 7.0
-    unit: m
-    source: rule_default
-    confidence: 0.7
-wing:
-  position:
-    value: high
-    source: user
-    confidence: 1.0
-  span:
-    value: 12.0
-    unit: m
-    source: user
-    confidence: 1.0
-  root_chord:
-    value: 1.2
-    unit: m
-    source: rule_default
-    confidence: 0.75
-  tip_chord:
-    value: 0.6
-    unit: m
-    source: rule_default
-    confidence: 0.75
-tail:
-  type:
-    value: conventional
-    source: user
-    confidence: 1.0
-engine:
-  count:
-    value: 2
-    source: user
-    confidence: 1.0
-`;
 
 export default function Home() {
-  const [error, setError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [job, setJob] = useState<JobResponse | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
+  const [jobStatus, setJobStatus] = useState<string | undefined>();
+  const [versionNo, setVersionNo] = useState<number | undefined>();
   const [previewSource, setPreviewSource] = useState<CadPreviewSource | null>(null);
   const [previewSpec, setPreviewSpec] = useState<AircraftPreviewSpec | null>(null);
+  const [specData, setSpecData] = useState<AircraftSpecData | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const parameters = useMemo(
-    () => [
-      { label: "翼展", scalar: { value: 12.0, unit: "m", source: "user", confidence: 1.0 } },
-      { label: "发动机数量", scalar: { value: 2, source: "user", confidence: 1.0 } },
-      { label: "机翼位置", scalar: { value: "high", source: "user", confidence: 1.0 } },
-      { label: "尾翼", scalar: { value: "conventional", source: "user", confidence: 1.0 } },
-    ],
-    []
+  const handleSend = useCallback(
+    async (message: string) => {
+      const convId = conversationId ?? crypto.randomUUID();
+      if (!conversationId) setConversationId(convId);
+
+      setMessages((prev) => [...prev, { role: "user", content: message }]);
+      setIsGenerating(true);
+
+      const assistantIndex = messages.length + 1;
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "" },
+      ]);
+
+      const abortController = new AbortController();
+      abortRef.current = abortController;
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversation_id: convId,
+            message,
+          }),
+          signal: abortController.signal,
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`请求失败：HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          let eventType = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              const dataStr = line.slice(6);
+              try {
+                const data = JSON.parse(dataStr);
+                handleSSEEvent(
+                  eventType,
+                  data,
+                  assistantIndex,
+                  convId,
+                );
+              } catch {
+                // skip malformed data lines
+              }
+              eventType = "";
+            }
+          }
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "error",
+            content: err instanceof Error ? err.message : "请求失败",
+          },
+        ]);
+      } finally {
+        setIsGenerating(false);
+        abortRef.current = null;
+      }
+    },
+    [conversationId, messages.length],
   );
 
-  async function handleGenerate() {
-    setError(null);
-    setIsGenerating(true);
+  const handleSSEEvent = useCallback(
+    (
+      eventType: string,
+      data: Record<string, unknown>,
+      assistantIdx: number,
+      convId: string,
+    ) => {
+      switch (eventType) {
+        case "message":
+          setMessages((prev) => {
+            const updated = [...prev];
+            if (updated[assistantIdx]) {
+              updated[assistantIdx] = {
+                ...updated[assistantIdx],
+                content: updated[assistantIdx].content + String(data.content ?? ""),
+              };
+            }
+            return updated;
+          });
+          break;
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/designs/${DEMO_DESIGN_ID}/generate`, {
-        method: "POST",
-        body: EXAMPLE_SPEC,
-      });
+        case "tool_call":
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "generating",
+              content: `正在${data.name === "generate_design" ? "生成设计" : "修改设计"}...`,
+            },
+          ]);
+          break;
 
-      if (!response.ok) {
-        throw new Error(`生成请求失败：HTTP ${response.status}`);
+        case "generation_started":
+          setJobStatus("running");
+          break;
+
+        case "generation_complete":
+          setJobStatus("ready");
+          if (data.version_no) setVersionNo(data.version_no as number);
+          void refreshAfterGeneration(convId, data.version_no as number);
+          break;
+
+        case "error":
+          setMessages((prev) => [
+            ...prev,
+            { role: "error", content: String(data.content ?? "发生错误") },
+          ]);
+          break;
       }
+    },
+    [],
+  );
 
-      const nextJob = (await response.json()) as JobResponse;
-      setJob(nextJob);
+  const refreshAfterGeneration = useCallback(
+    async (convId: string, vNo: number) => {
+      try {
+        const versionResp = await fetch(
+          `${API_BASE_URL}/api/designs/${convId}/versions/${vNo}`,
+        );
+        if (!versionResp.ok) return;
 
-      const versionResponse = await fetch(
-        `${API_BASE_URL}/api/designs/${DEMO_DESIGN_ID}/versions/${nextJob.version_no}`
-      );
+        const version = (await versionResp.json()) as VersionResponse;
+        setFiles(version.files);
+        setPreviewSpec((version.validation_report?.spec_echo ?? null) as AircraftPreviewSpec | null);
+        setSpecData((version.validation_report?.spec_echo ?? null) as AircraftSpecData | null);
 
-      if (!versionResponse.ok) {
-        throw new Error(`版本请求失败：HTTP ${versionResponse.status}`);
-      }
-
-      const version = (await versionResponse.json()) as VersionResponse;
-      setFiles(version.files);
-      setPreviewSource(
-        selectCadPreviewSource({
+        const source = selectCadPreviewSource({
           apiBaseUrl: API_BASE_URL,
-          designId: DEMO_DESIGN_ID,
-          versionNo: nextJob.version_no,
+          designId: convId,
+          versionNo: vNo,
           files: version.files,
-        }),
-      );
-      setPreviewSpec(version.validation_report?.spec_echo ?? null);
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "生成失败");
-    } finally {
-      setIsGenerating(false);
-    }
-  }
+        });
+        setPreviewSource(source);
+      } catch {
+        // non-critical — preview will stay in parameter mode
+      }
+    },
+    [],
+  );
 
   return (
     <main className="workbench">
@@ -151,20 +205,24 @@ export default function Home() {
         <span>固定翼无人机概念设计 MVP</span>
       </nav>
       <div className="main-grid">
-        <ChatPanel error={error} isGenerating={isGenerating} onGenerate={handleGenerate} />
+        <ChatPanel
+          messages={messages}
+          isGenerating={isGenerating}
+          onSend={handleSend}
+        />
         <CadViewer
           modelFormat={previewSource?.format}
           modelUrl={previewSource?.url}
           spec={previewSpec}
         />
-        <ParameterPanel parameters={parameters} />
+        <ParameterPanel spec={specData} />
       </div>
       <VersionPanel
         apiBaseUrl={API_BASE_URL}
-        designId={DEMO_DESIGN_ID}
+        designId={conversationId ?? "demo"}
         files={files}
-        jobStatus={job?.status}
-        versionNo={job?.version_no}
+        jobStatus={jobStatus}
+        versionNo={versionNo}
       />
     </main>
   );

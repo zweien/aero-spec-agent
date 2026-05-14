@@ -12,7 +12,7 @@ type SpecSection = {
   [key: string]: Scalar | SpecSection | undefined;
 };
 
-type AircraftSpecData = {
+export type AircraftSpecData = {
   aircraft?: { name?: string; type?: string; layout?: string };
   mission?: SpecSection;
   fuselage?: SpecSection;
