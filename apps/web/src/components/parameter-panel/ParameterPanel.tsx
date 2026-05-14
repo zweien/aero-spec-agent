@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 type Scalar = {
   value: string | number;
   unit?: string;
@@ -90,15 +92,18 @@ function extractParameters(
 
 export function ParameterPanel({ spec }: ParameterPanelProps) {
   const parameters = spec ? extractParameters(spec) : [];
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (parameters.length === 0) return null;
 
   return (
-    <section className="panel parameter-panel">
-      <header>参数</header>
-      {parameters.length === 0 ? (
-        <div className="parameter-empty">
-          等待生成设计参数
-        </div>
-      ) : (
+    <section className={`panel parameter-panel ${collapsed ? "parameter-collapsed" : ""}`}>
+      <header className="parameter-toggle" onClick={() => setCollapsed(!collapsed)}>
+        <span>参数</span>
+        <span className="parameter-chevron">{collapsed ? "▸" : "▾"}</span>
+        {!collapsed && <span className="parameter-count">{parameters.length}</span>}
+      </header>
+      {!collapsed &&
         parameters.map((item) => (
           <div className="parameter-row" key={item.label}>
             <span>{item.label}</span>
@@ -114,8 +119,7 @@ export function ParameterPanel({ spec }: ParameterPanelProps) {
               {Math.round(item.scalar.confidence * 100)}%
             </small>
           </div>
-        ))
-      )}
+        ))}
     </section>
   );
 }
