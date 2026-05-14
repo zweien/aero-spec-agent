@@ -3,7 +3,10 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from services.api.app.routers.chat import router as chat_router
+from services.api.app.routers.chat import set_job_runner as set_chat_job_runner
 from services.api.app.routers.designs import router as designs_router
+from services.api.app.routers.designs import runner as designs_runner
 
 
 def _local_web_origins() -> list[str]:
@@ -22,6 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(designs_router)
+app.include_router(chat_router)
+
+set_chat_job_runner(designs_runner)
 
 
 @app.get("/health")

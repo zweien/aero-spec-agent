@@ -16,18 +16,6 @@ from services.api.app.services.spec_patch import apply_patch
 
 EXAMPLE = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml")
 
-_PROXY_VARS = (
-    "http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY",
-    "all_proxy", "ALL_PROXY",
-)
-
-
-@pytest.fixture(autouse=True)
-def _clean_proxy_env(monkeypatch):
-    """Remove proxy env vars so OpenAI client doesn't choke on socks://."""
-    for var in _PROXY_VARS:
-        monkeypatch.delenv(var, raising=False)
-
 
 def test_conversation_state_is_created():
     svc = ChatService()
