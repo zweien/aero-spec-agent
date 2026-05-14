@@ -572,10 +572,17 @@ textarea:focus {
 
 .aircraft-preview {
   display: grid;
-  grid-template-rows: minmax(220px, 1fr) 100px auto;
-  gap: 12px;
+  grid-template-rows: minmax(200px, 1fr) auto auto;
+  gap: 10px;
   min-height: 0;
   width: 100%;
+}
+
+.preview-drawings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-height: 0;
 }
 
 .three-preview-canvas {
