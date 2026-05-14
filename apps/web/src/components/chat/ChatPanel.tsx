@@ -1,32 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DefaultChatTransport } from "ai";
+import { useChat } from "@ai-sdk/react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8900";
-
-export type ChatMessage = {
-  id: string;
-  role: "user" | "assistant" | "error";
-  content: string;
-  tools?: ToolStatus[];
-};
-
-export type ToolStatus = {
-  name: string;
-  label: string;
-  state: "running" | "done";
-  versionNo?: number;
-  files?: string[];
-};
-
-type GenerationCompleteData = {
+export type GenerationCompleteData = {
   status?: string;
   version_no?: number;
   design_id?: string;
   files?: string[];
+};
+
+type ToolPart = {
+  type: string;
+  toolCallId: string;
+  toolName: string;
+  args?: Record<string, unknown>;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  state: string;
 };
 
 type ChatPanelProps = {
@@ -34,16 +29,30 @@ type ChatPanelProps = {
   onGenerationComplete: (data: GenerationCompleteData) => void;
 };
 
-let msgCounter = 0;
+const TOOL_LABELS: Record<string, string> = {
+  generate_design: "生成设计",
+  modify_design: "修改设计",
+};
 
 export function ChatPanel({
   conversationId,
   onGenerationComplete,
 }: ChatPanelProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
+  const processedCalls = useRef(new Set<string>());
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        body: { conversation_id: conversationId },
+      }),
+    [conversationId],
+  );
+
+  const { messages, sendMessage, status } = useChat({ transport });
+
+  const isStreaming = status === "streaming" || status === "submitted";
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -52,158 +61,38 @@ export function ChatPanel({
     });
   }, [messages]);
 
-  const handleSubmit = useCallback(() => {
-    const trimmed = input.trim();
-    if (!trimmed || isStreaming) return;
-    setInput("");
-    void streamChat(trimmed);
-  }, [input, isStreaming, conversationId]);
-
-  const streamChat = useCallback(
-    async (message: string) => {
-      const userMsg: ChatMessage = {
-        id: `msg-${++msgCounter}`,
-        role: "user",
-        content: message,
-      };
-      const assistantId = `msg-${++msgCounter}`;
-      const assistantMsg: ChatMessage = {
-        id: assistantId,
-        role: "assistant",
-        content: "",
-        tools: [],
-      };
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
-      setIsStreaming(true);
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            conversation_id: conversationId,
-            message,
-          }),
-        });
-
-        if (!response.ok || !response.body) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          let eventType = "";
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              eventType = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                processEvent(eventType, data, assistantId);
-              } catch {
-                // skip
-              }
-              eventType = "";
+  useEffect(() => {
+    for (const message of messages) {
+      for (const part of message.parts ?? []) {
+        if (
+          part.type.startsWith("tool-") &&
+          "state" in part &&
+          "toolCallId" in part
+        ) {
+          const toolPart = part as unknown as ToolPart;
+          if (
+            toolPart.state === "output-available" &&
+            !processedCalls.current.has(toolPart.toolCallId)
+          ) {
+            processedCalls.current.add(toolPart.toolCallId);
+            const output = (toolPart.output ?? toolPart.result) as
+              | GenerationCompleteData
+              | undefined;
+            if (output) {
+              onGenerationComplete(output);
             }
           }
         }
-      } catch (err) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `msg-${++msgCounter}`,
-            role: "error",
-            content: err instanceof Error ? err.message : "请求失败",
-          },
-        ]);
-      } finally {
-        setIsStreaming(false);
       }
-    },
-    [conversationId],
-  );
+    }
+  }, [messages, onGenerationComplete]);
 
-  const processEvent = useCallback(
-    (
-      eventType: string,
-      data: Record<string, unknown>,
-      assistantId: string,
-    ) => {
-      switch (eventType) {
-        case "message":
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, content: m.content + String(data.content ?? "") }
-                : m,
-            ),
-          );
-          break;
-        case "tool_call": {
-          const name = String(data.name ?? "");
-          const label =
-            name === "generate_design"
-              ? "生成设计"
-              : name === "modify_design"
-                ? "修改设计"
-                : name;
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, tools: [...(m.tools ?? []), { name, label, state: "running" as const }] }
-                : m,
-            ),
-          );
-          break;
-        }
-        case "generation_complete": {
-          const genData = data as GenerationCompleteData;
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    tools: (m.tools ?? []).map((t) =>
-                      t.state === "running"
-                        ? {
-                            ...t,
-                            state: "done" as const,
-                            versionNo: genData.version_no,
-                            files: genData.files as string[] | undefined,
-                          }
-                        : t,
-                    ),
-                  }
-                : m,
-            ),
-          );
-          onGenerationComplete(genData);
-          break;
-        }
-        case "error":
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `msg-${++msgCounter}`,
-              role: "error",
-              content: String(data.content ?? "发生错误"),
-            },
-          ]);
-          break;
-      }
-    },
-    [onGenerationComplete],
-  );
+  const handleSend = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed || isStreaming) return;
+    setInput("");
+    void sendMessage({ text: trimmed });
+  }, [input, isStreaming, sendMessage]);
 
   return (
     <section className="panel chat-panel">
@@ -219,17 +108,33 @@ export function ChatPanel({
           </div>
         )}
         {messages.map((msg) => (
-          <div key={msg.id} className={`chat-bubble chat-bubble-${msg.role}`}>
+          <div
+            key={msg.id}
+            className={`chat-bubble chat-bubble-${msg.role}`}
+          >
             <div className="chat-avatar">
-              {msg.role === "user" ? "你" : msg.role === "error" ? "!" : "AI"}
+              {msg.role === "user" ? "你" : "AI"}
             </div>
             <div className="chat-bubble-body">
-              {msg.content && (
-                <Markdown remarkPlugins={[remarkGfm]}>{msg.content}</Markdown>
-              )}
-              {msg.tools?.map((tool, i) => (
-                <ToolCard key={i} tool={tool} />
-              ))}
+              {(msg.parts ?? []).map((part, i) => {
+                if (part.type === "text") {
+                  const text = (part as { type: "text"; text: string }).text;
+                  return text ? (
+                    <Markdown key={i} remarkPlugins={[remarkGfm]}>
+                      {text}
+                    </Markdown>
+                  ) : null;
+                }
+                if (part.type.startsWith("tool-")) {
+                  return (
+                    <ToolCard
+                      key={i}
+                      part={part as unknown as ToolPart}
+                    />
+                  );
+                }
+                return null;
+              })}
             </div>
           </div>
         ))}
@@ -243,7 +148,7 @@ export function ChatPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              handleSubmit();
+              handleSend();
             }
           }}
           disabled={isStreaming}
@@ -253,7 +158,7 @@ export function ChatPanel({
           type="button"
           className={isStreaming ? "btn-streaming" : ""}
           disabled={isStreaming || !input.trim()}
-          onClick={handleSubmit}
+          onClick={handleSend}
         >
           {isStreaming ? (
             <>
@@ -268,25 +173,50 @@ export function ChatPanel({
   );
 }
 
-function ToolCard({ tool }: { tool: ToolStatus }) {
+function ToolCard({ part }: { part: ToolPart }) {
+  const [expanded, setExpanded] = useState(false);
+  const toolName = part.toolName || part.type.replace(/^tool-/, "");
+  const label = TOOL_LABELS[toolName] ?? toolName;
+  const isRunning =
+    part.state === "input-streaming" ||
+    part.state === "input-available" ||
+    part.state === "call";
+  const result = (part.output ?? part.result) as GenerationCompleteData | undefined;
+
   return (
     <div
-      className={`tool-card ${tool.state === "running" ? "tool-card-running" : "tool-card-done"}`}
+      className={`tool-card ${isRunning ? "tool-card-running" : "tool-card-done"}`}
     >
       <div className="tool-card-header">
-        {tool.state === "running" ? (
+        {isRunning ? (
           <span className="spinner" />
         ) : (
           <span className="tool-card-check">&#10003;</span>
         )}
-        <span className="tool-card-name">{tool.label}</span>
-        {tool.versionNo && (
-          <span className="tool-card-version">v{tool.versionNo}</span>
+        <span className="tool-card-name">{label}</span>
+        {result?.version_no && (
+          <span className="tool-card-version">v{result.version_no}</span>
         )}
       </div>
-      {tool.state === "done" && tool.files && tool.files.length > 0 && (
+
+      {(part.args ?? part.input) && (
+        <button
+          type="button"
+          className="tool-card-toggle"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "▾ 收起参数" : "▸ 查看参数"}
+        </button>
+      )}
+      {expanded && (part.args ?? part.input) && (
+        <div className="tool-card-args">
+          <SpecSummary args={(part.args ?? part.input)!} toolName={toolName} />
+        </div>
+      )}
+
+      {!isRunning && result?.files && result.files.length > 0 && (
         <div className="tool-card-files">
-          {tool.files.map((f) => (
+          {result.files.map((f: string) => (
             <span key={f} className="tool-card-file">
               {f}
             </span>
@@ -294,5 +224,75 @@ function ToolCard({ tool }: { tool: ToolStatus }) {
         </div>
       )}
     </div>
+  );
+}
+
+function SpecSummary({
+  args,
+  toolName,
+}: {
+  args: Record<string, unknown>;
+  toolName: string;
+}): JSX.Element {
+  if (toolName === "generate_design") {
+    const aircraft = (args.aircraft ?? {}) as Record<string, unknown>;
+    const wing = (args.wing ?? {}) as Record<string, unknown>;
+    const fuselage = (args.fuselage ?? {}) as Record<string, unknown>;
+    const engine = (args.engine ?? {}) as Record<string, unknown>;
+    const entries: Array<{ k: string; v: string }> = [];
+    if ("name" in aircraft)
+      entries.push({ k: "名称", v: String(aircraft.name) });
+    const wingSpan = wing.span as Record<string, unknown> | undefined;
+    if (wingSpan)
+      entries.push({
+        k: "翼展",
+        v: `${wingSpan.value} ${wingSpan.unit ?? "m"}`,
+      });
+    const fuseLen = fuselage.length as Record<string, unknown> | undefined;
+    if (fuseLen)
+      entries.push({
+        k: "机长",
+        v: `${fuseLen.value} ${fuseLen.unit ?? "m"}`,
+      });
+    const wingPos = wing.position as Record<string, unknown> | undefined;
+    if (wingPos) entries.push({ k: "机翼位置", v: String(wingPos.value) });
+    const engCount = engine.count as Record<string, unknown> | undefined;
+    if (engCount) entries.push({ k: "发动机", v: `${engCount.value}发` });
+    return (
+      <div className="spec-summary">
+        {entries.map((e) => (
+          <div key={e.k} className="spec-summary-row">
+            <span className="spec-summary-key">{e.k}</span>
+            <span className="spec-summary-val">{e.v}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (toolName === "modify_design") {
+    const changes = (args.changes ?? []) as Array<{
+      path: string;
+      value: unknown;
+      reason?: string;
+    }>;
+    return (
+      <div className="spec-summary">
+        {changes.map((c, i) => (
+          <div key={i} className="spec-summary-row">
+            <span className="spec-summary-key">{c.path}</span>
+            <span className="spec-summary-val">
+              {JSON.stringify(c.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <pre className="spec-summary-raw">
+      {JSON.stringify(args, null, 2)}
+    </pre>
   );
 }
