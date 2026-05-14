@@ -99,15 +99,23 @@ def _sse_event(event_type: str, data: Any) -> str:
 class ChatService:
     def __init__(self) -> None:
         self._conversations: dict[str, ConversationState] = {}
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        base_url = os.getenv("OPENAI_BASE_URL")
         self._model = os.getenv("OPENAI_MODEL", "deepseek-chat")
-        self._client = OpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            _enforce_credentials=bool(api_key),
-        )
+        self._client: OpenAI | None = None
         self._job_runner = None
+
+    def _get_client(self) -> OpenAI:
+        if self._client is None:
+            api_key = os.getenv("OPENAI_API_KEY", "")
+            base_url = os.getenv("OPENAI_BASE_URL")
+            saved_proxy = {}
+            for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+                if val := os.environ.pop(key, None):
+                    saved_proxy[key] = val
+            try:
+                self._client = OpenAI(api_key=api_key, base_url=base_url)
+            finally:
+                os.environ.update(saved_proxy)
+        return self._client
 
     def set_job_runner(self, runner: Any) -> None:
         self._job_runner = runner
@@ -149,7 +157,7 @@ class ChatService:
         collected_content = ""
         tool_calls_collected: dict[int, dict[str, Any]] = {}
 
-        response = self._client.chat.completions.create(
+        response = self._get_client().chat.completions.create(
             model=self._model,
             messages=api_messages,
             tools=self.build_tools(),
@@ -233,7 +241,7 @@ class ChatService:
                     "content": json.dumps({"error": f"unknown tool: {tool_name}"}, ensure_ascii=False),
                 })
 
-        second_response = self._client.chat.completions.create(
+        second_response = self._get_client().chat.completions.create(
             model=self._model,
             messages=[{"role": "system", "content": system_prompt}] + state.messages,
             stream=True,
