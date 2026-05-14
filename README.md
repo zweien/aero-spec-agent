@@ -117,3 +117,25 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 ```
 
 At this stage the real OpenVSP backend generates `.vsp3`, `.step`, and `.obj` files through the OpenVSP Python API. GLB conversion is not produced by `CAD_BACKEND=openvsp` yet. The web CAD viewer prefers generated `aircraft.glb`, falls back to `aircraft.obj` when available, and keeps the parameter-driven preview visible if a generated model file cannot be loaded.
+
+## Chat Endpoint
+
+The chat endpoint connects to an OpenAI-compatible LLM to parse natural language into aircraft specs. Multi-turn conversation with spec modification is supported.
+
+Set the following environment variables in `.env`:
+
+```
+OPENAI_API_KEY=sk-your-key
+OPENAI_BASE_URL=https://api.deepseek.com/v1
+OPENAI_MODEL=deepseek-chat
+```
+
+Then use the web UI chat panel or curl:
+
+```bash
+curl -sS -N -X POST "http://localhost:8900/api/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"conversation_id":"demo-chat","message":"设计一架翼展12米双发无人机"}'
+```
+
+The endpoint returns an SSE stream with events: `message` (token-by-token text), `tool_call` (function invocation), `generation_started`, `generation_complete` (with version_no and files), and `error`.
