@@ -5,6 +5,7 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from openai import OpenAI
@@ -211,6 +212,24 @@ class ConversationState:
     messages: list[dict[str, str]] = field(default_factory=list)
     current_spec: AircraftSpec | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "conversation_id": self.conversation_id,
+            "design_id": self.design_id,
+            "messages": self.messages,
+            "current_spec": self.current_spec.model_dump(mode="json") if self.current_spec else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ConversationState:
+        spec_data = data.get("current_spec")
+        return cls(
+            conversation_id=data["conversation_id"],
+            design_id=data["design_id"],
+            messages=data.get("messages", []),
+            current_spec=AircraftSpec.model_validate(spec_data) if spec_data else None,
+        )
+
 
 def _sse_event(event_type: str, data: Any) -> str:
     payload = json.dumps(data, ensure_ascii=False) if not isinstance(data, str) else json.dumps({"content": data}, ensure_ascii=False)
@@ -218,11 +237,20 @@ def _sse_event(event_type: str, data: Any) -> str:
 
 
 class ChatService:
-    def __init__(self) -> None:
+    def __init__(self, storage_root: str | Path | None = None) -> None:
         self._conversations: dict[str, ConversationState] = {}
         self._model = os.getenv("OPENAI_MODEL", "deepseek-chat")
         self._client: OpenAI | None = None
         self._job_runner = None
+        self._storage_root = Path(storage_root) if storage_root else Path("storage")
+
+    def _state_path(self, conversation_id: str) -> Path:
+        return self._storage_root / "conversations" / conversation_id / "state.json"
+
+    def _save_state(self, state: ConversationState) -> None:
+        path = self._state_path(state.conversation_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _get_client(self) -> OpenAI:
         if self._client is None:
@@ -243,10 +271,22 @@ class ChatService:
 
     def get_or_create_state(self, conversation_id: str) -> ConversationState:
         if conversation_id not in self._conversations:
-            self._conversations[conversation_id] = ConversationState(
-                conversation_id=conversation_id,
-                design_id=conversation_id,
-            )
+            state_path = self._state_path(conversation_id)
+            if state_path.exists():
+                try:
+                    data = json.loads(state_path.read_text(encoding="utf-8"))
+                    self._conversations[conversation_id] = ConversationState.from_dict(data)
+                except Exception:
+                    logger.warning("Failed to load conversation %s, creating fresh", conversation_id)
+                    self._conversations[conversation_id] = ConversationState(
+                        conversation_id=conversation_id,
+                        design_id=conversation_id,
+                    )
+            else:
+                self._conversations[conversation_id] = ConversationState(
+                    conversation_id=conversation_id,
+                    design_id=conversation_id,
+                )
         return self._conversations[conversation_id]
 
     def build_tools(self) -> list[dict[str, Any]]:
@@ -332,6 +372,7 @@ class ChatService:
         state.messages.append(assistant_msg)
 
         if not tool_calls_collected:
+            self._save_state(state)
             return
 
         for idx in sorted(tool_calls_collected):
@@ -377,6 +418,8 @@ class ChatService:
 
         if final_content:
             state.messages.append({"role": "assistant", "content": final_content})
+
+        self._save_state(state)
 
     async def _handle_generate_design(self, state: ConversationState, args: dict[str, Any], tool_call_id: str) -> AsyncIterator[str]:
         try:
