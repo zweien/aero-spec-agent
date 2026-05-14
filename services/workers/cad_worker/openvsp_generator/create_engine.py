@@ -9,7 +9,7 @@ from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuild
 
 def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]:
     engine_count = int(spec.engine.count.value)
-    if engine_count != 2:
+    if engine_count not in (1, 2):
         raise UnsupportedGeometryError(
             f"Unsupported OpenVSP geometry for engine.count={engine_count}"
         )
@@ -21,12 +21,37 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
         if spec.fuselage.max_diameter is not None
         else 0.75
     )
+    fuselage_length = float(spec.fuselage.length.value)
+
+    length = root_chord
+    diameter = fuselage_diameter * 0.5
+
+    if engine_count == 1:
+        engine_position = (
+            spec.engine.position.value if spec.engine.position else "nose"
+        )
+        if engine_position == "nose":
+            x_rel_location = fuselage_length * 0.5
+            z_rel_location = 0.0
+        else:
+            x_rel_location = root_chord * 0.25
+            z_rel_location = -fuselage_diameter * 0.45
+        return [
+            _create_engine_nacelle(
+                adapter,
+                name="center_engine",
+                engine_count=engine_count,
+                x_rel_location=x_rel_location,
+                y_offset=0.0,
+                z_rel_location=z_rel_location,
+                length=length,
+                diameter=diameter,
+            ),
+        ]
 
     x_rel_location = root_chord * 0.25
     y_offset = wing_span * 0.25
     z_rel_location = -fuselage_diameter * 0.45
-    length = root_chord
-    diameter = fuselage_diameter * 0.5
 
     return [
         _create_engine_nacelle(
@@ -34,7 +59,7 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             name="left_engine",
             engine_count=engine_count,
             x_rel_location=x_rel_location,
-            y_rel_location=-y_offset,
+            y_offset=-y_offset,
             z_rel_location=z_rel_location,
             length=length,
             diameter=diameter,
@@ -44,7 +69,7 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             name="right_engine",
             engine_count=engine_count,
             x_rel_location=x_rel_location,
-            y_rel_location=y_offset,
+            y_offset=y_offset,
             z_rel_location=z_rel_location,
             length=length,
             diameter=diameter,
@@ -58,7 +83,7 @@ def _create_engine_nacelle(
     name: str,
     engine_count: int,
     x_rel_location: float,
-    y_rel_location: float,
+    y_offset: float,
     z_rel_location: float,
     length: float,
     diameter: float,
@@ -69,7 +94,7 @@ def _create_engine_nacelle(
     fineness_ratio = length / (diameter / 2.0)
 
     adapter.set_param(geom_id, "X_Rel_Location", "XForm", x_rel_location)
-    adapter.set_param(geom_id, "Y_Rel_Location", "XForm", y_rel_location)
+    adapter.set_param(geom_id, "Y_Rel_Location", "XForm", y_offset)
     adapter.set_param(geom_id, "Z_Rel_Location", "XForm", z_rel_location)
     adapter.set_param(geom_id, "Length", "Design", length)
     adapter.set_param(geom_id, "FineRatio", "Design", fineness_ratio)
@@ -80,7 +105,7 @@ def _create_engine_nacelle(
         applied_parameters={
             "engine.count": engine_count,
             "x_rel_location": x_rel_location,
-            "y_rel_location": y_rel_location,
+            "y_offset": y_offset,
             "z_rel_location": z_rel_location,
             "length": length,
             "diameter": diameter,

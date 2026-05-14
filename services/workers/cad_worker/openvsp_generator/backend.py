@@ -135,7 +135,7 @@ def _stable_applied_parameters(
                     "z_rel_location",
                 ],
             )
-        elif result.name in {"left_engine", "right_engine"}:
+        elif result.name in {"center_engine", "left_engine", "right_engine"}:
             if "engine.count" in result.applied_parameters:
                 applied["engine.count"] = result.applied_parameters["engine.count"]
             _copy_parameters(

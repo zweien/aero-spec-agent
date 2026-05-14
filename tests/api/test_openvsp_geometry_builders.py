@@ -273,8 +273,8 @@ def test_create_engine_nacelles_returns_two_symmetric_pods():
     assert right_engine.name == "right_engine"
     assert left_engine.applied_parameters["engine.count"] == 2
     assert right_engine.applied_parameters["engine.count"] == 2
-    assert left_engine.applied_parameters["y_rel_location"] == pytest.approx(-3.0)
-    assert right_engine.applied_parameters["y_rel_location"] == pytest.approx(3.0)
+    assert left_engine.applied_parameters["y_offset"] == pytest.approx(-3.0)
+    assert right_engine.applied_parameters["y_offset"] == pytest.approx(3.0)
     assert left_engine.applied_parameters["diameter"] == pytest.approx(0.375)
     assert right_engine.applied_parameters["diameter"] == pytest.approx(0.375)
     assert left_engine.applied_parameters["fineness_ratio"] == pytest.approx(6.4)
@@ -296,16 +296,31 @@ def test_create_engine_nacelle_rejects_non_positive_diameter():
             name="left_engine",
             engine_count=2,
             x_rel_location=0.3,
-            y_rel_location=-3.0,
+            y_offset=-3.0,
             z_rel_location=-0.3375,
             length=1.2,
             diameter=0.0,
         )
 
 
-def test_create_engine_nacelles_rejects_unsupported_engine_count():
+def test_create_engine_nacelles_single_engine_creates_center_pod():
     data = deepcopy(valid_spec_data())
     data["engine"]["count"]["value"] = 1
+    data["engine"]["position"] = {"value": "nose", "source": "user", "confidence": 1.0}
+    spec = load_aircraft_spec(data)
+    adapter, fake_vsp = make_adapter()
+
+    results = create_engine_nacelles(adapter, spec)
+
+    assert len(results) == 1
+    assert results[0].name == "center_engine"
+    assert results[0].applied_parameters["engine.count"] == 1
+    assert results[0].applied_parameters["y_offset"] == pytest.approx(0.0)
+
+
+def test_create_engine_nacelles_rejects_unsupported_engine_count():
+    data = deepcopy(valid_spec_data())
+    data["engine"]["count"]["value"] = 3
     spec = load_aircraft_spec(data)
     adapter, _fake_vsp = make_adapter()
 
