@@ -27,8 +27,10 @@ def create_main_wing(adapter: Any, spec: Any) -> GeometryBuildResult:
     tip_chord = _value(spec.wing.tip_chord)
     sweep = _value(spec.wing.sweep, 0.0)
     dihedral = _value(spec.wing.dihedral, 0.0)
+    fuselage_length = _value(spec.fuselage.length)
     fuselage_diameter = _value(spec.fuselage.max_diameter, 0.75)
     position = str(spec.wing.position.value).lower()
+    x_rel_location = fuselage_length * 0.40
     z_rel_location = _wing_z_location(position, fuselage_diameter)
 
     adapter.set_param(geom_id, "TotalSpan", "WingGeom", span)
@@ -36,6 +38,7 @@ def create_main_wing(adapter: Any, spec: Any) -> GeometryBuildResult:
     adapter.set_param(geom_id, "Tip_Chord", "XSec_1", tip_chord)
     adapter.set_param(geom_id, "Sweep", "XSec_1", sweep)
     adapter.set_param(geom_id, "Dihedral", "XSec_1", dihedral)
+    adapter.set_param(geom_id, "X_Rel_Location", "XForm", x_rel_location)
     adapter.set_param(geom_id, "Z_Rel_Location", "XForm", z_rel_location)
 
     return GeometryBuildResult(
@@ -47,6 +50,7 @@ def create_main_wing(adapter: Any, spec: Any) -> GeometryBuildResult:
             "tip_chord": tip_chord,
             "sweep": sweep,
             "dihedral": dihedral,
+            "x_rel_location": x_rel_location,
             "z_rel_location": z_rel_location,
         },
     )

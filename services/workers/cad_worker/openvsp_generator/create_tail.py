@@ -6,7 +6,7 @@ from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuild
 def create_tail(adapter: Any, spec: Any) -> list[GeometryBuildResult]:
     wing_span = float(spec.wing.span.value)
     root_chord = float(spec.wing.root_chord.value)
-    tail_x = float(spec.fuselage.length.value) * 0.42
+    tail_x = float(spec.fuselage.length.value) * 0.90
 
     horizontal_tail = _create_tail_surface(
         adapter,

@@ -22,6 +22,7 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
         else 0.75
     )
     fuselage_length = float(spec.fuselage.length.value)
+    wing_x = fuselage_length * 0.40
 
     length = root_chord
     diameter = fuselage_diameter * 0.5
@@ -34,7 +35,7 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             x_rel_location = fuselage_length * 0.5
             z_rel_location = 0.0
         else:
-            x_rel_location = root_chord * 0.25
+            x_rel_location = wing_x + root_chord * 0.25
             z_rel_location = -fuselage_diameter * 0.45
         return [
             _create_engine_nacelle(
@@ -49,7 +50,7 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             ),
         ]
 
-    x_rel_location = root_chord * 0.25
+    x_rel_location = wing_x + root_chord * 0.25
     y_offset = wing_span * 0.25
     z_rel_location = -fuselage_diameter * 0.45
 

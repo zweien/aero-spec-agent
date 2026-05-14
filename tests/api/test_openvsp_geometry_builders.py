@@ -212,6 +212,7 @@ def test_create_main_wing_applies_planform_and_high_wing_z_location():
         "tip_chord": 0.6,
         "sweep": 5.0,
         "dihedral": 3.0,
+        "x_rel_location": pytest.approx(2.8),
         "z_rel_location": pytest.approx(0.3375),
     }
     assert fake_vsp.value_for("geom-1", "TotalSpan", "WingGeom") == 12.0
@@ -222,6 +223,7 @@ def test_create_main_wing_applies_planform_and_high_wing_z_location():
     assert fake_vsp.value_for("geom-1", "Z_Rel_Location", "XForm") == pytest.approx(
         0.3375
     )
+    assert fake_vsp.value_for("geom-1", "X_Rel_Location", "XForm") == pytest.approx(2.8)
 
 
 def test_create_main_wing_uses_zero_z_location_for_unknown_wing_position():
@@ -247,12 +249,12 @@ def test_create_tail_returns_horizontal_and_vertical_tail_results():
     assert horizontal_tail.applied_parameters == {
         "span": pytest.approx(3.36),
         "chord": pytest.approx(0.54),
-        "x_rel_location": pytest.approx(2.94),
+        "x_rel_location": pytest.approx(6.3),
     }
     assert vertical_tail.applied_parameters == {
         "span": pytest.approx(1.92),
         "chord": pytest.approx(0.66),
-        "x_rel_location": pytest.approx(2.94),
+        "x_rel_location": pytest.approx(6.3),
         "x_rel_rotation": 90.0,
     }
     assert ("AddGeom", "WING", "", "geom-1") in fake_vsp.calls
