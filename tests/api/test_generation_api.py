@@ -7,11 +7,15 @@ from services.api.app.main import app
 import services.api.app.routers.designs as designs_router
 from services.api.app.services.job_runner import JobRunner
 from services.api.app.services.version_store import VersionStore
+from services.workers.cad_worker.openvsp_generator.backend import FakeCadBackend
 
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    isolated_runner = JobRunner(store=VersionStore(root=tmp_path / "storage"))
+    isolated_runner = JobRunner(
+        store=VersionStore(root=tmp_path / "storage"),
+        backend=FakeCadBackend(),
+    )
     monkeypatch.setattr(designs_router, "runner", isolated_runner)
     return TestClient(app)
 

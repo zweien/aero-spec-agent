@@ -17,7 +17,6 @@ class FakeOpenVspModule:
     _ALLOWED_PARAMETERS = {
         "FUSELAGE": {
             ("Length", "Design"),
-            ("Diameter", "Design"),
         },
         "WING": {
             ("TotalSpan", "WingGeom"),
@@ -62,6 +61,23 @@ class FakeOpenVspModule:
 
     def SetParmVal(self, parm_id: str, value: float | int | str) -> None:
         self.calls.append(("SetParmVal", parm_id, value))
+
+    def GetXSecSurf(self, geom_id: str, index: int) -> str:
+        surf_id = f"xsec-surf:{geom_id}:{index}"
+        self.calls.append(("GetXSecSurf", geom_id, index, surf_id))
+        return surf_id
+
+    def GetNumXSec(self, xsec_surf_id: str) -> int:
+        self.calls.append(("GetNumXSec", xsec_surf_id))
+        return 5
+
+    def GetXSec(self, xsec_surf_id: str, index: int) -> str:
+        xsec_id = f"xsec:{xsec_surf_id}:{index}"
+        self.calls.append(("GetXSec", xsec_surf_id, index, xsec_id))
+        return xsec_id
+
+    def SetXSecWidthHeight(self, xsec_id: str, width: float, height: float) -> None:
+        self.calls.append(("SetXSecWidthHeight", xsec_id, width, height))
 
     def Update(self) -> None:
         self.calls.append(("Update",))

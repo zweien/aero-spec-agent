@@ -17,7 +17,7 @@ def create_fuselage(adapter: Any, spec: Any) -> GeometryBuildResult:
     diameter = _value(spec.fuselage.max_diameter, 0.75)
 
     adapter.set_param(geom_id, "Length", "Design", length)
-    adapter.set_param(geom_id, "Diameter", "Design", diameter)
+    adapter.set_fuselage_diameter(geom_id, diameter)
 
     return GeometryBuildResult(
         name="fuselage",

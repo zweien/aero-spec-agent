@@ -100,6 +100,16 @@ To opt in to real OpenVSP generation, install the OpenVSP Python API that matche
 CAD_BACKEND=openvsp .venv/bin/python -m uvicorn services.api.app.main:app --host "$API_HOST" --port "$API_PORT"
 ```
 
+This workspace is configured for the official OpenVSP 3.50.2 Ubuntu 24.04 package extracted under the current user:
+
+```bash
+OPENVSP_ROOT=/home/z/.local/opt/OpenVSP-3.50.2
+OPENVSP_LIB_DIR=/home/z/.local/opt/openvsp-libs/root/usr/lib/x86_64-linux-gnu
+LD_LIBRARY_PATH=/home/z/.local/opt/openvsp-libs/root/usr/lib/x86_64-linux-gnu
+```
+
+The OpenVSP Python package is installed into `.venv` from `$OPENVSP_ROOT/python/openvsp`. The user-level library directory contains Ubuntu packages `libcminpack1` and `libglew2.2`, unpacked without sudo.
+
 Run the OpenVSP integration test only when that API is installed:
 
 ```bash

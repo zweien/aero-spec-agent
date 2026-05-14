@@ -85,7 +85,6 @@ class FakeOpenVspModule:
     _ALLOWED_PARAMETERS = {
         "FUSELAGE": {
             ("Length", "Design"),
-            ("Diameter", "Design"),
         },
         "WING": {
             ("TotalSpan", "WingGeom"),
@@ -110,6 +109,8 @@ class FakeOpenVspModule:
         self.calls: list[tuple[Any, ...]] = []
         self.geom_kinds: dict[str, str] = {}
         self.next_index = 1
+        self.xsec_surfs: dict[str, str] = {}
+        self.xsecs: dict[tuple[str, int], str] = {}
 
     def AddGeom(self, kind: str, parent_id: str) -> str:
         geom_id = f"geom-{self.next_index}"
@@ -127,6 +128,25 @@ class FakeOpenVspModule:
 
     def SetParmVal(self, parm_id: str, value: float | int | str) -> None:
         self.calls.append(("SetParmVal", parm_id, value))
+
+    def GetXSecSurf(self, geom_id: str, index: int) -> str:
+        surf_id = f"xsec-surf:{geom_id}:{index}"
+        self.xsec_surfs[geom_id] = surf_id
+        self.calls.append(("GetXSecSurf", geom_id, index, surf_id))
+        return surf_id
+
+    def GetNumXSec(self, xsec_surf_id: str) -> int:
+        self.calls.append(("GetNumXSec", xsec_surf_id))
+        return 5
+
+    def GetXSec(self, xsec_surf_id: str, index: int) -> str:
+        xsec_id = f"xsec:{xsec_surf_id}:{index}"
+        self.xsecs[(xsec_surf_id, index)] = xsec_id
+        self.calls.append(("GetXSec", xsec_surf_id, index, xsec_id))
+        return xsec_id
+
+    def SetXSecWidthHeight(self, xsec_id: str, width: float, height: float) -> None:
+        self.calls.append(("SetXSecWidthHeight", xsec_id, width, height))
 
     def value_for(self, geom_id: str, parm_name: str, group_name: str) -> float | int | str:
         parm_id = f"parm:{geom_id}:{parm_name}:{group_name}"
@@ -152,7 +172,13 @@ def test_create_fuselage_applies_length_and_diameter():
     assert result.applied_parameters == {"length": 7.0, "max_diameter": 0.75}
     assert ("AddGeom", "FUSELAGE", "", "geom-1") in fake_vsp.calls
     assert fake_vsp.value_for("geom-1", "Length", "Design") == 7.0
-    assert fake_vsp.value_for("geom-1", "Diameter", "Design") == 0.75
+    assert ("FindParm", "geom-1", "Diameter", "Design") not in fake_vsp.calls
+    assert (
+        "SetXSecWidthHeight",
+        "xsec:xsec-surf:geom-1:0:1",
+        0.75,
+        0.75,
+    ) in fake_vsp.calls
 
 
 def test_create_fuselage_defaults_missing_diameter_to_075():
@@ -164,7 +190,12 @@ def test_create_fuselage_defaults_missing_diameter_to_075():
     result = create_fuselage(adapter, spec)
 
     assert result.applied_parameters["max_diameter"] == 0.75
-    assert fake_vsp.value_for("geom-1", "Diameter", "Design") == 0.75
+    assert (
+        "SetXSecWidthHeight",
+        "xsec:xsec-surf:geom-1:0:1",
+        0.75,
+        0.75,
+    ) in fake_vsp.calls
 
 
 def test_create_main_wing_applies_planform_and_high_wing_z_location():
