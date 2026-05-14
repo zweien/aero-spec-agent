@@ -202,6 +202,12 @@ function prepareImportedModel(object: THREE.Object3D): boolean {
   const center = box.getCenter(new THREE.Vector3());
   object.position.sub(center);
   object.scale.multiplyScalar(Math.min(1, 10 / maxDimension));
+
+  // OpenVSP → Three.js coordinate alignment:
+  // OpenVSP: X=longitudinal, Y=lateral, Z=up
+  // Three.js: X=lateral, Y=up, Z=longitudinal
+  object.rotation.x = -Math.PI / 2;
+
   return true;
 }
 

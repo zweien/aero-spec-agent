@@ -231,6 +231,28 @@ class ConversationState:
         )
 
 
+def _normalize_spec_keys(data: dict[str, Any]) -> None:
+    """Fix common LLM casing mistakes in spec data."""
+    if "schema_Version" in data and "schema_version" not in data:
+        data["schema_version"] = data.pop("schema_Version")
+    if "schema_version" in data and isinstance(data["schema_version"], str):
+        data["schema_version"] = data["schema_version"].strip('"')
+    _normalize_source_values(data)
+
+
+def _normalize_source_values(obj: Any) -> None:
+    """Recursively fix source field casing: rule_Default → rule_default."""
+    if not isinstance(obj, dict):
+        return
+    for key, val in obj.items():
+        if key == "source" and isinstance(val, str):
+            lower = val.lower()
+            if lower in ("user", "inferred", "rule_default", "system_default"):
+                obj[key] = lower
+        elif isinstance(val, dict):
+            _normalize_source_values(val)
+
+
 def _sse_event(event_type: str, data: Any) -> str:
     payload = json.dumps(data, ensure_ascii=False) if not isinstance(data, str) else json.dumps({"content": data}, ensure_ascii=False)
     return f"event: {event_type}\ndata: {payload}\n\n"
@@ -424,8 +446,7 @@ class ChatService:
     async def _handle_generate_design(self, state: ConversationState, args: dict[str, Any], tool_call_id: str) -> AsyncIterator[str]:
         try:
             spec_data = args.get("spec", args)
-            if "schema_version" in spec_data and isinstance(spec_data["schema_version"], str):
-                spec_data["schema_version"] = spec_data["schema_version"].strip('"')
+            _normalize_spec_keys(spec_data)
             spec = AircraftSpec.model_validate(spec_data)
         except Exception as exc:
             error_msg = f"spec 校验失败: {exc}"
