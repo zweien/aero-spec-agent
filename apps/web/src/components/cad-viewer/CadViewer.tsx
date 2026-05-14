@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AircraftThreePreview } from "./AircraftThreePreview";
 import type { CadPreviewFormat } from "./cadPreviewSource";
@@ -21,9 +21,39 @@ type CadViewerProps = {
 
 export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
   const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
+  const [drawingsPct, setDrawingsPct] = useState(28);
   const preview = spec ? buildAircraftPreview(spec) : null;
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
   const handleStatusChange = useCallback((status: CadPreviewStatus) => {
     setPreviewStatus(status);
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current || !surfaceRef.current) return;
+      const rect = surfaceRef.current.getBoundingClientRect();
+      const pct = ((rect.bottom - e.clientY) / rect.height) * 100;
+      setDrawingsPct(Math.max(10, Math.min(55, pct)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  const handleDragStart = useCallback(() => {
+    dragging.current = true;
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
   }, []);
 
   return (
@@ -36,10 +66,13 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
           </small>
         ) : null}
       </header>
-      <div className="viewer-surface">
+      <div className="viewer-surface" ref={surfaceRef}>
         {spec && preview ? (
           <div className="aircraft-preview" aria-label="飞机几何预览">
-            <div className="three-preview-frame">
+            <div
+              className="three-preview-frame"
+              style={{ flex: `1 1 ${100 - drawingsPct}%` }}
+            >
               <AircraftThreePreview
                 modelFormat={modelFormat}
                 modelUrl={modelUrl}
@@ -50,7 +83,14 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
                 {cadPreviewStatusLabel(previewStatus)}
               </span>
             </div>
-            <div className="preview-drawings">
+            <div
+              className="resize-handle-h"
+              onMouseDown={handleDragStart}
+            />
+            <div
+              className="preview-drawings"
+              style={{ flex: `0 0 ${drawingsPct}%` }}
+            >
               <svg className="preview-top" viewBox={preview.viewBox} role="img">
                 <title>飞机俯视预览</title>
                 <line className="preview-axis" x1="0" y1="-7" x2="0" y2="7" />
