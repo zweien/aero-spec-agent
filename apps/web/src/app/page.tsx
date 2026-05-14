@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CadViewer } from "@/components/cad-viewer/CadViewer";
 import {
@@ -34,6 +34,36 @@ export default function Home() {
   const [previewSpec, setPreviewSpec] =
     useState<AircraftPreviewSpec | null>(null);
   const [specData, setSpecData] = useState<AircraftSpecData | null>(null);
+
+  const [chatWidth, setChatWidth] = useState(38);
+  const mainRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current || !mainRef.current) return;
+      const rect = mainRef.current.getBoundingClientRect();
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setChatWidth(Math.max(28, Math.min(55, pct)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  const handleDragStart = useCallback(() => {
+    dragging.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
 
   const handleGenerationComplete = useCallback(
     (data: { design_id?: string; version_no?: number; status?: string; files?: string[] }) => {
@@ -78,20 +108,29 @@ export default function Home() {
   return (
     <main className="workbench">
       <nav className="topbar">
-        <strong>AeroSpec Agent</strong>
-        <span>固定翼无人机概念设计 MVP</span>
+        <strong>AeroSpec</strong>
+        <span className="topbar-sep" />
+        <span className="topbar-sub">固定翼无人机概念设计</span>
       </nav>
-      <div className="main-grid">
-        <ChatPanel
-          conversationId={conversationId}
-          onGenerationComplete={handleGenerationComplete}
+      <div className="main-content" ref={mainRef}>
+        <div className="chat-column" style={{ width: `${chatWidth}%` }}>
+          <ChatPanel
+            conversationId={conversationId}
+            onGenerationComplete={handleGenerationComplete}
+          />
+        </div>
+        <div
+          className="resize-handle"
+          onMouseDown={handleDragStart}
         />
-        <CadViewer
-          modelFormat={previewSource?.format}
-          modelUrl={previewSource?.url}
-          spec={previewSpec}
-        />
-        <ParameterPanel spec={specData} />
+        <div className="workspace">
+          <CadViewer
+            modelFormat={previewSource?.format}
+            modelUrl={previewSource?.url}
+            spec={previewSpec}
+          />
+          <ParameterPanel spec={specData} />
+        </div>
       </div>
       <VersionPanel
         apiBaseUrl={API_BASE_URL}

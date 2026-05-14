@@ -95,7 +95,7 @@ export function ParameterPanel({ spec }: ParameterPanelProps) {
     <section className="panel parameter-panel">
       <header>参数</header>
       {parameters.length === 0 ? (
-        <div style={{ color: "#6c7685", fontSize: 14 }}>
+        <div className="parameter-empty">
           等待生成设计参数
         </div>
       ) : (
@@ -107,20 +107,7 @@ export function ParameterPanel({ spec }: ParameterPanelProps) {
               {item.scalar.unit ? ` ${item.scalar.unit}` : ""}
             </strong>
             <small>
-              <span
-                style={{
-                  display: "inline-block",
-                  padding: "1px 6px",
-                  borderRadius: 3,
-                  fontSize: 11,
-                  background:
-                    item.scalar.source === "user"
-                      ? "#dbeafe"
-                      : item.scalar.source === "inferred"
-                        ? "#fef3c7"
-                        : "#f1f5f9",
-                }}
-              >
+              <span className={`source-badge source-badge-${item.scalar.source}`}>
                 {SOURCE_LABELS[item.scalar.source] ?? item.scalar.source}
               </span>
               {" "}
