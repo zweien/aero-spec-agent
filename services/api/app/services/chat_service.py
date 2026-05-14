@@ -15,37 +15,158 @@ from services.api.app.services.spec_patch import apply_patch
 
 logger = logging.getLogger(__name__)
 
+SPEC_SCHEMA_EXAMPLE = (
+    '\n'
+    'schema_version: "0.1"\n'
+    'aircraft:\n'
+    '  name: my_uav\n'
+    '  type: fixed_wing_uav\n'
+    '  layout: conventional\n'
+    'mission:\n'
+    '  cruise_speed: {value: 150, unit: km/h, source: user, confidence: 1.0}\n'
+    '  payload: {value: 20, unit: kg, source: user, confidence: 1.0}\n'
+    '  priority: {value: endurance, source: user, confidence: 0.9}\n'
+    'fuselage:\n'
+    '  length: {value: 5.0, unit: m, source: rule_default, confidence: 0.7}\n'
+    '  max_diameter: {value: 0.6, unit: m, source: rule_default, confidence: 0.7}\n'
+    'wing:\n'
+    '  position: {value: high, source: user, confidence: 1.0}\n'
+    '  span: {value: 10.0, unit: m, source: user, confidence: 1.0}\n'
+    '  root_chord: {value: 1.0, unit: m, source: rule_default, confidence: 0.75}\n'
+    '  tip_chord: {value: 0.5, unit: m, source: rule_default, confidence: 0.75}\n'
+    '  sweep: {value: 3, unit: deg, source: rule_default, confidence: 0.7}\n'
+    '  dihedral: {value: 3, unit: deg, source: rule_default, confidence: 0.7}\n'
+    '  airfoil: {value: NACA4412, source: system_default, confidence: 0.6}\n'
+    'tail:\n'
+    '  type: {value: conventional, source: user, confidence: 1.0}\n'
+    'engine:\n'
+    '  count: {value: 2, source: user, confidence: 1.0}\n'
+    '  position: {value: under_wing, source: inferred, confidence: 0.75}\n'
+)
+
 SYSTEM_PROMPT_TEMPLATE = """你是 AeroSpec Agent，一个飞机概念设计助手。
 
 用户用自然语言描述飞机需求，你负责生成或修改 aircraft_spec 参数化设计。
 
 当前设计状态：
-{current_spec_yaml}
+%s
 
 规则：
 - 只处理固定翼无人机（fixed_wing_uav），常规布局（conventional）
-- 所有数值参数必须包含 unit、source、confidence 字段
+- schema_version 必须是 "0.1"
+- aircraft 必须包含 name, type, layout 字段
+- 每个数值参数必须包含 value, source, confidence 字段，数值参数额外需要 unit 字段
 - 用户明确给出的参数：source=user, confidence=1.0
 - 你推断的参数：source=inferred, confidence=0.7-0.9
 - 无法确定的参数使用合理默认值：source=rule_default, confidence=0.7
 - 新建设计使用 generate_design，修改现有设计使用 modify_design
 - 修改时只输出需要变更的字段
-- 生成完成后简要解释设计参数和依据"""
+- 生成完成后简要解释设计参数和依据
+
+AircraftSpec 完整结构示例（必须严格遵循此结构，不要添加额外字段）：
+""" + SPEC_SCHEMA_EXAMPLE
 
 GENERATE_DESIGN_TOOL = {
     "type": "function",
     "function": {
         "name": "generate_design",
-        "description": "根据用户需求生成新的飞机设计 spec。当用户描述全新的飞机需求时使用。",
+        "description": "根据用户需求生成新的飞机设计 spec。当用户描述全新的飞机需求时使用。必须严格遵循 AircraftSpec 结构。",
         "parameters": {
             "type": "object",
             "properties": {
-                "spec": {
+                "schema_version": {
+                    "type": "string",
+                    "enum": ["0.1"],
+                    "description": "固定值 0.1",
+                },
+                "aircraft": {
                     "type": "object",
-                    "description": "完整的 AircraftSpec 对象，包含 schema_version, aircraft, mission, fuselage, wing, tail, engine 字段",
-                }
+                    "properties": {
+                        "name": {"type": "string", "description": "飞机名称，用英文下划线命名"},
+                        "type": {"type": "string", "enum": ["fixed_wing_uav"]},
+                        "layout": {"type": "string", "enum": ["conventional"]},
+                    },
+                    "required": ["name", "type", "layout"],
+                },
+                "mission": {
+                    "type": "object",
+                    "properties": {
+                        "cruise_speed": {"$ref": "#/$defs/numeric_scalar"},
+                        "payload": {"$ref": "#/$defs/numeric_scalar"},
+                        "priority": {"$ref": "#/$defs/text_scalar"},
+                    },
+                },
+                "fuselage": {
+                    "type": "object",
+                    "properties": {
+                        "length": {"$ref": "#/$defs/numeric_scalar"},
+                        "max_diameter": {"$ref": "#/$defs/numeric_scalar"},
+                    },
+                    "required": ["length"],
+                },
+                "wing": {
+                    "type": "object",
+                    "properties": {
+                        "position": {"$ref": "#/$defs/text_scalar"},
+                        "span": {"$ref": "#/$defs/numeric_scalar"},
+                        "root_chord": {"$ref": "#/$defs/numeric_scalar"},
+                        "tip_chord": {"$ref": "#/$defs/numeric_scalar"},
+                        "sweep": {"$ref": "#/$defs/numeric_scalar"},
+                        "dihedral": {"$ref": "#/$defs/numeric_scalar"},
+                        "airfoil": {"$ref": "#/$defs/text_scalar"},
+                    },
+                    "required": ["position", "span", "root_chord", "tip_chord"],
+                },
+                "tail": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"$ref": "#/$defs/text_scalar"},
+                    },
+                    "required": ["type"],
+                },
+                "engine": {
+                    "type": "object",
+                    "properties": {
+                        "count": {"$ref": "#/$defs/integer_scalar"},
+                        "position": {"$ref": "#/$defs/text_scalar"},
+                    },
+                    "required": ["count"],
+                },
             },
-            "required": ["spec"],
+            "required": ["schema_version", "aircraft", "fuselage", "wing", "tail", "engine"],
+            "$defs": {
+                "numeric_scalar": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": "number"},
+                        "unit": {"type": "string"},
+                        "source": {"type": "string", "enum": ["user", "inferred", "rule_default", "system_default"]},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["value", "source", "confidence"],
+                },
+                "integer_scalar": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": "integer"},
+                        "source": {"type": "string", "enum": ["user", "inferred", "rule_default", "system_default"]},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["value", "source", "confidence"],
+                },
+                "text_scalar": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": "string"},
+                        "source": {"type": "string", "enum": ["user", "inferred", "rule_default", "system_default"]},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["value", "source", "confidence"],
+                },
+            },
         },
     },
 }
@@ -141,7 +262,7 @@ class ChatService:
             Path(f.name).unlink(missing_ok=True)
         else:
             spec_yaml = "尚无设计"
-        return SYSTEM_PROMPT_TEMPLATE.format(current_spec_yaml=spec_yaml)
+        return SYSTEM_PROMPT_TEMPLATE % spec_yaml
 
     async def chat_stream(
         self,
@@ -259,7 +380,9 @@ class ChatService:
 
     async def _handle_generate_design(self, state: ConversationState, args: dict[str, Any]) -> AsyncIterator[str]:
         try:
-            spec_data = args.get("spec", {})
+            spec_data = args.get("spec", args)
+            if "schema_version" in spec_data and isinstance(spec_data["schema_version"], str):
+                spec_data["schema_version"] = spec_data["schema_version"].strip('"')
             spec = AircraftSpec.model_validate(spec_data)
         except Exception as exc:
             yield _sse_event("error", {"content": f"spec 校验失败: {exc}"})

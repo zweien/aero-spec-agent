@@ -35,13 +35,13 @@ def test_conversation_state_reuses_existing():
 
 def test_system_prompt_includes_current_spec():
     spec = load_aircraft_spec(EXAMPLE)
-    prompt = SYSTEM_PROMPT_TEMPLATE.format(current_spec_yaml="wing.span: 12.0")
+    prompt = SYSTEM_PROMPT_TEMPLATE % "wing.span: 12.0"
     assert "wing.span: 12.0" in prompt
     assert "AeroSpec Agent" in prompt
 
 
 def test_system_prompt_shows_no_design_when_empty():
-    prompt = SYSTEM_PROMPT_TEMPLATE.format(current_spec_yaml="尚无设计")
+    prompt = SYSTEM_PROMPT_TEMPLATE % "尚无设计"
     assert "尚无设计" in prompt
 
 
