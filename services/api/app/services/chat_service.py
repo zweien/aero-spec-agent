@@ -350,10 +350,10 @@ class ChatService:
                 continue
 
             if tool_name == "generate_design":
-                async for event in self._handle_generate_design(state, tool_args):
+                async for event in self._handle_generate_design(state, tool_args, tool_call_id):
                     yield event
             elif tool_name == "modify_design":
-                async for event in self._handle_modify_design(state, tool_args):
+                async for event in self._handle_modify_design(state, tool_args, tool_call_id):
                     yield event
             else:
                 state.messages.append({
@@ -378,18 +378,22 @@ class ChatService:
         if final_content:
             state.messages.append({"role": "assistant", "content": final_content})
 
-    async def _handle_generate_design(self, state: ConversationState, args: dict[str, Any]) -> AsyncIterator[str]:
+    async def _handle_generate_design(self, state: ConversationState, args: dict[str, Any], tool_call_id: str) -> AsyncIterator[str]:
         try:
             spec_data = args.get("spec", args)
             if "schema_version" in spec_data and isinstance(spec_data["schema_version"], str):
                 spec_data["schema_version"] = spec_data["schema_version"].strip('"')
             spec = AircraftSpec.model_validate(spec_data)
         except Exception as exc:
-            yield _sse_event("error", {"content": f"spec 校验失败: {exc}"})
+            error_msg = f"spec 校验失败: {exc}"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
             return
 
         if self._job_runner is None:
-            yield _sse_event("error", {"content": "job runner not configured"})
+            error_msg = "job runner not configured"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
             return
 
         yield _sse_event("generation_started", {"design_id": state.design_id})
@@ -407,28 +411,36 @@ class ChatService:
 
         state.messages.append({
             "role": "tool",
-            "tool_call_id": "",
+            "tool_call_id": tool_call_id,
             "content": json.dumps(result, ensure_ascii=False),
         })
 
-    async def _handle_modify_design(self, state: ConversationState, args: dict[str, Any]) -> AsyncIterator[str]:
+    async def _handle_modify_design(self, state: ConversationState, args: dict[str, Any], tool_call_id: str) -> AsyncIterator[str]:
         if state.current_spec is None:
-            yield _sse_event("error", {"content": "没有当前设计，请先使用 generate_design 创建设计"})
+            error_msg = "没有当前设计，请先使用 generate_design 创建设计"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
             return
 
         changes = args.get("changes", [])
         if not changes:
-            yield _sse_event("error", {"content": "changes 不能为空"})
+            error_msg = "changes 不能为空"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
             return
 
         try:
             patched = apply_patch(state.current_spec, changes)
         except Exception as exc:
-            yield _sse_event("error", {"content": f"spec patch 失败: {exc}"})
+            error_msg = f"spec patch 失败: {exc}"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
             return
 
         if self._job_runner is None:
-            yield _sse_event("error", {"content": "job runner not configured"})
+            error_msg = "job runner not configured"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
             return
 
         yield _sse_event("generation_started", {"design_id": state.design_id})
@@ -446,6 +458,6 @@ class ChatService:
 
         state.messages.append({
             "role": "tool",
-            "tool_call_id": "",
+            "tool_call_id": tool_call_id,
             "content": json.dumps(result, ensure_ascii=False),
         })

@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "error" | "generating";
@@ -16,6 +18,10 @@ type ChatPanelProps = {
 export function ChatPanel({ messages, isGenerating, onSend }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   function handleSubmit() {
     const trimmed = input.trim();
@@ -35,7 +41,11 @@ export function ChatPanel({ messages, isGenerating, onSend }: ChatPanelProps) {
         )}
         {messages.map((msg, i) => (
           <div key={i} className={`message ${msg.role}`}>
-            {msg.content}
+            {msg.role === "assistant" ? (
+              <Markdown remarkPlugins={[remarkGfm]}>{msg.content}</Markdown>
+            ) : (
+              msg.content
+            )}
           </div>
         ))}
         <div ref={messagesEndRef} />
