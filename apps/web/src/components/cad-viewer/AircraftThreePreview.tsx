@@ -3,16 +3,30 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 
 import type { AircraftPreviewSpec } from "./previewGeometry";
 import {
   buildAircraftThreeModel,
   type AircraftThreeModel,
 } from "./threePreviewModel";
+import type { CadPreviewFormat } from "./cadPreviewSource";
 
 type AircraftThreePreviewProps = {
+  modelFormat?: CadPreviewFormat;
+  modelUrl?: string;
   spec: AircraftPreviewSpec;
 };
+
+function disposeMaterial(material: THREE.Material): void {
+  for (const value of Object.values(material)) {
+    if (value instanceof THREE.Texture) {
+      value.dispose();
+    }
+  }
+  material.dispose();
+}
 
 function disposeObject3D(object: THREE.Object3D): void {
   const disposedMaterials = new Set<THREE.Material>();
@@ -25,7 +39,7 @@ function disposeObject3D(object: THREE.Object3D): void {
       const materials = Array.isArray(child.material) ? child.material : [child.material];
       for (const material of materials) {
         if (material instanceof THREE.Material && !disposedMaterials.has(material)) {
-          material.dispose();
+          disposeMaterial(material);
           disposedMaterials.add(material);
         }
       }
@@ -155,7 +169,65 @@ function createAircraftGroup(model: AircraftThreeModel): THREE.Group {
   return group;
 }
 
-export function AircraftThreePreview({ spec }: AircraftThreePreviewProps) {
+function prepareImportedModel(object: THREE.Object3D): boolean {
+  let hasMesh = false;
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      hasMesh = true;
+      if (!child.material) {
+        child.material = new THREE.MeshStandardMaterial({
+          color: 0xd8e2f0,
+          metalness: 0.12,
+          roughness: 0.45,
+        });
+      }
+    }
+  });
+  if (!hasMesh) {
+    return false;
+  }
+
+  const box = new THREE.Box3().setFromObject(object);
+  if (box.isEmpty()) {
+    return false;
+  }
+  const size = box.getSize(new THREE.Vector3());
+  const maxDimension = Math.max(size.x, size.y, size.z);
+  if (!Number.isFinite(maxDimension) || maxDimension <= 0) {
+    return false;
+  }
+
+  const center = box.getCenter(new THREE.Vector3());
+  object.position.sub(center);
+  object.scale.multiplyScalar(Math.min(1, 10 / maxDimension));
+  return true;
+}
+
+function loadImportedModel(
+  url: string,
+  format: CadPreviewFormat,
+  onLoad: (object: THREE.Object3D) => void,
+  onError: () => void,
+): void {
+  if (format === "glb") {
+    new GLTFLoader().load(
+      url,
+      (gltf) => onLoad(gltf.scene),
+      undefined,
+      onError,
+    );
+    return;
+  }
+
+  new OBJLoader().load(
+    url,
+    onLoad,
+    undefined,
+    onError,
+  );
+}
+
+export function AircraftThreePreview({ modelFormat, modelUrl, spec }: AircraftThreePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const model = useMemo(() => buildAircraftThreeModel(spec), [spec]);
 
@@ -167,6 +239,7 @@ export function AircraftThreePreview({ spec }: AircraftThreePreviewProps) {
     const rendererCanvas = canvas;
 
     let animationFrame = 0;
+    let isActive = true;
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
@@ -196,6 +269,27 @@ export function AircraftThreePreview({ spec }: AircraftThreePreviewProps) {
     grid.position.z = -0.75;
     scene.add(grid);
 
+    if (modelUrl && modelFormat) {
+      loadImportedModel(
+        modelUrl,
+        modelFormat,
+        (loadedModel) => {
+          if (!isActive) {
+            disposeObject3D(loadedModel);
+            return;
+          }
+          if (!prepareImportedModel(loadedModel)) {
+            disposeObject3D(loadedModel);
+            return;
+          }
+          scene.remove(aircraft);
+          disposeObject3D(aircraft);
+          scene.add(loadedModel);
+        },
+        () => undefined,
+      );
+    }
+
     function resize() {
       const width = rendererCanvas.clientWidth;
       const height = rendererCanvas.clientHeight;
@@ -216,12 +310,13 @@ export function AircraftThreePreview({ spec }: AircraftThreePreviewProps) {
     render();
 
     return () => {
+      isActive = false;
       window.cancelAnimationFrame(animationFrame);
       controls.dispose();
       disposeObject3D(scene);
       renderer.dispose();
     };
-  }, [model]);
+  }, [model, modelFormat, modelUrl]);
 
   return <canvas ref={canvasRef} className="three-preview-canvas" aria-label="可旋转 3D 飞机预览" />;
 }

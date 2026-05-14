@@ -21,6 +21,7 @@ def _artifact_files(artifacts: CadArtifacts) -> dict[str, Path]:
         files["step"] = artifacts.step
     if artifacts.glb is not None:
         files["glb"] = artifacts.glb
+    files.update(artifacts.extra_files)
     return files
 
 

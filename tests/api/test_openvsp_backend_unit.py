@@ -10,6 +10,10 @@ from tests.api.test_openvsp_geometry_builders import valid_spec_data
 
 
 class FakeOpenVspModule:
+    SET_ALL = 0
+    EXPORT_STEP = 10
+    EXPORT_OBJ = 11
+
     _ALLOWED_PARAMETERS = {
         "FUSELAGE": {
             ("Length", "Design"),
@@ -66,20 +70,30 @@ class FakeOpenVspModule:
         self.calls.append(("WriteVSPFile", path))
         Path(path).write_text("fake openvsp model\n", encoding="utf-8")
 
+    def ExportFile(self, path: str, set_id: int, export_type: int) -> None:
+        self.calls.append(("ExportFile", path, set_id, export_type))
+        Path(path).write_text(f"fake export {export_type}\n", encoding="utf-8")
+
 
 def _spec():
     return load_aircraft_spec(valid_spec_data())
 
 
-def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_only(tmp_path: Path):
+def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_step_and_obj(
+    tmp_path: Path,
+):
     fake_vsp = FakeOpenVspModule()
 
     artifacts = OpenVspBackend(vsp_module=fake_vsp).generate(_spec(), tmp_path)
 
     assert artifacts.vsp3.exists()
     assert artifacts.vsp3.stat().st_size > 0
-    assert artifacts.step is None
+    assert artifacts.step is not None
+    assert artifacts.step.name == "aircraft.step"
+    assert artifacts.step.read_text(encoding="utf-8") == "fake export 10\n"
     assert artifacts.glb is None
+    assert artifacts.extra_files["obj"].name == "aircraft.obj"
+    assert artifacts.extra_files["obj"].read_text(encoding="utf-8") == "fake export 11\n"
     assert artifacts.metadata["backend"] == "openvsp"
     assert artifacts.metadata["components"] == {
         "fuselage": "geom-1",
@@ -99,6 +113,8 @@ def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_only(tmp_path: P
     )
     assert artifacts.metadata["validation"]["vsp3"]["status"] == "pass"
     assert artifacts.metadata["validation"]["vsp3.exists"]["status"] == "pass"
+    assert artifacts.metadata["validation"]["step.exists"]["status"] == "pass"
+    assert artifacts.metadata["validation"]["obj.exists"]["status"] == "pass"
 
 
 def test_openvsp_backend_updates_model_before_writing_vsp3(tmp_path: Path):
@@ -108,6 +124,7 @@ def test_openvsp_backend_updates_model_before_writing_vsp3(tmp_path: Path):
 
     call_names = [call[0] for call in fake_vsp.calls]
     assert call_names.index("Update") < call_names.index("WriteVSPFile")
+    assert call_names.index("WriteVSPFile") < call_names.index("ExportFile")
 
 
 def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(
@@ -121,7 +138,7 @@ def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(
         backend=OpenVspBackend(vsp_module=fake_vsp),
     )
 
-    assert set(result.files) == {"vsp3"}
+    assert set(result.files) == {"vsp3", "step", "obj"}
     assert result.validation_report["backend"] == {
         "expected": "openvsp",
         "actual": "openvsp",
@@ -135,8 +152,11 @@ def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(
     }
     assert result.validation_report["wing.span"]["actual"] == 12.0
     assert result.validation_report["engine.count"]["actual"] == 2
+    assert result.validation_report["step.exists"]["status"] == "pass"
+    assert result.validation_report["obj.exists"]["status"] == "pass"
     assert result.generation_log["components"]["fuselage"] == "geom-1"
     assert result.generation_log["applied_parameters"]["wing.span"] == 12.0
+    assert result.generation_log["files"]["obj"].endswith("aircraft.obj")
 
 
 def test_generate_aircraft_prefers_applied_parameters_over_backend_validation(

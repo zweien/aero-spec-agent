@@ -12,6 +12,10 @@ from services.workers.cad_worker.openvsp_generator.openvsp_adapter import OpenVs
 
 
 class FakeOpenVspModule:
+    SET_ALL = 0
+    EXPORT_STEP = 10
+    EXPORT_OBJ = 11
+
     def __init__(
         self,
         *,
@@ -38,6 +42,10 @@ class FakeOpenVspModule:
 
     def WriteVSPFile(self, path: str) -> None:
         self.calls.append(("WriteVSPFile", path))
+
+    def ExportFile(self, path: str, set_id: int, export_type: int) -> None:
+        self.calls.append(("ExportFile", path, set_id, export_type))
+        Path(path).write_text(f"export {export_type}\n", encoding="utf-8")
 
 
 def test_adapter_delegates_openvsp_calls_in_order(tmp_path: Path):
@@ -68,6 +76,17 @@ def test_set_param_uses_find_parm_result_for_set_parm_val():
 
     assert ("SetParmVal", "resolved-parm", 42) in fake_vsp.calls
     assert ("SetParmVal", "geom-2", "Span", "XForm", 42) not in fake_vsp.calls
+
+
+def test_export_file_uses_openvsp_export_constant_and_all_set(tmp_path: Path):
+    fake_vsp = FakeOpenVspModule()
+    adapter = OpenVspAdapter(module=fake_vsp)
+    output_path = tmp_path / "aircraft.step"
+
+    adapter.export_file(output_path, "EXPORT_STEP")
+
+    assert output_path.read_text(encoding="utf-8") == "export 10\n"
+    assert ("ExportFile", str(output_path), 0, 10) in fake_vsp.calls
 
 
 @pytest.mark.parametrize("empty_geom_id", ["", None])

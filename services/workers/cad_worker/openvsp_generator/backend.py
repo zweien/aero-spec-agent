@@ -22,6 +22,7 @@ class CadArtifacts:
     vsp3: Path
     step: Path | None = None
     glb: Path | None = None
+    extra_files: dict[str, Path] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -60,13 +61,21 @@ class OpenVspBackend:
 
         adapter.update()
         vsp3 = output_dir / "aircraft.vsp3"
+        step = output_dir / "aircraft.step"
+        obj = output_dir / "aircraft.obj"
         adapter.write_vsp_file(vsp3)
+        adapter.export_file(step, "EXPORT_STEP")
+        adapter.export_file(obj, "EXPORT_OBJ")
 
         applied_parameters = _stable_applied_parameters(build_results)
         vsp3_validation = verify_vsp3_file(vsp3)
+        step_validation = verify_vsp3_file(step)
+        obj_validation = verify_vsp3_file(obj)
         validation = {
             "vsp3": vsp3_validation,
             "vsp3.exists": vsp3_validation,
+            "step.exists": step_validation,
+            "obj.exists": obj_validation,
             "wing.span": verification_entry(
                 float(spec.wing.span.value),
                 applied_parameters.get("wing.span"),
@@ -78,8 +87,9 @@ class OpenVspBackend:
         }
         return CadArtifacts(
             vsp3=vsp3,
-            step=None,
+            step=step,
             glb=None,
+            extra_files={"obj": obj},
             metadata={
                 "backend": "openvsp",
                 "components": _components(build_results),

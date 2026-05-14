@@ -106,4 +106,4 @@ Run the OpenVSP integration test only when that API is installed:
 CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/test_openvsp_integration.py -q
 ```
 
-At this stage the real OpenVSP backend generates a `.vsp3` file only. STEP and GLB export remain fake-backend placeholders and are not produced by `CAD_BACKEND=openvsp`.
+At this stage the real OpenVSP backend generates `.vsp3`, `.step`, and `.obj` files through the OpenVSP Python API. GLB conversion is not produced by `CAD_BACKEND=openvsp` yet. The web CAD viewer prefers generated `aircraft.glb`, falls back to `aircraft.obj` when available, and keeps the parameter-driven preview visible if a generated model file cannot be loaded.

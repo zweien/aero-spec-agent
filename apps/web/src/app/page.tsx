@@ -3,6 +3,10 @@
 import { useMemo, useState } from "react";
 
 import { CadViewer } from "@/components/cad-viewer/CadViewer";
+import {
+  selectCadPreviewSource,
+  type CadPreviewSource,
+} from "@/components/cad-viewer/cadPreviewSource";
 import type { AircraftPreviewSpec } from "@/components/cad-viewer/previewGeometry";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { ParameterPanel } from "@/components/parameter-panel/ParameterPanel";
@@ -84,6 +88,7 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [job, setJob] = useState<JobResponse | null>(null);
   const [files, setFiles] = useState<string[]>([]);
+  const [previewSource, setPreviewSource] = useState<CadPreviewSource | null>(null);
   const [previewSpec, setPreviewSpec] = useState<AircraftPreviewSpec | null>(null);
 
   const parameters = useMemo(
@@ -123,6 +128,14 @@ export default function Home() {
 
       const version = (await versionResponse.json()) as VersionResponse;
       setFiles(version.files);
+      setPreviewSource(
+        selectCadPreviewSource({
+          apiBaseUrl: API_BASE_URL,
+          designId: DEMO_DESIGN_ID,
+          versionNo: nextJob.version_no,
+          files: version.files,
+        }),
+      );
       setPreviewSpec(version.validation_report?.spec_echo ?? null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "生成失败");
@@ -139,7 +152,11 @@ export default function Home() {
       </nav>
       <div className="main-grid">
         <ChatPanel error={error} isGenerating={isGenerating} onGenerate={handleGenerate} />
-        <CadViewer glbPath={job?.files.glb} spec={previewSpec} />
+        <CadViewer
+          modelFormat={previewSource?.format}
+          modelUrl={previewSource?.url}
+          spec={previewSpec}
+        />
         <ParameterPanel parameters={parameters} />
       </div>
       <VersionPanel

@@ -1,17 +1,19 @@
 "use client";
 
 import { AircraftThreePreview } from "./AircraftThreePreview";
+import type { CadPreviewFormat } from "./cadPreviewSource";
 import {
   buildAircraftPreview,
   type AircraftPreviewSpec,
 } from "./previewGeometry";
 
 type CadViewerProps = {
-  glbPath?: string;
+  modelFormat?: CadPreviewFormat;
+  modelUrl?: string;
   spec?: AircraftPreviewSpec | null;
 };
 
-export function CadViewer({ glbPath, spec }: CadViewerProps) {
+export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
   const preview = spec ? buildAircraftPreview(spec) : null;
 
   return (
@@ -27,7 +29,7 @@ export function CadViewer({ glbPath, spec }: CadViewerProps) {
       <div className="viewer-surface">
         {spec && preview ? (
           <div className="aircraft-preview" aria-label="飞机几何预览">
-            <AircraftThreePreview spec={spec} />
+            <AircraftThreePreview modelFormat={modelFormat} modelUrl={modelUrl} spec={spec} />
             <svg className="preview-top" viewBox={preview.viewBox} role="img">
               <title>飞机俯视预览</title>
               <line className="preview-axis" x1="0" y1="-7" x2="0" y2="7" />
@@ -85,7 +87,6 @@ export function CadViewer({ glbPath, spec }: CadViewerProps) {
         ) : (
           <span>等待生成模型</span>
         )}
-        {glbPath ? <small className="artifact-note">GLB 占位文件：{glbPath}</small> : null}
       </div>
     </section>
   );

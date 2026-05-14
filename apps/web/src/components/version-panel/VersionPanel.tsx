@@ -1,3 +1,5 @@
+import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
+
 type VersionPanelProps = {
   apiBaseUrl: string;
   designId: string;
@@ -27,7 +29,7 @@ export function VersionPanel({
                 {index > 0 ? ", " : ""}
                 {canLinkFiles ? (
                   <a
-                    href={`${apiBaseUrl}/api/designs/${designId}/versions/${versionNo}/files/${encodeURIComponent(file)}`}
+                    href={buildVersionFileUrl(apiBaseUrl, designId, versionNo, file)}
                     rel="noreferrer"
                     target="_blank"
                   >

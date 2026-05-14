@@ -50,5 +50,22 @@ class OpenVspAdapter:
     def write_vsp_file(self, path: Path) -> None:
         self._vsp.WriteVSPFile(str(path))
 
+    def export_file(
+        self,
+        path: Path,
+        export_type_name: str,
+        set_id: int | None = None,
+    ) -> None:
+        export_type = getattr(self._vsp, export_type_name, None)
+        if export_type is None:
+            raise CadGenerationError(
+                f"OpenVSP export type is unavailable: {export_type_name}"
+            )
+        resolved_set_id = self.default_set_id() if set_id is None else set_id
+        self._vsp.ExportFile(str(path), resolved_set_id, export_type)
+
+    def default_set_id(self) -> int:
+        return int(getattr(self._vsp, "SET_ALL", 0))
+
     def update(self) -> None:
         self._vsp.Update()
