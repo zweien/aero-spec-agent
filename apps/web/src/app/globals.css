@@ -581,10 +581,35 @@ textarea:focus {
 
 .preview-drawings {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.resize-handle-v {
+  width: 10px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.resize-handle-v::before {
+  content: "";
+  width: 3px;
+  height: 28px;
+  border-radius: 3px;
+  background: var(--border-strong);
+  transition: background 0.2s, height 0.2s;
+}
+
+.resize-handle-v:hover::before {
+  background: var(--accent);
+  height: 40px;
 }
 
 .preview-top-wrap,

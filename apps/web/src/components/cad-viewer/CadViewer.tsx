@@ -40,7 +40,7 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
         setDrawingsPct(Math.max(10, Math.min(55, pct)));
       } else if (dragTarget.current === "drawings" && drawingsRef.current) {
         const rect = drawingsRef.current.getBoundingClientRect();
-        const pct = ((rect.bottom - e.clientY) / rect.height) * 100;
+        const pct = ((e.clientX - rect.left) / rect.width) * 100;
         setTopPct(Math.max(15, Math.min(85, pct)));
       }
     };
@@ -129,7 +129,7 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
                 </svg>
               </div>
               <div
-                className="resize-handle-h"
+                className="resize-handle-v"
                 onMouseDown={() => startDrag("drawings")}
               />
               <div
