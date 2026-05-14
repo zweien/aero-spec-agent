@@ -350,3 +350,49 @@ textarea {
     min-height: 300px;
   }
 }
+
+.chat-messages {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-messages .message {
+  margin-bottom: 8px;
+}
+
+.chat-messages .message.user {
+  background: #e8edf5;
+  border-color: #c5ccd6;
+}
+
+.chat-messages .message.assistant {
+  background: #ffffff;
+  border-color: #d9dde3;
+}
+
+.chat-messages .message.error {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.chat-messages .message.generating {
+  background: #f0f7ff;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input-row textarea {
+  flex: 1;
+}
+
+.chat-input-row button {
+  padding: 0 16px;
+  white-space: nowrap;
+}
