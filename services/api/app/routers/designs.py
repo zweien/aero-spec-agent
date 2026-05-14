@@ -34,6 +34,14 @@ def get_job(job_id: str):
     return job.__dict__
 
 
+@router.get("/designs/{design_id}/versions")
+def list_versions(design_id: str):
+    try:
+        return runner.store.list_versions(design_id=design_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/designs/{design_id}/versions/{version_no}")
 def get_version(design_id: str, version_no: int):
     try:

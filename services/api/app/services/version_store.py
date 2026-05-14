@@ -62,6 +62,17 @@ class VersionStore:
             "validation_report": validation,
         }
 
+    def list_versions(self, design_id: str) -> list[dict[str, object]]:
+        design_id = self._validate_design_id(design_id)
+        versions_root = self.root / "designs" / design_id / "versions"
+        if not versions_root.exists():
+            return []
+        versions = []
+        for path in sorted(versions_root.iterdir(), key=lambda p: int(p.name) if p.name.isdigit() else 0):
+            if path.is_dir() and path.name.isdigit():
+                versions.append({"version_no": int(path.name)})
+        return versions
+
     def version_file(self, design_id: str, version_no: int, filename: str) -> Path:
         if Path(filename).name != filename or filename in {"", ".", ".."}:
             raise ValueError("filename must be a file name, not a path")
