@@ -22,9 +22,11 @@ type CadViewerProps = {
 export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
   const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
   const [drawingsPct, setDrawingsPct] = useState(28);
+  const [topPct, setTopPct] = useState(50);
   const preview = spec ? buildAircraftPreview(spec) : null;
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
+  const drawingsRef = useRef<HTMLDivElement>(null);
+  const dragTarget = useRef<"surface" | "drawings" | null>(null);
 
   const handleStatusChange = useCallback((status: CadPreviewStatus) => {
     setPreviewStatus(status);
@@ -32,13 +34,18 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (!dragging.current || !surfaceRef.current) return;
-      const rect = surfaceRef.current.getBoundingClientRect();
-      const pct = ((rect.bottom - e.clientY) / rect.height) * 100;
-      setDrawingsPct(Math.max(10, Math.min(55, pct)));
+      if (dragTarget.current === "surface" && surfaceRef.current) {
+        const rect = surfaceRef.current.getBoundingClientRect();
+        const pct = ((rect.bottom - e.clientY) / rect.height) * 100;
+        setDrawingsPct(Math.max(10, Math.min(55, pct)));
+      } else if (dragTarget.current === "drawings" && drawingsRef.current) {
+        const rect = drawingsRef.current.getBoundingClientRect();
+        const pct = ((rect.bottom - e.clientY) / rect.height) * 100;
+        setTopPct(Math.max(15, Math.min(85, pct)));
+      }
     };
     const onUp = () => {
-      dragging.current = false;
+      dragTarget.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
@@ -50,8 +57,8 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
     };
   }, []);
 
-  const handleDragStart = useCallback(() => {
-    dragging.current = true;
+  const startDrag = useCallback((target: "surface" | "drawings") => {
+    dragTarget.current = target;
     document.body.style.cursor = "row-resize";
     document.body.style.userSelect = "none";
   }, []);
@@ -85,60 +92,75 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
             </div>
             <div
               className="resize-handle-h"
-              onMouseDown={handleDragStart}
+              onMouseDown={() => startDrag("surface")}
             />
             <div
               className="preview-drawings"
+              ref={drawingsRef}
               style={{ flex: `0 0 ${drawingsPct}%` }}
             >
-              <svg className="preview-top" viewBox={preview.viewBox} role="img">
-                <title>飞机俯视预览</title>
-                <line className="preview-axis" x1="0" y1="-7" x2="0" y2="7" />
-                <polygon className="preview-wing" points={preview.top.wing} />
-                <rect
-                  className="preview-fuselage"
-                  x={preview.top.fuselage.x}
-                  y={preview.top.fuselage.y}
-                  width={preview.top.fuselage.width}
-                  height={preview.top.fuselage.height}
-                  rx={preview.top.fuselage.radius}
-                  ry={preview.top.fuselage.radius}
-                />
-                <polygon className="preview-tail" points={preview.top.tail} />
-                {preview.top.engines.map((engine) => (
-                  <circle
-                    className="preview-engine"
-                    key={`${engine.cx}-${engine.cy}`}
-                    cx={engine.cx}
-                    cy={engine.cy}
-                    r={engine.r}
+              <div
+                className="preview-top-wrap"
+                style={{ flex: `1 1 ${topPct}%` }}
+              >
+                <svg className="preview-top" viewBox={preview.viewBox} role="img">
+                  <title>飞机俯视预览</title>
+                  <line className="preview-axis" x1="0" y1="-7" x2="0" y2="7" />
+                  <polygon className="preview-wing" points={preview.top.wing} />
+                  <rect
+                    className="preview-fuselage"
+                    x={preview.top.fuselage.x}
+                    y={preview.top.fuselage.y}
+                    width={preview.top.fuselage.width}
+                    height={preview.top.fuselage.height}
+                    rx={preview.top.fuselage.radius}
+                    ry={preview.top.fuselage.radius}
                   />
-                ))}
-              </svg>
-              <svg className="preview-side" viewBox="-4.2 -1.4 8.4 2.8" role="img">
-                <title>飞机侧视预览</title>
-                <line className="preview-ground" x1="-4.2" y1="1.05" x2="4.2" y2="1.05" />
-                <rect
-                  className="preview-fuselage"
-                  x={preview.side.fuselage.x}
-                  y={preview.side.fuselage.y}
-                  width={preview.side.fuselage.width}
-                  height={preview.side.fuselage.height}
-                  rx={preview.side.fuselage.radius}
-                  ry={preview.side.fuselage.radius}
-                />
-                <polygon className="preview-wing" points={preview.side.wing} />
-                <polygon className="preview-tail" points={preview.side.tail} />
-                {preview.side.engines.map((engine) => (
-                  <circle
-                    className="preview-engine"
-                    key={`${engine.cx}-${engine.cy}`}
-                    cx={engine.cx}
-                    cy={engine.cy}
-                    r={engine.r}
+                  <polygon className="preview-tail" points={preview.top.tail} />
+                  {preview.top.engines.map((engine) => (
+                    <circle
+                      className="preview-engine"
+                      key={`${engine.cx}-${engine.cy}`}
+                      cx={engine.cx}
+                      cy={engine.cy}
+                      r={engine.r}
+                    />
+                  ))}
+                </svg>
+              </div>
+              <div
+                className="resize-handle-h"
+                onMouseDown={() => startDrag("drawings")}
+              />
+              <div
+                className="preview-side-wrap"
+                style={{ flex: `1 1 ${100 - topPct}%` }}
+              >
+                <svg className="preview-side" viewBox="-4.2 -1.4 8.4 2.8" role="img">
+                  <title>飞机侧视预览</title>
+                  <line className="preview-ground" x1="-4.2" y1="1.05" x2="4.2" y2="1.05" />
+                  <rect
+                    className="preview-fuselage"
+                    x={preview.side.fuselage.x}
+                    y={preview.side.fuselage.y}
+                    width={preview.side.fuselage.width}
+                    height={preview.side.fuselage.height}
+                    rx={preview.side.fuselage.radius}
+                    ry={preview.side.fuselage.radius}
                   />
-                ))}
-              </svg>
+                  <polygon className="preview-wing" points={preview.side.wing} />
+                  <polygon className="preview-tail" points={preview.side.tail} />
+                  {preview.side.engines.map((engine) => (
+                    <circle
+                      className="preview-engine"
+                      key={`${engine.cx}-${engine.cy}`}
+                      cx={engine.cx}
+                      cy={engine.cy}
+                      r={engine.r}
+                    />
+                  ))}
+                </svg>
+              </div>
             </div>
             <div className="preview-metrics">
               <span>机身 {preview.labels.fuselageLength}</span>
