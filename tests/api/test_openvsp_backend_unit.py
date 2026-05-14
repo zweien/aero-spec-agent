@@ -95,19 +95,28 @@ def _spec():
     return load_aircraft_spec(valid_spec_data())
 
 
+def fake_obj_to_glb(_obj_path: Path, glb_path: Path) -> None:
+    glb_path.write_bytes(b"glTF\x02\x00\x00\x00\x14\x00\x00\x00")
+
+
 def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_step_and_obj(
     tmp_path: Path,
 ):
     fake_vsp = FakeOpenVspModule()
 
-    artifacts = OpenVspBackend(vsp_module=fake_vsp).generate(_spec(), tmp_path)
+    artifacts = OpenVspBackend(
+        obj_to_glb=fake_obj_to_glb,
+        vsp_module=fake_vsp,
+    ).generate(_spec(), tmp_path)
 
     assert artifacts.vsp3.exists()
     assert artifacts.vsp3.stat().st_size > 0
     assert artifacts.step is not None
     assert artifacts.step.name == "aircraft.step"
     assert artifacts.step.read_text(encoding="utf-8") == "fake export 10\n"
-    assert artifacts.glb is None
+    assert artifacts.glb is not None
+    assert artifacts.glb.name == "aircraft.glb"
+    assert artifacts.glb.read_bytes()[:4] == b"glTF"
     assert artifacts.extra_files["obj"].name == "aircraft.obj"
     assert artifacts.extra_files["obj"].read_text(encoding="utf-8") == "fake export 11\n"
     assert artifacts.metadata["backend"] == "openvsp"
@@ -131,12 +140,13 @@ def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_step_and_obj(
     assert artifacts.metadata["validation"]["vsp3.exists"]["status"] == "pass"
     assert artifacts.metadata["validation"]["step.exists"]["status"] == "pass"
     assert artifacts.metadata["validation"]["obj.exists"]["status"] == "pass"
+    assert artifacts.metadata["validation"]["glb.exists"]["status"] == "pass"
 
 
 def test_openvsp_backend_updates_model_before_writing_vsp3(tmp_path: Path):
     fake_vsp = FakeOpenVspModule()
 
-    OpenVspBackend(vsp_module=fake_vsp).generate(_spec(), tmp_path)
+    OpenVspBackend(obj_to_glb=fake_obj_to_glb, vsp_module=fake_vsp).generate(_spec(), tmp_path)
 
     call_names = [call[0] for call in fake_vsp.calls]
     assert call_names.index("Update") < call_names.index("WriteVSPFile")
@@ -151,10 +161,10 @@ def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(
     result = generate_aircraft(
         spec=_spec(),
         output_dir=tmp_path,
-        backend=OpenVspBackend(vsp_module=fake_vsp),
+        backend=OpenVspBackend(obj_to_glb=fake_obj_to_glb, vsp_module=fake_vsp),
     )
 
-    assert set(result.files) == {"vsp3", "step", "obj"}
+    assert set(result.files) == {"vsp3", "step", "obj", "glb"}
     assert result.validation_report["backend"] == {
         "expected": "openvsp",
         "actual": "openvsp",
@@ -170,9 +180,11 @@ def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(
     assert result.validation_report["engine.count"]["actual"] == 2
     assert result.validation_report["step.exists"]["status"] == "pass"
     assert result.validation_report["obj.exists"]["status"] == "pass"
+    assert result.validation_report["glb.exists"]["status"] == "pass"
     assert result.generation_log["components"]["fuselage"] == "geom-1"
     assert result.generation_log["applied_parameters"]["wing.span"] == 12.0
     assert result.generation_log["files"]["obj"].endswith("aircraft.obj")
+    assert result.generation_log["files"]["glb"].endswith("aircraft.glb")
 
 
 def test_generate_aircraft_prefers_applied_parameters_over_backend_validation(

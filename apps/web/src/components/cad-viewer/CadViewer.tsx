@@ -1,7 +1,13 @@
 "use client";
 
+import { useCallback, useState } from "react";
+
 import { AircraftThreePreview } from "./AircraftThreePreview";
 import type { CadPreviewFormat } from "./cadPreviewSource";
+import {
+  cadPreviewStatusLabel,
+  type CadPreviewStatus,
+} from "./cadPreviewStatus";
 import {
   buildAircraftPreview,
   type AircraftPreviewSpec,
@@ -14,7 +20,11 @@ type CadViewerProps = {
 };
 
 export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
+  const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
   const preview = spec ? buildAircraftPreview(spec) : null;
+  const handleStatusChange = useCallback((status: CadPreviewStatus) => {
+    setPreviewStatus(status);
+  }, []);
 
   return (
     <section className="panel viewer-panel">
@@ -29,7 +39,17 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
       <div className="viewer-surface">
         {spec && preview ? (
           <div className="aircraft-preview" aria-label="飞机几何预览">
-            <AircraftThreePreview modelFormat={modelFormat} modelUrl={modelUrl} spec={spec} />
+            <div className="three-preview-frame">
+              <AircraftThreePreview
+                modelFormat={modelFormat}
+                modelUrl={modelUrl}
+                onStatusChange={handleStatusChange}
+                spec={spec}
+              />
+              <span className="preview-source-status">
+                {cadPreviewStatusLabel(previewStatus)}
+              </span>
+            </div>
             <svg className="preview-top" viewBox={preview.viewBox} role="img">
               <title>飞机俯视预览</title>
               <line className="preview-axis" x1="0" y1="-7" x2="0" y2="7" />

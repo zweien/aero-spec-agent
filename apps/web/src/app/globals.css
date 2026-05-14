@@ -190,6 +190,34 @@ textarea {
   cursor: grab;
 }
 
+.three-preview-frame {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  min-height: 260px;
+}
+
+.three-preview-frame .three-preview-canvas {
+  display: block;
+}
+
+.preview-source-status {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  border: 1px solid rgba(219, 229, 245, 0.22);
+  border-radius: 6px;
+  background: rgba(16, 20, 29, 0.72);
+  color: #eef5ff;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .three-preview-canvas:active {
   cursor: grabbing;
 }

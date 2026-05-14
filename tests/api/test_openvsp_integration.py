@@ -25,9 +25,13 @@ def test_openvsp_backend_generates_real_vsp3_and_validation_report(tmp_path: Pat
         pytest.fail(str(exc))
 
     vsp3 = result.files["vsp3"]
+    glb = result.files["glb"]
     assert vsp3.exists()
     assert vsp3.stat().st_size > 0
+    assert glb.exists()
+    assert glb.read_bytes()[:4] == b"glTF"
     assert result.validation_report["backend"]["actual"] in {"openvsp", "OpenVspBackend"}
     assert result.validation_report["vsp3.exists"]["status"] == "pass"
+    assert result.validation_report["glb.exists"]["status"] == "pass"
     assert result.validation_report["wing.span"]["status"] == "pass"
     assert result.validation_report["engine.count"]["status"] == "pass"

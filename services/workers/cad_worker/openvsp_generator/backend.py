@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.workers.cad_worker.openvsp_generator.create_engine import (
@@ -11,6 +11,7 @@ from services.workers.cad_worker.openvsp_generator.create_tail import create_tai
 from services.workers.cad_worker.openvsp_generator.create_wing import create_main_wing
 from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuildResult
 from services.workers.cad_worker.openvsp_generator.openvsp_adapter import OpenVspAdapter
+from services.workers.cad_worker.openvsp_generator.obj_to_glb import convert_obj_to_glb
 from services.workers.cad_worker.openvsp_generator.verify_model import (
     verification_entry,
     verify_vsp3_file,
@@ -44,7 +45,13 @@ class FakeCadBackend:
 
 
 class OpenVspBackend:
-    def __init__(self, vsp_module: object | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        obj_to_glb: Callable[[Path, Path], None] = convert_obj_to_glb,
+        vsp_module: object | None = None,
+    ) -> None:
+        self._obj_to_glb = obj_to_glb
         self._vsp_module = vsp_module
 
     def generate(self, spec: AircraftSpec, output_dir: Path) -> CadArtifacts:
@@ -63,19 +70,23 @@ class OpenVspBackend:
         vsp3 = output_dir / "aircraft.vsp3"
         step = output_dir / "aircraft.step"
         obj = output_dir / "aircraft.obj"
+        glb = output_dir / "aircraft.glb"
         adapter.write_vsp_file(vsp3)
         adapter.export_file(step, "EXPORT_STEP")
         adapter.export_file(obj, "EXPORT_OBJ")
+        self._obj_to_glb(obj, glb)
 
         applied_parameters = _stable_applied_parameters(build_results)
         vsp3_validation = verify_vsp3_file(vsp3)
         step_validation = verify_vsp3_file(step)
         obj_validation = verify_vsp3_file(obj)
+        glb_validation = verify_vsp3_file(glb)
         validation = {
             "vsp3": vsp3_validation,
             "vsp3.exists": vsp3_validation,
             "step.exists": step_validation,
             "obj.exists": obj_validation,
+            "glb.exists": glb_validation,
             "wing.span": verification_entry(
                 float(spec.wing.span.value),
                 applied_parameters.get("wing.span"),
@@ -88,7 +99,7 @@ class OpenVspBackend:
         return CadArtifacts(
             vsp3=vsp3,
             step=step,
-            glb=None,
+            glb=glb,
             extra_files={"obj": obj},
             metadata={
                 "backend": "openvsp",

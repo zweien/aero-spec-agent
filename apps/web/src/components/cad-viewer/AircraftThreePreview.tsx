@@ -12,10 +12,12 @@ import {
   type AircraftThreeModel,
 } from "./threePreviewModel";
 import type { CadPreviewFormat } from "./cadPreviewSource";
+import type { CadPreviewStatus } from "./cadPreviewStatus";
 
 type AircraftThreePreviewProps = {
   modelFormat?: CadPreviewFormat;
   modelUrl?: string;
+  onStatusChange?: (status: CadPreviewStatus) => void;
   spec: AircraftPreviewSpec;
 };
 
@@ -227,7 +229,12 @@ function loadImportedModel(
   );
 }
 
-export function AircraftThreePreview({ modelFormat, modelUrl, spec }: AircraftThreePreviewProps) {
+export function AircraftThreePreview({
+  modelFormat,
+  modelUrl,
+  onStatusChange,
+  spec,
+}: AircraftThreePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const model = useMemo(() => buildAircraftThreeModel(spec), [spec]);
 
@@ -270,6 +277,7 @@ export function AircraftThreePreview({ modelFormat, modelUrl, spec }: AircraftTh
     scene.add(grid);
 
     if (modelUrl && modelFormat) {
+      onStatusChange?.({ format: modelFormat, state: "loading" });
       loadImportedModel(
         modelUrl,
         modelFormat,
@@ -285,9 +293,12 @@ export function AircraftThreePreview({ modelFormat, modelUrl, spec }: AircraftTh
           scene.remove(aircraft);
           disposeObject3D(aircraft);
           scene.add(loadedModel);
+          onStatusChange?.({ format: modelFormat, state: "loaded" });
         },
-        () => undefined,
+        () => onStatusChange?.({ format: modelFormat, state: "fallback" }),
       );
+    } else {
+      onStatusChange?.({ state: "parameter" });
     }
 
     function resize() {
@@ -316,7 +327,7 @@ export function AircraftThreePreview({ modelFormat, modelUrl, spec }: AircraftTh
       disposeObject3D(scene);
       renderer.dispose();
     };
-  }, [model, modelFormat, modelUrl]);
+  }, [model, modelFormat, modelUrl, onStatusChange]);
 
   return <canvas ref={canvasRef} className="three-preview-canvas" aria-label="可旋转 3D 飞机预览" />;
 }
