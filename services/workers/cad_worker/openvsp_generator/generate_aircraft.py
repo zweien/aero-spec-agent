@@ -5,6 +5,7 @@ from typing import Any
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.workers.cad_worker.openvsp_generator.backend import CadArtifacts, CadBackend
+from services.workers.cad_worker.openvsp_generator.design_rules import run_design_rules
 from services.workers.cad_worker.openvsp_generator.verify_model import verification_entry
 
 
@@ -62,6 +63,8 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend)
         int(spec.engine.count.value),
         engine_count_actual,
     )
+    rule_report = run_design_rules(spec)
+    validation_report["design_rules"] = rule_report.to_dict()
     generation_log = {
         "aircraft": spec.aircraft.name,
         "backend": backend_name,

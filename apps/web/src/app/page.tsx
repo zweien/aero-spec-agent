@@ -17,7 +17,20 @@ type VersionResponse = {
   files: string[];
   validation_report?: {
     spec_echo?: Record<string, unknown>;
+    design_rules?: {
+      rules: DesignRuleEntry[];
+      summary: Record<string, number>;
+    };
   };
+};
+
+export type DesignRuleEntry = {
+  rule_id: string;
+  label: string;
+  status: "pass" | "warn" | "fail" | "skip";
+  value: number | string;
+  expected: string;
+  message: string;
 };
 
 const API_BASE_URL =
@@ -34,6 +47,7 @@ export default function Home() {
   const [previewSpec, setPreviewSpec] =
     useState<AircraftPreviewSpec | null>(null);
   const [specData, setSpecData] = useState<AircraftSpecData | null>(null);
+  const [designRules, setDesignRules] = useState<DesignRuleEntry[] | null>(null);
 
   const [chatWidth, setChatWidth] = useState(38);
   const mainRef = useRef<HTMLDivElement>(null);
@@ -89,6 +103,9 @@ export default function Home() {
           setSpecData(
             (version.validation_report?.spec_echo ?? null) as AircraftSpecData | null,
           );
+          setDesignRules(
+            version.validation_report?.design_rules?.rules ?? null,
+          );
 
           const source = selectCadPreviewSource({
             apiBaseUrl: API_BASE_URL,
@@ -138,6 +155,7 @@ export default function Home() {
         files={files}
         jobStatus={jobStatus}
         versionNo={versionNo}
+        designRules={designRules}
       />
     </main>
   );

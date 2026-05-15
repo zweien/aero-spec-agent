@@ -1,0 +1,65 @@
+# AeroSpec Agent - Design Rule Configuration
+# Thresholds for fixed-wing UAV concept design rationality checks.
+# Rules are evaluated against aircraft_spec.yaml before CAD generation.
+
+defaults:
+  wing_span_range:
+    label: 翼展范围
+    type: range
+    pass: [3.0, 30.0]
+    warn: [2.0, 40.0]
+    unit: m
+  fuselage_length_range:
+    label: 机身长度范围
+    type: range
+    pass: [2.0, 15.0]
+    warn: [1.0, 20.0]
+    unit: m
+  span_length_ratio:
+    label: 翼展/机长比
+    type: range
+    pass: [1.0, 2.5]
+    warn: [0.8, 3.0]
+  aspect_ratio:
+    label: 展弦比
+    type: range
+    pass: [6.0, 15.0]
+    warn: [4.0, 20.0]
+  taper_ratio:
+    label: 梢比
+    type: range
+    pass: [0.3, 1.0]
+    warn: [0.2, 1.1]
+  engine_count:
+    label: 发动机数量
+    type: discrete
+    valid: [1, 2]
+  engine_position:
+    label: 发动机位置
+    type: engine_position
+    mapping:
+      1: [nose, tail]
+      2: [under_wing, tail]
+  wing_position:
+    label: 机翼位置
+    type: discrete
+    valid: [high, mid, low]
+  tail_type:
+    label: 尾翼类型
+    type: discrete
+    valid: [conventional]
+  wing_loading:
+    label: 翼载荷
+    type: range
+    pass: [2.0, 50.0]
+    warn: [1.0, 100.0]
+    unit: "kg/m²"
+    note: "基于有效载荷/翼面积，非总重"
+
+# Per aircraft-type overrides. Nested keys replace matching defaults.
+# Uncomment and edit to customize thresholds for a specific type.
+overrides: {}
+# fixed_wing_uav:
+#   wing_span_range:
+#     pass: [5.0, 35.0]
+#     warn: [3.0, 45.0]
