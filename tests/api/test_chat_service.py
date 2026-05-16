@@ -12,7 +12,9 @@ from services.api.app.services.chat_service import (
     _flat_args_to_spec,
     _pre_fill_none_scalars,
 )
+from services.api.app.services.job_runner import JobRecord
 from services.api.app.services.spec_io import load_aircraft_spec
+from services.api.app.services.version_store import VersionStore
 
 
 EXAMPLE = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml")
@@ -234,11 +236,176 @@ def test_modify_selected_part_tool_schema():
     params = MODIFY_SELECTED_PART_TOOL["function"]["parameters"]
     assert "part_ref" in params["properties"]
     assert "operation" in params["properties"]
-    assert "delta_m" in params["properties"]
-    assert params["required"] == ["part_ref", "operation", "delta_m"]
+    assert "value" in params["properties"]
+    assert params["required"] == ["part_ref", "operation", "value"]
+    ops = params["properties"]["operation"]["enum"]
+    assert "set_length" in ops
+    assert "set_span" in ops
+    assert "set_tail_type" in ops
+    assert "move_outboard" in ops
 
 
 def test_engine_move_map_covers_all_operations():
     ops = {op for op, _ in ChatService._ENGINE_MOVE_MAP.values()}
     assert ops == {"y_offset", "x_offset", "z_offset"}
     assert len(ChatService._ENGINE_MOVE_MAP) == 6
+
+
+def test_part_set_operations_covers_fuselage_wing_tail():
+    fuselage_ops = ChatService._PART_SET_OPERATIONS["part:fuselage"]
+    assert "set_length" in fuselage_ops
+    assert "set_diameter" in fuselage_ops
+    wing_ops = ChatService._PART_SET_OPERATIONS["part:main_wing"]
+    assert len(wing_ops) == 5
+    tail_ops = ChatService._PART_SET_OPERATIONS["part:tail"]
+    assert "set_tail_type" in tail_ops
+
+
+# ---------------------------------------------------------------------------
+# FakeJobRunner for handler tests
+# ---------------------------------------------------------------------------
+
+
+class FakeJobRunner:
+    """Minimal job runner that returns a fake successful job."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        self._store = VersionStore(tmp_path)
+
+    def generate(self, design_id: str, spec):
+        version_no, _ = self._store.create_version_dir(design_id)
+        self._store.write_spec(design_id, version_no, spec)
+        return JobRecord(
+            id="fake-id",
+            design_id=design_id,
+            version_no=version_no,
+            status="ready",
+            progress=100,
+            current_step="ready",
+            files={"aircraft.vsp3": "fake"},
+        )
+
+
+def _service_with_spec(tmp_path: Path) -> ChatService:
+    svc = ChatService(storage_root=tmp_path)
+    svc.set_job_runner(FakeJobRunner(tmp_path))
+    state = svc.get_or_create_state("test-mod")
+    state.current_spec = load_aircraft_spec(EXAMPLE)
+    return svc
+
+
+@pytest.mark.anyio
+async def test_handle_modify_selected_part_set_fuselage_length(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:fuselage", "operation": "set_length", "value": 8.5},
+            "tc-1",
+        )
+    ]
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.fuselage.length.value == 8.5
+    assert state.current_spec.fuselage.length.source == "user"
+    assert state.current_spec.fuselage.length.confidence == 1.0
+
+
+@pytest.mark.anyio
+async def test_handle_modify_selected_part_set_fuselage_diameter(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:fuselage", "operation": "set_diameter", "value": 1.2},
+            "tc-2",
+        )
+    ]
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.fuselage.max_diameter is not None
+    assert state.current_spec.fuselage.max_diameter.value == 1.2
+
+
+@pytest.mark.anyio
+async def test_handle_modify_selected_part_set_wing_span(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:main_wing", "operation": "set_span", "value": 14.0},
+            "tc-3",
+        )
+    ]
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.wing.span.value == 14.0
+
+
+@pytest.mark.anyio
+async def test_handle_modify_selected_part_set_sweep_prefills_none(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:main_wing", "operation": "set_sweep", "value": 5.0},
+            "tc-4",
+        )
+    ]
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.wing.sweep is not None
+    assert state.current_spec.wing.sweep.value == 5.0
+
+
+@pytest.mark.anyio
+async def test_handle_modify_selected_part_set_tail_type(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:tail", "operation": "set_tail_type", "value": "t-tail"},
+            "tc-5",
+        )
+    ]
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.tail.type.value == "t-tail"
+
+
+@pytest.mark.anyio
+async def test_handle_modify_selected_part_invalid_combination(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:fuselage", "operation": "set_span", "value": 14.0},
+            "tc-6",
+        )
+    ]
+    assert any("error" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.fuselage.length.value != 14.0
+
+
+@pytest.mark.anyio
+async def test_handle_modify_selected_part_engine_move_still_works(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:right_engine", "operation": "move_outboard", "value": 0.5},
+            "tc-7",
+        )
+    ]
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.engine.y_offset is not None
+    assert state.current_spec.engine.y_offset.value == 0.5
