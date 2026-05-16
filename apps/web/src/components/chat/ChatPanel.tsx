@@ -529,6 +529,14 @@ const SPEC_FIELD_LABELS: Record<string, string> = {
 };
 
 const OPERATION_LABELS: Record<string, string> = {
+  set_length: "设置长度",
+  set_diameter: "设置直径",
+  set_span: "设置翼展",
+  set_root_chord: "设置翼根弦长",
+  set_tip_chord: "设置翼尖弦长",
+  set_sweep: "设置后掠角",
+  set_dihedral: "设置上反角",
+  set_tail_type: "设置尾翼类型",
   move_outboard: "向外移动",
   move_inboard: "向内移动",
   move_forward: "向前移动",
@@ -580,7 +588,8 @@ function SpecSummary({
     if (toolName === "modify_selected_part") {
       const partRef = String(args.part_ref ?? "");
       const operation = String(args.operation ?? "");
-      const deltaM = args.delta_m;
+      const val = args.value;
+      const isMove = operation.startsWith("move_");
       return (
         <div className="spec-summary">
           <div className="spec-summary-row">
@@ -589,7 +598,10 @@ function SpecSummary({
           </div>
           <div className="spec-summary-row">
             <span className="spec-summary-key">操作</span>
-            <span className="spec-summary-val">{OPERATION_LABELS[operation] ?? operation} {String(deltaM)} m</span>
+            <span className="spec-summary-val">
+              {OPERATION_LABELS[operation] ?? operation}{" "}
+              {isMove ? `${val} m` : val != null ? String(val) : ""}
+            </span>
           </div>
           {args.reason != null && (
             <div className="spec-summary-row">
