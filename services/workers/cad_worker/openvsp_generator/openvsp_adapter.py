@@ -8,9 +8,6 @@ from services.workers.cad_worker.openvsp_generator.errors import (
     OpenVspUnavailableError,
 )
 
-_ERROR_POLICY_FAIL = os.getenv("OPENVSP_ERROR_POLICY", "warn").lower() == "fail"
-
-
 class OpenVspAdapter:
     def __init__(self, module: Any | None = None) -> None:
         self._module = module
@@ -141,7 +138,7 @@ class OpenVspAdapter:
             entry = {"context": context, "message": message}
             errors.append(entry)
             self.errors.append(entry)
-        if errors and _ERROR_POLICY_FAIL:
+        if errors and _error_policy_fail():
             summary = "; ".join(e["message"] for e in errors)
             raise CadGenerationError(f"OpenVSP error(s) in {context}: {summary}")
         return errors
@@ -168,3 +165,7 @@ def _openvsp_error_message(error: Any) -> str:
         if value:
             return str(value)
     return str(error)
+
+
+def _error_policy_fail() -> bool:
+    return os.getenv("OPENVSP_ERROR_POLICY", "warn").strip().lower() == "fail"

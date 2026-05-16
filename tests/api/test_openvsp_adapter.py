@@ -190,10 +190,7 @@ def test_add_geom_checks_openvsp_error_stack_after_call():
 
 
 def test_error_policy_warn_does_not_raise(monkeypatch):
-    import services.workers.cad_worker.openvsp_generator.openvsp_adapter as mod
-
-    monkeypatch.setattr(mod, "_ERROR_POLICY_FAIL", False)
-
+    monkeypatch.setenv("OPENVSP_ERROR_POLICY", "warn")
     fake_vsp = FakeOpenVspModule()
     manager = FakeErrorManager(["soft warn"])
     _attach_error_manager(fake_vsp, manager)
@@ -204,10 +201,7 @@ def test_error_policy_warn_does_not_raise(monkeypatch):
 
 
 def test_error_policy_fail_raises_cad_generation_error(monkeypatch):
-    import services.workers.cad_worker.openvsp_generator.openvsp_adapter as mod
-
-    monkeypatch.setattr(mod, "_ERROR_POLICY_FAIL", True)
-
+    monkeypatch.setenv("OPENVSP_ERROR_POLICY", "fail")
     fake_vsp = FakeOpenVspModule()
     manager = FakeErrorManager(["fatal error"])
     _attach_error_manager(fake_vsp, manager)
