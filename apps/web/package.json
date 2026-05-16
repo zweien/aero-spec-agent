@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p ${WEB_PORT:-3900}",
+    "test": "node scripts/run-node-tests.mjs",
     "build": "next build"
   },
   "dependencies": {

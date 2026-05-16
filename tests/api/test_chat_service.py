@@ -1,3 +1,5 @@
+import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -12,9 +14,14 @@ from services.api.app.services.chat_service import (
     _flat_args_to_spec,
     _pre_fill_none_scalars,
 )
-from services.api.app.services.job_runner import JobRecord
+from services.api.app.services.job_runner import JobRecord, JobRunner
+from services.api.app.services.selected_part_modifier import (
+    ENGINE_MOVE_MAP,
+    PART_SET_OPERATIONS,
+)
 from services.api.app.services.spec_io import load_aircraft_spec
 from services.api.app.services.version_store import VersionStore
+from services.workers.cad_worker.openvsp_generator.backend import FakeCadBackend
 
 
 EXAMPLE = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml")
@@ -136,6 +143,32 @@ async def test_chat_stream_emits_error_event_when_llm_client_fails(monkeypatch):
     assert "missing llm credentials" in events[0]
 
 
+@pytest.mark.anyio
+async def test_chat_stream_logs_shadow_intent_for_selected_part_message(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    svc = _service_with_spec(tmp_path)
+
+    def fail_client():
+        raise RuntimeError("stop before llm")
+
+    monkeypatch.setattr(svc, "_get_client", fail_client)
+    with caplog.at_level(logging.DEBUG, logger="services.api.app.services.chat_service"):
+        events = [
+            event
+            async for event in svc.chat_stream(
+                conversation_id="test-mod",
+                message="把这个向外移动0.5米",
+                selected_refs=["part:right_engine"],
+            )
+        ]
+
+    assert events[0].startswith("event: error")
+    assert "shadow_intent=modify_selected_part" in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # Flat args to spec conversion
 # ---------------------------------------------------------------------------
@@ -250,18 +283,18 @@ def test_modify_selected_part_tool_schema():
 
 
 def test_engine_move_map_covers_all_operations():
-    ops = {op for op, _ in ChatService._ENGINE_MOVE_MAP.values()}
+    ops = {op for op, _ in ENGINE_MOVE_MAP.values()}
     assert ops == {"y_offset", "x_offset", "z_offset"}
-    assert len(ChatService._ENGINE_MOVE_MAP) == 6
+    assert len(ENGINE_MOVE_MAP) == 6
 
 
 def test_part_set_operations_covers_fuselage_wing_tail():
-    fuselage_ops = ChatService._PART_SET_OPERATIONS["part:fuselage"]
+    fuselage_ops = PART_SET_OPERATIONS["part:fuselage"]
     assert "set_length" in fuselage_ops
     assert "set_diameter" in fuselage_ops
-    wing_ops = ChatService._PART_SET_OPERATIONS["part:main_wing"]
+    wing_ops = PART_SET_OPERATIONS["part:main_wing"]
     assert len(wing_ops) == 5
-    tail_ops = ChatService._PART_SET_OPERATIONS["part:tail"]
+    tail_ops = PART_SET_OPERATIONS["part:tail"]
     assert "set_tail_type" in tail_ops
 
 
@@ -298,6 +331,11 @@ def _service_with_spec(tmp_path: Path) -> ChatService:
     state = svc.get_or_create_state("test-mod")
     state.current_spec = load_aircraft_spec(EXAMPLE)
     return svc
+
+
+def _sse_payload(event: str) -> dict[str, object]:
+    data_line = next(line for line in event.splitlines() if line.startswith("data: "))
+    return json.loads(data_line.removeprefix("data: "))
 
 
 @pytest.mark.anyio
@@ -530,6 +568,43 @@ async def test_modify_selected_part_move_right_engine_outboard_updates_engine_y_
     assert state.current_spec is not None
     assert state.current_spec.engine.y_offset is not None
     assert state.current_spec.engine.y_offset.value == 0.5
+
+
+@pytest.mark.anyio
+async def test_modify_selected_part_end_to_end_generates_version_and_validates_engine_offset(
+    tmp_path,
+):
+    store = VersionStore(tmp_path)
+    runner = JobRunner(store=store, backend=FakeCadBackend())
+    svc = ChatService(storage_root=tmp_path)
+    svc.set_job_runner(runner)
+    state = svc.get_or_create_state("selected-e2e")
+    state.current_spec = load_aircraft_spec(EXAMPLE)
+    state.selected_refs = ["part:right_engine"]
+    runner.generate(design_id=state.design_id, spec=state.current_spec)
+
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:right_engine", "operation": "move_outboard", "value": 0.5},
+            "tc-e2e",
+        )
+    ]
+
+    complete_event = next(e for e in events if e.startswith("event: generation_complete"))
+    complete_payload = _sse_payload(complete_event)
+    assert complete_payload["version_no"] == 2
+    assert state.current_spec is not None
+    assert state.current_spec.engine.y_offset is not None
+    assert state.current_spec.engine.y_offset.value == 0.5
+
+    version = store.read_version(state.design_id, 2)
+    validation_report = version["validation_report"]
+    assert validation_report["engine.y_offset"] == {
+        "expected": 0.5,
+        "actual": 0.5,
+        "status": "pass",
+    }
 
 
 @pytest.mark.anyio
