@@ -62,9 +62,10 @@ export function buildAircraftThreeModel(spec: AircraftPreviewSpec): AircraftThre
   const radius = nacelleDiameter / 2;
   const finenessRatio = radius > 0 ? nacelleLength / radius : 0;
   const engineY = wingSpan * 0.25;
+  const wz = wingZ(position, fuselageDiameter);
   const enginePosition = {
     x: rootChord * 0.25,
-    z: -fuselageDiameter * 0.45,
+    z: wz - nacelleDiameter * 0.6,
   };
 
   return {

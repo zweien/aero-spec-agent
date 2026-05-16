@@ -185,20 +185,20 @@ export function buildAircraftPreview(spec: AircraftPreviewSpec): AircraftPreview
         radius: fuselageDiameter / 2,
       },
       wing: polygon([
-        [wingX - rootChord / 2, z],
-        [wingX + rootChord / 2, z],
-        [wingX + rootChord * 0.24, z + 0.12],
-        [wingX - rootChord * 0.24, z + 0.12],
+        [wingX - rootChord / 2, -z],
+        [wingX + rootChord / 2, -z],
+        [wingX + rootChord * 0.24, -z - 0.12],
+        [wingX - rootChord * 0.24, -z - 0.12],
       ]),
       tail: polygon([
-        [tailX - rootChord * 0.28, fuselageDiameter * 0.34],
-        [tailX + rootChord * 0.14, fuselageDiameter * 0.34],
-        [tailX + rootChord * 0.18, fuselageDiameter * 0.95],
-        [tailX - rootChord * 0.12, fuselageDiameter * 0.95],
+        [tailX - rootChord * 0.28, -fuselageDiameter * 0.34],
+        [tailX + rootChord * 0.14, -fuselageDiameter * 0.34],
+        [tailX + rootChord * 0.18, -fuselageDiameter * 0.95],
+        [tailX - rootChord * 0.12, -fuselageDiameter * 0.95],
       ]),
       engines:
         engineCount >= 2
-          ? [{ cx: engineX, cy: -fuselageDiameter * 0.62, r: engineRadius }]
+          ? [{ cx: engineX, cy: -(z - fuselageDiameter * 0.25), r: engineRadius }]
           : [],
       wingZ: z,
     },

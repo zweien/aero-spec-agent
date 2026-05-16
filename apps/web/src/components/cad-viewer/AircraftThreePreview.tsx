@@ -14,13 +14,6 @@ import {
 import type { CadPreviewFormat } from "./cadPreviewSource";
 import type { CadPreviewStatus } from "./cadPreviewStatus";
 
-type AircraftThreePreviewProps = {
-  modelFormat?: CadPreviewFormat;
-  modelUrl?: string;
-  onStatusChange?: (status: CadPreviewStatus) => void;
-  spec: AircraftPreviewSpec;
-};
-
 function disposeMaterial(material: THREE.Material): void {
   for (const value of Object.values(material)) {
     if (value instanceof THREE.Texture) {
@@ -203,11 +196,6 @@ function prepareImportedModel(object: THREE.Object3D): boolean {
   object.position.sub(center);
   object.scale.multiplyScalar(Math.min(1, 10 / maxDimension));
 
-  // OpenVSP → Three.js coordinate alignment:
-  // OpenVSP: X=longitudinal, Y=lateral, Z=up
-  // Three.js: X=lateral, Y=up, Z=longitudinal
-  object.rotation.x = -Math.PI / 2;
-
   return true;
 }
 
@@ -235,6 +223,13 @@ function loadImportedModel(
   );
 }
 
+type AircraftThreePreviewProps = {
+  modelFormat?: CadPreviewFormat;
+  modelUrl?: string;
+  onStatusChange?: (status: CadPreviewStatus) => void;
+  spec: AircraftPreviewSpec;
+};
+
 export function AircraftThreePreview({
   modelFormat,
   modelUrl,
@@ -244,73 +239,58 @@ export function AircraftThreePreview({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const model = useMemo(() => buildAircraftThreeModel(spec), [spec]);
 
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const wireframeRef = useRef<THREE.Group | null>(null);
+  const importedRef = useRef<THREE.Object3D | null>(null);
+  const animFrameRef = useRef(0);
+  const isActiveRef = useRef(true);
+
+  // Scene setup — runs once
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    const rendererCanvas = canvas;
+    if (!canvas) return;
 
-    let animationFrame = 0;
-    let isActive = true;
+    isActiveRef.current = true;
+
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
-      canvas: rendererCanvas,
+      canvas,
       preserveDrawingBuffer: true,
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    rendererRef.current = renderer;
 
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
+
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
     camera.position.set(-7, -10, 5.2);
 
-    const controls = new OrbitControls(camera, rendererCanvas);
+    const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
     controls.target.set(0, 0, 0);
     controls.update();
+    controlsRef.current = controls;
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x162033, 2.4));
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
     keyLight.position.set(-4, -6, 8);
     scene.add(keyLight);
 
-    const aircraft = createAircraftGroup(model);
-    scene.add(aircraft);
     const grid = new THREE.GridHelper(14, 14, 0x33506e, 0x213246);
     grid.rotation.x = Math.PI / 2;
     grid.position.z = -0.75;
     scene.add(grid);
 
-    if (modelUrl && modelFormat) {
-      onStatusChange?.({ format: modelFormat, state: "loading" });
-      loadImportedModel(
-        modelUrl,
-        modelFormat,
-        (loadedModel) => {
-          if (!isActive) {
-            disposeObject3D(loadedModel);
-            return;
-          }
-          if (!prepareImportedModel(loadedModel)) {
-            disposeObject3D(loadedModel);
-            return;
-          }
-          scene.remove(aircraft);
-          disposeObject3D(aircraft);
-          scene.add(loadedModel);
-          onStatusChange?.({ format: modelFormat, state: "loaded" });
-        },
-        () => onStatusChange?.({ format: modelFormat, state: "fallback" }),
-      );
-    } else {
-      onStatusChange?.({ state: "parameter" });
-    }
-
     function resize() {
-      const width = rendererCanvas.clientWidth;
-      const height = rendererCanvas.clientHeight;
-      if (rendererCanvas.width !== width || rendererCanvas.height !== height) {
+      const el = canvasRef.current;
+      if (!el) return;
+      const width = el.clientWidth;
+      const height = el.clientHeight;
+      if (el.width !== width || el.height !== height) {
         renderer.setSize(width, height, false);
         camera.aspect = width / Math.max(height, 1);
         camera.updateProjectionMatrix();
@@ -321,19 +301,93 @@ export function AircraftThreePreview({
       resize();
       controls.update();
       renderer.render(scene, camera);
-      animationFrame = window.requestAnimationFrame(render);
+      animFrameRef.current = window.requestAnimationFrame(render);
     }
 
     render();
 
     return () => {
-      isActive = false;
-      window.cancelAnimationFrame(animationFrame);
+      isActiveRef.current = false;
+      window.cancelAnimationFrame(animFrameRef.current);
       controls.dispose();
       disposeObject3D(scene);
       renderer.dispose();
+      sceneRef.current = null;
+      rendererRef.current = null;
+      controlsRef.current = null;
+      wireframeRef.current = null;
+      importedRef.current = null;
     };
-  }, [model, modelFormat, modelUrl, onStatusChange]);
+  }, []);
+
+  // Update wireframe when spec changes and no GLB loaded
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !isActiveRef.current) return;
+
+    // If an imported model is loaded, don't show wireframe
+    if (importedRef.current) return;
+
+    // Remove old wireframe
+    if (wireframeRef.current) {
+      scene.remove(wireframeRef.current);
+      disposeObject3D(wireframeRef.current);
+    }
+
+    const aircraft = createAircraftGroup(model);
+    scene.add(aircraft);
+    wireframeRef.current = aircraft;
+
+    if (!modelUrl || !modelFormat) {
+      onStatusChange?.({ state: "parameter" });
+    }
+  }, [model, modelUrl, modelFormat, onStatusChange]);
+
+  // Load imported model (GLB/OBJ) — keeps old model visible until new loads
+  useEffect(() => {
+    if (!modelUrl || !modelFormat || !sceneRef.current || !isActiveRef.current) return;
+
+    const scene = sceneRef.current;
+
+    onStatusChange?.({ format: modelFormat, state: "loading" });
+
+    loadImportedModel(
+      modelUrl,
+      modelFormat,
+      (loadedModel) => {
+        if (!isActiveRef.current || sceneRef.current !== scene) {
+          disposeObject3D(loadedModel);
+          return;
+        }
+        if (!prepareImportedModel(loadedModel)) {
+          disposeObject3D(loadedModel);
+          return;
+        }
+
+        // Remove old imported model
+        if (importedRef.current) {
+          scene.remove(importedRef.current);
+          disposeObject3D(importedRef.current);
+        }
+
+        // Remove wireframe
+        if (wireframeRef.current) {
+          scene.remove(wireframeRef.current);
+          disposeObject3D(wireframeRef.current);
+          wireframeRef.current = null;
+        }
+
+        scene.add(loadedModel);
+        importedRef.current = loadedModel;
+        onStatusChange?.({ format: modelFormat, state: "loaded" });
+      },
+      () => {
+        if (isActiveRef.current) {
+          onStatusChange?.({ format: modelFormat, state: "fallback" });
+        }
+      },
+    );
+  }, [modelUrl, modelFormat, onStatusChange]);
 
   return <canvas ref={canvasRef} className="three-preview-canvas" aria-label="可旋转 3D 飞机预览" />;
 }

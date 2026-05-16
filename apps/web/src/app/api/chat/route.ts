@@ -3,6 +3,15 @@ import { type NextRequest } from "next/server";
 const FASTAPI_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8900";
 
+const TOOL_LABELS: Record<string, string> = {
+  generate_design: "生成设计",
+  modify_design: "修改设计",
+};
+
+export const dynamic = "force-dynamic";
+
+let globalToolCallCounter = 1;
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const messages = body.messages ?? [];
@@ -37,112 +46,187 @@ export async function POST(req: NextRequest) {
   }
 
   const encoder = new TextEncoder();
-  const messageId = `msg-${Date.now()}`;
-  const textId = `text-${Date.now()}`;
-  let callCounter = 0;
+  const reader = fastapiResponse.body.getReader();
+  const decoder = new TextDecoder();
+
+  let callCounter = globalToolCallCounter++;
   let currentToolCallId = "";
+  let currentToolName = "";
+  let toolPhaseTextShown = false;
+  let textStarted = false;
+  const textId = "text-main";
+  const messageId = `msg-${Date.now()}`;
+  let sseBuffer = "";
+  let done = false;
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      controller.enqueue(
-        encoder.encode(
-          `data: ${JSON.stringify({ type: "start", messageId })}\n\n`,
-        ),
-      );
-      controller.enqueue(
-        encoder.encode(
-          `data: ${JSON.stringify({ type: "text-start", id: textId })}\n\n`,
-        ),
-      );
+  function sse(data: object) {
+    return encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+  }
 
-      const reader = fastapiResponse.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+  function ensureTextStarted(): Uint8Array {
+    if (textStarted) return new Uint8Array();
+    textStarted = true;
+    return sse({ type: "text-start", id: textId });
+  }
 
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+  function writeTextDelta(delta: string): Uint8Array {
+    const chunks: Uint8Array[] = [];
+    const start = ensureTextStarted();
+    if (start.length) chunks.push(start);
+    chunks.push(sse({ type: "text-delta", id: textId, delta }));
+    const total = chunks.reduce((s, c) => s + c.length, 0);
+    const result = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      result.set(c, offset);
+      offset += c.length;
+    }
+    return result;
+  }
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
+  function processSSEEvents(): Uint8Array | null {
+    const output: Uint8Array[] = [];
+    let produced = false;
 
-          let eventType = "";
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              eventType = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                switch (eventType) {
-                  case "message": {
-                    const delta = String(data.content ?? "");
-                    if (delta) {
-                      controller.enqueue(
-                        encoder.encode(
-                          `data: ${JSON.stringify({ type: "text-delta", id: textId, delta })}\n\n`,
-                        ),
-                      );
-                    }
-                    break;
-                  }
-                  case "tool_call": {
-                    const toolCallId = `call-${++callCounter}`;
-                    currentToolCallId = toolCallId;
-                    let args: Record<string, unknown> = {};
-                    try {
-                      args = JSON.parse(String(data.arguments ?? "{}"));
-                    } catch {
-                      // keep empty args
-                    }
-                    controller.enqueue(
-                      encoder.encode(
-                        `data: ${JSON.stringify({
-                          type: "tool-input-available",
-                          toolCallId,
-                          toolName: String(data.name ?? ""),
-                          input: args,
-                        })}\n\n`,
-                      ),
-                    );
-                    break;
-                  }
-                  case "generation_complete": {
-                    if (currentToolCallId) {
-                      controller.enqueue(
-                        encoder.encode(
-                          `data: ${JSON.stringify({
-                            type: "tool-output-available",
-                            toolCallId: currentToolCallId,
-                            output: data,
-                          })}\n\n`,
-                        ),
-                      );
-                    }
-                    break;
-                  }
-                }
-              } catch {
-                // skip unparseable lines
+    const lines = sseBuffer.split("\n");
+    sseBuffer = "";
+
+    let eventType = "";
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (line.startsWith("event: ")) {
+        eventType = line.slice(7).trim();
+        continue;
+      }
+
+      if (line.startsWith("data: ")) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          switch (eventType) {
+            case "message": {
+              const delta = String(data.content ?? "");
+              if (delta) {
+                output.push(writeTextDelta(delta));
               }
-              eventType = "";
+              break;
+            }
+            case "tool_call": {
+              const toolCallId = `call-${++callCounter}`;
+              currentToolCallId = toolCallId;
+              currentToolName = String(data.name ?? "");
+              toolPhaseTextShown = false;
+              let args: Record<string, unknown> = {};
+              try {
+                args = JSON.parse(String(data.arguments ?? "{}"));
+              } catch {
+                // keep empty args
+              }
+              const label = TOOL_LABELS[currentToolName] ?? currentToolName;
+              output.push(writeTextDelta(`\n\n> **${label}** `));
+              output.push(
+                sse({
+                  type: "tool-input-available",
+                  toolCallId,
+                  toolName: currentToolName,
+                  input: args,
+                }),
+              );
+              break;
+            }
+            case "generation_started": {
+              if (!toolPhaseTextShown) {
+                toolPhaseTextShown = true;
+                output.push(writeTextDelta("⚙️ 正在生成CAD模型..."));
+              }
+              break;
+            }
+            case "generation_complete": {
+              if (currentToolCallId) {
+                if (toolPhaseTextShown) {
+                  const v = data.version_no;
+                  output.push(writeTextDelta(` ✅ v${v}\n\n`));
+                }
+                output.push(
+                  sse({
+                    type: "tool-output-available",
+                    toolCallId: currentToolCallId,
+                    output: data,
+                  }),
+                );
+              }
+              break;
+            }
+            case "error": {
+              const errMsg = String(data.content ?? "未知错误");
+              output.push(writeTextDelta(`\n\n❌ **错误**: ${errMsg}\n\n`));
+              break;
             }
           }
+        } catch {
+          // skip
         }
-      } finally {
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "text-end", id: textId })}\n\n`,
-          ),
-        );
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "finish" })}\n\n`,
-          ),
-        );
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-        controller.close();
+        eventType = "";
+        continue;
+      }
+
+      // Empty line = end of SSE event, or trailing content
+      if (line === "") {
+        eventType = "";
+        continue;
+      }
+
+      // Incomplete trailing data
+      sseBuffer = line;
+    }
+
+    if (output.length === 0) return null;
+    produced = true;
+    const total = output.reduce((s, c) => s + c.length, 0);
+    const result = new Uint8Array(total);
+    let offset = 0;
+    for (const c of output) {
+      result.set(c, offset);
+      offset += c.length;
+    }
+    return result;
+  }
+
+  const stream = new ReadableStream({
+    async pull(controller) {
+      try {
+        while (true) {
+          // Try to produce output from already-buffered SSE data
+          const result = processSSEEvents();
+          if (result) {
+            controller.enqueue(result);
+            return; // Yield control — consumer will pull again
+          }
+
+          if (done) {
+            // Stream finished — send closing events
+            if (textStarted) {
+              controller.enqueue(sse({ type: "text-end", id: textId }));
+            }
+            controller.enqueue(sse({ type: "finish" }));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+            return;
+          }
+
+          // Read more data from FastAPI
+          const { done: readerDone, value } = await reader.read();
+          if (readerDone) {
+            done = true;
+            // Loop back to process remaining buffer + close
+            continue;
+          }
+
+          sseBuffer += decoder.decode(value, { stream: true });
+          // Loop to process the new data
+        }
+      } catch (err) {
+        controller.error(err);
       }
     },
   });
@@ -150,9 +234,11 @@ export async function POST(req: NextRequest) {
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-transform",
+      "Content-Encoding": "identity",
       Connection: "keep-alive",
       "x-vercel-ai-ui-message-stream": "v1",
+      "x-accel-buffering": "no",
     },
   });
 }

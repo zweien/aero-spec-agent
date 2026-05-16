@@ -47,7 +47,7 @@ class OpenVspAdapter:
             )
         self._vsp.SetParmVal(parm_id, value)
 
-    def write_vsp_file(self, path: Path) -> None:
+    def write_vsp_file(self, path: Path | str) -> None:
         self._vsp.WriteVSPFile(str(path))
 
     def set_fuselage_diameter(self, geom_id: str, diameter: float) -> None:
@@ -80,3 +80,33 @@ class OpenVspAdapter:
 
     def update(self) -> None:
         self._vsp.Update()
+
+    def set_vspaero_ref_wing(self, wing_id: str) -> None:
+        self._vsp.SetVSPAERORefWingID(wing_id)
+
+    def set_analysis_input_defaults(self, name: str) -> None:
+        self._vsp.SetAnalysisInputDefaults(name)
+
+    def set_int_analysis_input(self, name: str, key: str, vals: list[int], index: int = 0) -> None:
+        self._vsp.SetIntAnalysisInput(name, key, vals, index)
+
+    def set_double_analysis_input(self, name: str, key: str, vals: list[float]) -> None:
+        self._vsp.SetDoubleAnalysisInput(name, key, vals, 0)
+
+    def exec_analysis(self, name: str) -> str:
+        return self._vsp.ExecAnalysis(name)
+
+    def get_double_results(self, result_id: str, name: str) -> list[float]:
+        return list(self._vsp.GetDoubleResults(result_id, name))
+
+    def find_latest_results_id(self, name: str) -> str:
+        return self._vsp.FindLatestResultsID(name)
+
+    def create_set(self, name: str) -> int:
+        set_id = self._vsp.GetSetIndex(name)
+        if set_id < 0:
+            raise CadGenerationError(f"Could not find set: {name}")
+        return set_id
+
+    def add_to_set(self, set_id: int, geom_id: str) -> None:
+        self._vsp.SetSetFlag(geom_id, set_id, True)

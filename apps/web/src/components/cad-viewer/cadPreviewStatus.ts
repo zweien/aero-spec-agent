@@ -10,10 +10,10 @@ function formatLabel(format: CadPreviewFormat): string {
 
 export function cadPreviewStatusLabel(status: CadPreviewStatus): string {
   if (status.state === "loaded") {
-    return `已加载 OpenVSP ${formatLabel(status.format)}`;
+    return `已加载 ${formatLabel(status.format)} 模型`;
   }
   if (status.state === "loading") {
-    return `正在加载 OpenVSP ${formatLabel(status.format)}`;
+    return `正在加载 ${formatLabel(status.format)} 模型`;
   }
   return "参数化 3D 预览";
 }

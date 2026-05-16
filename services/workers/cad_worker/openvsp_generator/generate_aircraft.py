@@ -6,6 +6,7 @@ from typing import Any
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.workers.cad_worker.openvsp_generator.backend import CadArtifacts, CadBackend
 from services.workers.cad_worker.openvsp_generator.design_rules import run_design_rules
+from services.workers.cad_worker.openvsp_generator.performance_estimate import run_performance_estimate
 from services.workers.cad_worker.openvsp_generator.verify_model import verification_entry
 
 
@@ -65,6 +66,11 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend)
     )
     rule_report = run_design_rules(spec)
     validation_report["design_rules"] = rule_report.to_dict()
+    perf_report = run_performance_estimate(spec)
+    validation_report["performance_estimate"] = perf_report.to_dict()
+    vspaero_data = artifacts.metadata.get("vspaero_analysis")
+    if vspaero_data:
+        validation_report["vspaero_analysis"] = vspaero_data
     generation_log = {
         "aircraft": spec.aircraft.name,
         "backend": backend_name,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 type Scalar = {
   value: string | number;
@@ -25,6 +25,9 @@ export type AircraftSpecData = {
 
 type ParameterPanelProps = {
   spec: AircraftSpecData | null;
+  onParameterChange?: (path: string, value: string | number) => void;
+  onApplyChanges?: () => void;
+  pendingCount?: number;
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -59,6 +62,19 @@ const SOURCE_LABELS: Record<string, string> = {
   system_default: "系统",
 };
 
+const SLIDER_RANGES: Record<string, { min: number; max: number; step: number }> = {
+  cruise_speed: { min: 30, max: 500, step: 10 },
+  payload: { min: 0.5, max: 200, step: 1 },
+  length: { min: 1, max: 20, step: 0.5 },
+  max_diameter: { min: 0.15, max: 3, step: 0.05 },
+  span: { min: 2, max: 30, step: 0.5 },
+  root_chord: { min: 0.2, max: 5, step: 0.1 },
+  tip_chord: { min: 0.1, max: 3, step: 0.1 },
+  sweep: { min: 0, max: 45, step: 1 },
+  dihedral: { min: -10, max: 15, step: 0.5 },
+  count: { min: 1, max: 4, step: 1 },
+};
+
 function isScalar(val: unknown): val is Scalar {
   return (
     typeof val === "object" &&
@@ -68,10 +84,12 @@ function isScalar(val: unknown): val is Scalar {
   );
 }
 
+type ParamEntry = { label: string; path: string; scalar: Scalar; fieldKey: string };
+
 function extractParameters(
   spec: AircraftSpecData
-): Array<{ label: string; scalar: Scalar }> {
-  const params: Array<{ label: string; scalar: Scalar }> = [];
+): ParamEntry[] {
+  const params: ParamEntry[] = [];
   for (const [sectionKey, sectionLabel] of Object.entries(SECTION_LABELS)) {
     const section = spec[sectionKey as keyof AircraftSpecData] as
       | SpecSection
@@ -82,7 +100,9 @@ function extractParameters(
         const label = FIELD_LABELS[fieldKey] ?? fieldKey;
         params.push({
           label: `${sectionLabel} · ${label}`,
+          path: `${sectionKey}.${fieldKey}.value`,
           scalar: fieldValue,
+          fieldKey,
         });
       }
     }
@@ -90,36 +110,162 @@ function extractParameters(
   return params;
 }
 
-export function ParameterPanel({ spec }: ParameterPanelProps) {
+function EditableValue({
+  scalar,
+  onCommit,
+}: {
+  scalar: Scalar;
+  onCommit: (newValue: string | number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const draftRef = useRef(String(scalar.value));
+  const committedRef = useRef(scalar.value);
+
+  const commit = useCallback(() => {
+    const draft = draftRef.current;
+    const newValue =
+      typeof scalar.value === "number" ? Number(draft) : draft;
+    if (
+      newValue !== committedRef.current &&
+      !(typeof newValue === "number" && Number.isNaN(newValue))
+    ) {
+      committedRef.current = newValue;
+      onCommit(newValue);
+    }
+    setEditing(false);
+  }, [scalar.value, onCommit]);
+
+  if (!editing) {
+    return (
+      <strong
+        className="editable-value"
+        onClick={() => {
+          draftRef.current = String(committedRef.current);
+          setEditing(true);
+        }}
+      >
+        {scalar.value}
+        {scalar.unit ? ` ${scalar.unit}` : ""}
+      </strong>
+    );
+  }
+
+  return (
+    <input
+      className="editable-input"
+      type={typeof scalar.value === "number" ? "number" : "text"}
+      defaultValue={String(scalar.value)}
+      autoFocus
+      step={typeof scalar.value === "number" ? "any" : undefined}
+      onChange={(e) => {
+        draftRef.current = e.target.value;
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          commit();
+        } else if (e.key === "Escape") {
+          setEditing(false);
+        }
+      }}
+      onBlur={commit}
+    />
+  );
+}
+
+function ParamSlider({
+  fieldKey,
+  scalar,
+  onCommit,
+}: {
+  fieldKey: string;
+  scalar: Scalar;
+  onCommit: (newValue: number) => void;
+}) {
+  const range = SLIDER_RANGES[fieldKey];
+  if (!range || typeof scalar.value !== "number") return null;
+
+  return (
+    <input
+      type="range"
+      className="param-slider"
+      min={range.min}
+      max={range.max}
+      step={range.step}
+      value={scalar.value}
+      onChange={(e) => onCommit(Number(e.target.value))}
+    />
+  );
+}
+
+export function ParameterPanel({
+  spec,
+  onParameterChange,
+  onApplyChanges,
+  pendingCount = 0,
+}: ParameterPanelProps) {
   const parameters = spec ? extractParameters(spec) : [];
   const [collapsed, setCollapsed] = useState(false);
 
   if (parameters.length === 0) return null;
 
   return (
-    <section className={`panel parameter-panel ${collapsed ? "parameter-collapsed" : ""}`}>
-      <header className="parameter-toggle" onClick={() => setCollapsed(!collapsed)}>
+    <section
+      className={`panel parameter-panel ${collapsed ? "parameter-collapsed" : ""}`}
+    >
+      <header
+        className="parameter-toggle"
+        onClick={() => setCollapsed(!collapsed)}
+      >
         <span>参数</span>
-        <span className="parameter-chevron">{collapsed ? "▸" : "▾"}</span>
-        {!collapsed && <span className="parameter-count">{parameters.length}</span>}
+        <span className="parameter-chevron">
+          {collapsed ? "▸" : "▾"}
+        </span>
+        {!collapsed && (
+          <span className="parameter-count">{parameters.length}</span>
+        )}
       </header>
       {!collapsed &&
         parameters.map((item) => (
-          <div className="parameter-row" key={item.label}>
+          <div className="parameter-row" key={item.path}>
             <span>{item.label}</span>
-            <strong>
-              {item.scalar.value}
-              {item.scalar.unit ? ` ${item.scalar.unit}` : ""}
-            </strong>
+            {onParameterChange ? (
+              <EditableValue
+                scalar={item.scalar}
+                onCommit={(v) => onParameterChange(item.path, v)}
+              />
+            ) : (
+              <strong>
+                {item.scalar.value}
+                {item.scalar.unit ? ` ${item.scalar.unit}` : ""}
+              </strong>
+            )}
             <small>
-              <span className={`source-badge source-badge-${item.scalar.source}`}>
+              <span
+                className={`source-badge source-badge-${item.scalar.source}`}
+              >
                 {SOURCE_LABELS[item.scalar.source] ?? item.scalar.source}
-              </span>
-              {" "}
+              </span>{" "}
               {Math.round(item.scalar.confidence * 100)}%
             </small>
+            {onParameterChange && (
+              <ParamSlider
+                fieldKey={item.fieldKey}
+                scalar={item.scalar}
+                onCommit={(v) => onParameterChange(item.path, v)}
+              />
+            )}
           </div>
         ))}
+      {onApplyChanges && (
+        <button
+          type="button"
+          className={`apply-changes-btn ${pendingCount > 0 ? "apply-changes-pending" : ""}`}
+          disabled={pendingCount === 0}
+          onClick={onApplyChanges}
+        >
+          {pendingCount > 0 ? `确认修改 (${pendingCount})` : "确认修改"}
+        </button>
+      )}
     </section>
   );
 }

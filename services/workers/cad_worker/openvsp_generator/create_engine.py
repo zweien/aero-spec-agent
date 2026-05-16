@@ -7,6 +7,11 @@ from services.workers.cad_worker.openvsp_generator.errors import (
 from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuildResult
 
 
+def _wing_z(position: str, fuselage_diameter: float) -> float:
+    factors = {"high": 0.45, "mid": 0.0, "low": -0.45}
+    return factors.get(position, 0.0) * fuselage_diameter
+
+
 def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]:
     engine_count = int(spec.engine.count.value)
     if engine_count not in (1, 2):
@@ -23,6 +28,8 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
     )
     fuselage_length = float(spec.fuselage.length.value)
     wing_x = fuselage_length * 0.40
+    wing_position = str(spec.wing.position.value).lower()
+    wing_z = _wing_z(wing_position, fuselage_diameter)
 
     length = root_chord
     diameter = fuselage_diameter * 0.5
@@ -34,9 +41,12 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
         if engine_position == "nose":
             x_rel_location = fuselage_length * 0.5
             z_rel_location = 0.0
+        elif engine_position == "tail":
+            x_rel_location = fuselage_length * 0.85
+            z_rel_location = fuselage_diameter * 0.2
         else:
             x_rel_location = wing_x + root_chord * 0.25
-            z_rel_location = -fuselage_diameter * 0.45
+            z_rel_location = wing_z - diameter * 0.6
         return [
             _create_engine_nacelle(
                 adapter,
@@ -52,7 +62,7 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
 
     x_rel_location = wing_x + root_chord * 0.25
     y_offset = wing_span * 0.25
-    z_rel_location = -fuselage_diameter * 0.45
+    z_rel_location = wing_z - diameter * 0.6
 
     return [
         _create_engine_nacelle(

@@ -6,6 +6,8 @@ import { useChat } from "@ai-sdk/react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
+
 export type GenerationCompleteData = {
   status?: string;
   version_no?: number;
@@ -26,7 +28,9 @@ type ToolPart = {
 
 type ChatPanelProps = {
   conversationId: string;
+  apiBaseUrl: string;
   onGenerationComplete: (data: GenerationCompleteData) => void;
+  registerSendMessage?: (fn: (text: string) => void) => void;
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -36,7 +40,9 @@ const TOOL_LABELS: Record<string, string> = {
 
 export function ChatPanel({
   conversationId,
+  apiBaseUrl,
   onGenerationComplete,
+  registerSendMessage,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const processedCalls = useRef(new Set<string>());
@@ -55,6 +61,12 @@ export function ChatPanel({
   const isStreaming = status === "streaming" || status === "submitted";
 
   useEffect(() => {
+    registerSendMessage?.((text: string) => {
+      void sendMessage({ text });
+    });
+  }, [registerSendMessage, sendMessage]);
+
+  useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
@@ -64,23 +76,18 @@ export function ChatPanel({
   useEffect(() => {
     for (const message of messages) {
       for (const part of message.parts ?? []) {
+        const toolPart = part as unknown as ToolPart;
         if (
-          part.type.startsWith("tool-") &&
-          "state" in part &&
-          "toolCallId" in part
+          toolPart.toolCallId &&
+          toolPart.state === "output-available" &&
+          !processedCalls.current.has(toolPart.toolCallId)
         ) {
-          const toolPart = part as unknown as ToolPart;
-          if (
-            toolPart.state === "output-available" &&
-            !processedCalls.current.has(toolPart.toolCallId)
-          ) {
-            processedCalls.current.add(toolPart.toolCallId);
-            const output = (toolPart.output ?? toolPart.result) as
-              | GenerationCompleteData
-              | undefined;
-            if (output) {
-              onGenerationComplete(output);
-            }
+          processedCalls.current.add(toolPart.toolCallId);
+          const output = (toolPart.output ?? toolPart.result) as
+            | GenerationCompleteData
+            | undefined;
+          if (output) {
+            onGenerationComplete(output);
           }
         }
       }
@@ -119,10 +126,23 @@ export function ChatPanel({
               {(msg.parts ?? []).map((part, i) => {
                 if (part.type === "text") {
                   const text = (part as { type: "text"; text: string }).text;
+                  const isLastTextPart =
+                    i ===
+                    (msg.parts ?? []).findLastIndex(
+                      (p) => p.type === "text",
+                    );
                   return text ? (
-                    <Markdown key={i} remarkPlugins={[remarkGfm]}>
-                      {text}
-                    </Markdown>
+                    <span key={i}>
+                      <Markdown remarkPlugins={[remarkGfm]}>
+                        {text}
+                      </Markdown>
+                      {isStreaming &&
+                        msg.role === "assistant" &&
+                        isLastTextPart &&
+                        status === "streaming" && (
+                          <span className="streaming-cursor" />
+                        )}
+                    </span>
                   ) : null;
                 }
                 if (part.type.startsWith("tool-")) {
@@ -130,6 +150,7 @@ export function ChatPanel({
                     <ToolCard
                       key={i}
                       part={part as unknown as ToolPart}
+                      apiBaseUrl={apiBaseUrl}
                     />
                   );
                 }
@@ -173,7 +194,7 @@ export function ChatPanel({
   );
 }
 
-function ToolCard({ part }: { part: ToolPart }) {
+function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) {
   const [expanded, setExpanded] = useState(false);
   const toolName = part.toolName || part.type.replace(/^tool-/, "");
   const label = TOOL_LABELS[toolName] ?? toolName;
@@ -214,12 +235,18 @@ function ToolCard({ part }: { part: ToolPart }) {
         </div>
       )}
 
-      {!isRunning && result?.files && result.files.length > 0 && (
+      {!isRunning && result?.files && result.files.length > 0 && result.version_no && (
         <div className="tool-card-files">
           {result.files.map((f: string) => (
-            <span key={f} className="tool-card-file">
+            <a
+              key={f}
+              className="tool-card-file"
+              href={buildVersionFileUrl(apiBaseUrl, result.design_id ?? "", result.version_no!, f)}
+              target="_blank"
+              rel="noreferrer"
+            >
               {f}
-            </span>
+            </a>
           ))}
         </div>
       )}

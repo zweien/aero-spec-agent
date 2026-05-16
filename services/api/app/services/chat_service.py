@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.spec_io import dump_aircraft_spec
@@ -176,12 +176,17 @@ MODIFY_DESIGN_TOOL = {
     "type": "function",
     "function": {
         "name": "modify_design",
-        "description": "修改当前飞机设计的参数。当用户要求修改现有设计的部分参数时使用。",
+        "description": (
+            "修改当前飞机设计的参数。当用户要求修改现有设计的部分参数时使用。"
+            "必须至少包含一个变更项。"
+            "示例: changes=[{\"path\":\"wing.span.value\",\"value\":14,\"reason\":\"用户要求\"}]"
+        ),
         "parameters": {
             "type": "object",
             "properties": {
                 "changes": {
                     "type": "array",
+                    "minItems": 1,
                     "items": {
                         "type": "object",
                         "properties": {
@@ -262,7 +267,7 @@ class ChatService:
     def __init__(self, storage_root: str | Path | None = None) -> None:
         self._conversations: dict[str, ConversationState] = {}
         self._model = os.getenv("OPENAI_MODEL", "deepseek-chat")
-        self._client: OpenAI | None = None
+        self._client: AsyncOpenAI | None = None
         self._job_runner = None
         self._storage_root = Path(storage_root) if storage_root else Path("storage")
 
@@ -274,7 +279,7 @@ class ChatService:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def _get_client(self) -> OpenAI:
+    def _get_client(self) -> AsyncOpenAI:
         if self._client is None:
             api_key = os.getenv("OPENAI_API_KEY", "")
             base_url = os.getenv("OPENAI_BASE_URL")
@@ -283,7 +288,7 @@ class ChatService:
                 if val := os.environ.pop(key, None):
                     saved_proxy[key] = val
             try:
-                self._client = OpenAI(api_key=api_key, base_url=base_url)
+                self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
             finally:
                 os.environ.update(saved_proxy)
         return self._client
@@ -340,14 +345,14 @@ class ChatService:
         collected_content = ""
         tool_calls_collected: dict[int, dict[str, Any]] = {}
 
-        response = self._get_client().chat.completions.create(
+        response = await self._get_client().chat.completions.create(
             model=self._model,
             messages=api_messages,
             tools=self.build_tools(),
             stream=True,
         )
 
-        for chunk in response:
+        async for chunk in response:
             choice = chunk.choices[0] if chunk.choices else None
             if choice is None:
                 continue
@@ -425,14 +430,14 @@ class ChatService:
                     "content": json.dumps({"error": f"unknown tool: {tool_name}"}, ensure_ascii=False),
                 })
 
-        second_response = self._get_client().chat.completions.create(
+        second_response = await self._get_client().chat.completions.create(
             model=self._model,
             messages=[{"role": "system", "content": system_prompt}] + state.messages,
             stream=True,
         )
 
         final_content = ""
-        for chunk in second_response:
+        async for chunk in second_response:
             choice = chunk.choices[0] if chunk.choices else None
             if choice and choice.delta and choice.delta.content:
                 final_content += choice.delta.content
@@ -488,7 +493,16 @@ class ChatService:
 
         changes = args.get("changes", [])
         if not changes:
-            error_msg = "changes 不能为空"
+            # Try to recover from common LLM mistakes where changes are placed at top level
+            for key in ("path", "value"):
+                if key in args:
+                    changes = [{"path": args["path"], "value": args["value"], "reason": args.get("reason", "")}]
+                    break
+        if not changes:
+            error_msg = (
+                "changes 不能为空。"
+                "请提供至少一个变更项，格式: [{\"path\":\"wing.span.value\",\"value\":14}]"
+            )
             yield _sse_event("error", {"content": error_msg})
             state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
             return
