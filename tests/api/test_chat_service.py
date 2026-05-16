@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,13 +7,28 @@ from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.chat_service import (
     ChatService,
     ConversationState,
+    GENERATE_DESIGN_TOOL,
+    MODIFY_DESIGN_TOOL,
     SYSTEM_PROMPT_TEMPLATE,
+    _flat_args_to_spec,
+    _pre_fill_none_scalars,
+    FIELD_TO_SPEC_PATH,
 )
 from services.api.app.services.spec_io import load_aircraft_spec
-from services.api.app.services.spec_patch import apply_patch
 
 
 EXAMPLE = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml")
+
+MINIMAL_FLAT_ARGS = {
+    "name": "test_uav",
+    "fuselage_length": 5.0,
+    "wing_position": "high",
+    "wing_span": 10.0,
+    "wing_root_chord": 1.0,
+    "wing_tip_chord": 0.5,
+    "tail_type": "conventional",
+    "engine_count": 2,
+}
 
 
 def test_conversation_state_is_created():
@@ -34,7 +48,6 @@ def test_conversation_state_reuses_existing():
 
 
 def test_system_prompt_includes_current_spec():
-    spec = load_aircraft_spec(EXAMPLE)
     prompt = SYSTEM_PROMPT_TEMPLATE % "wing.span: 12.0"
     assert "wing.span: 12.0" in prompt
     assert "AeroSpec Agent" in prompt
@@ -81,3 +94,78 @@ def test_persistence_saves_and_loads(tmp_path):
     assert len(loaded.messages) == 1
     assert loaded.messages[0]["content"] == "test msg"
     assert loaded.current_spec is not None
+
+
+# ---------------------------------------------------------------------------
+# Flat args to spec conversion
+# ---------------------------------------------------------------------------
+
+def test_flat_args_to_spec_minimal():
+    spec = _flat_args_to_spec(MINIMAL_FLAT_ARGS)
+    assert spec.aircraft.name == "test_uav"
+    assert spec.wing.span.value == 10.0
+    assert spec.wing.span.unit == "m"
+    assert spec.wing.span.source == "user"
+    assert spec.engine.count.value == 2
+    assert spec.fuselage.length.value == 5.0
+    assert spec.fuselage.max_diameter is None
+    assert spec.wing.sweep is None
+    assert spec.mission.cruise_speed is None
+
+
+def test_flat_args_to_spec_with_optional_fields():
+    args = {
+        **MINIMAL_FLAT_ARGS,
+        "cruise_speed": 150,
+        "wing_sweep": 5,
+        "wing_airfoil": "NACA4412",
+        "fuselage_diameter": 0.6,
+        "payload": 30,
+        "priority": "endurance",
+    }
+    spec = _flat_args_to_spec(args)
+    assert spec.mission.cruise_speed is not None
+    assert spec.mission.cruise_speed.value == 150
+    assert spec.mission.cruise_speed.unit == "km/h"
+    assert spec.wing.sweep is not None
+    assert spec.wing.sweep.value == 5
+    assert spec.wing.airfoil is not None
+    assert spec.wing.airfoil.value == "NACA4412"
+    assert spec.fuselage.max_diameter is not None
+    assert spec.fuselage.max_diameter.value == 0.6
+
+
+def test_flat_args_to_spec_rejects_missing_required():
+    with pytest.raises(Exception):
+        _flat_args_to_spec({"name": "bad"})
+
+
+# ---------------------------------------------------------------------------
+# Tool schema structure
+# ---------------------------------------------------------------------------
+
+def test_generate_design_tool_has_no_defs():
+    assert "$defs" not in GENERATE_DESIGN_TOOL["function"]["parameters"]
+    props = GENERATE_DESIGN_TOOL["function"]["parameters"]["properties"]
+    assert "wing_span" in props
+    assert "wing.position" not in props
+
+
+def test_modify_design_tool_has_field_enum():
+    items = MODIFY_DESIGN_TOOL["function"]["parameters"]["properties"]["changes"]["items"]
+    field_prop = items["properties"]["field"]
+    assert "enum" in field_prop
+    assert "wing_span" in field_prop["enum"]
+    assert "fuselage_length" in field_prop["enum"]
+
+
+# ---------------------------------------------------------------------------
+# Pre-fill None scalars
+# ---------------------------------------------------------------------------
+
+def test_pre_fill_none_scalars():
+    data = {"wing": {"sweep": None, "span": {"value": 10}}, "tail": {"type": None}}
+    _pre_fill_none_scalars(data, ["wing.sweep.value"])
+    assert data["wing"]["sweep"] == {}
+    assert data["wing"]["span"] == {"value": 10}
+    assert data["tail"]["type"] is None  # not affected

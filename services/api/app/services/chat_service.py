@@ -12,175 +12,188 @@ from openai import AsyncOpenAI
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.spec_io import dump_aircraft_spec
-from services.api.app.services.spec_patch import apply_patch
+from services.api.app.services.spec_patch import _set_nested
 
 logger = logging.getLogger(__name__)
 
-SPEC_SCHEMA_EXAMPLE = (
-    '\n'
-    'schema_version: "0.1"\n'
-    'aircraft:\n'
-    '  name: my_uav\n'
-    '  type: fixed_wing_uav\n'
-    '  layout: conventional\n'
-    'mission:\n'
-    '  cruise_speed: {value: 150, unit: km/h, source: user, confidence: 1.0}\n'
-    '  payload: {value: 20, unit: kg, source: user, confidence: 1.0}\n'
-    '  priority: {value: endurance, source: user, confidence: 0.9}\n'
-    'fuselage:\n'
-    '  length: {value: 5.0, unit: m, source: rule_default, confidence: 0.7}\n'
-    '  max_diameter: {value: 0.6, unit: m, source: rule_default, confidence: 0.7}\n'
-    'wing:\n'
-    '  position: {value: high, source: user, confidence: 1.0}\n'
-    '  span: {value: 10.0, unit: m, source: user, confidence: 1.0}\n'
-    '  root_chord: {value: 1.0, unit: m, source: rule_default, confidence: 0.75}\n'
-    '  tip_chord: {value: 0.5, unit: m, source: rule_default, confidence: 0.75}\n'
-    '  sweep: {value: 3, unit: deg, source: rule_default, confidence: 0.7}\n'
-    '  dihedral: {value: 3, unit: deg, source: rule_default, confidence: 0.7}\n'
-    '  airfoil: {value: NACA4412, source: system_default, confidence: 0.6}\n'
-    'tail:\n'
-    '  type: {value: conventional, source: user, confidence: 1.0}\n'
-    'engine:\n'
-    '  count: {value: 2, source: user, confidence: 1.0}\n'
-    '  position: {value: under_wing, source: inferred, confidence: 0.75}\n'
-)
+# ---------------------------------------------------------------------------
+# Flat field definitions: field_name → (scalar_type, default_unit, spec_path)
+# ---------------------------------------------------------------------------
+FLAT_FIELD_DEFS: dict[str, tuple[str, str | None, str]] = {
+    "name":              ("text",    None,    "aircraft.name"),
+    "wing_span":         ("numeric", "m",     "wing.span"),
+    "wing_root_chord":   ("numeric", "m",     "wing.root_chord"),
+    "wing_tip_chord":    ("numeric", "m",     "wing.tip_chord"),
+    "wing_sweep":        ("numeric", "deg",   "wing.sweep"),
+    "wing_dihedral":     ("numeric", "deg",   "wing.dihedral"),
+    "wing_airfoil":      ("text",    None,    "wing.airfoil"),
+    "wing_position":     ("text",    None,    "wing.position"),
+    "fuselage_length":   ("numeric", "m",     "fuselage.length"),
+    "fuselage_diameter": ("numeric", "m",     "fuselage.max_diameter"),
+    "engine_count":      ("integer", None,    "engine.count"),
+    "engine_position":   ("text",    None,    "engine.position"),
+    "tail_type":         ("text",    None,    "tail.type"),
+    "cruise_speed":      ("numeric", "km/h",  "mission.cruise_speed"),
+    "payload":           ("numeric", "kg",    "mission.payload"),
+    "priority":          ("text",    None,    "mission.priority"),
+}
 
-SYSTEM_PROMPT_TEMPLATE = """你是 AeroSpec Agent，一个飞机概念设计助手。
+# modify_design: field_name → spec dot-path (到 .value)
+FIELD_TO_SPEC_PATH: dict[str, str] = {
+    "name": "aircraft.name",
+    "wing_span": "wing.span.value",
+    "wing_root_chord": "wing.root_chord.value",
+    "wing_tip_chord": "wing.tip_chord.value",
+    "wing_sweep": "wing.sweep.value",
+    "wing_dihedral": "wing.dihedral.value",
+    "wing_airfoil": "wing.airfoil.value",
+    "wing_position": "wing.position.value",
+    "fuselage_length": "fuselage.length.value",
+    "fuselage_diameter": "fuselage.max_diameter.value",
+    "engine_count": "engine.count.value",
+    "engine_position": "engine.position.value",
+    "tail_type": "tail.type.value",
+    "cruise_speed": "mission.cruise_speed.value",
+    "payload": "mission.payload.value",
+    "priority": "mission.priority.value",
+}
 
-用户用自然语言描述飞机需求，你负责生成或修改 aircraft_spec 参数化设计。
+# modify_design: 数值字段修改时需同时填充 unit
+FIELD_DEFAULT_UNIT: dict[str, str | None] = {
+    "wing_span": "m", "wing_root_chord": "m", "wing_tip_chord": "m",
+    "wing_sweep": "deg", "wing_dihedral": "deg",
+    "fuselage_length": "m", "fuselage_diameter": "m",
+    "engine_count": None, "engine_position": None,
+    "cruise_speed": "km/h", "payload": "kg",
+}
 
-当前设计状态：
-%s
+# ---------------------------------------------------------------------------
+# Conversion helpers
+# ---------------------------------------------------------------------------
 
-规则：
-- 只处理固定翼无人机（fixed_wing_uav），常规布局（conventional）
-- schema_version 必须是 "0.1"
-- aircraft 必须包含 name, type, layout 字段
-- 每个数值参数必须包含 value, source, confidence 字段，数值参数额外需要 unit 字段
-- 用户明确给出的参数：source=user, confidence=1.0
-- 你推断的参数：source=inferred, confidence=0.7-0.9
-- 无法确定的参数使用合理默认值：source=rule_default, confidence=0.7
-- 新建设计使用 generate_design，修改现有设计使用 modify_design
-- 修改时只输出需要变更的字段
-- 生成完成后简要解释设计参数和依据
+def _flat_args_to_spec(args: dict[str, Any]) -> AircraftSpec:
+    """Convert flat generate_design args to full AircraftSpec with metadata."""
+    spec_data: dict[str, Any] = {
+        "schema_version": "0.1",
+        "aircraft": {
+            "name": args.get("name", "unnamed_uav"),
+            "type": "fixed_wing_uav",
+            "layout": "conventional",
+        },
+        "mission": {},
+        "fuselage": {},
+        "wing": {},
+        "tail": {},
+        "engine": {},
+    }
 
-AircraftSpec 完整结构示例（必须严格遵循此结构，不要添加额外字段）：
-""" + SPEC_SCHEMA_EXAMPLE
+    for field_name, (scalar_type, default_unit, spec_path) in FLAT_FIELD_DEFS.items():
+        if field_name not in args:
+            continue
+        value = args[field_name]
+        keys = spec_path.split(".")
+        target = spec_data
+        for key in keys[:-1]:
+            target = target.setdefault(key, {})
+        last_key = keys[-1]
 
-GENERATE_DESIGN_TOOL = {
+        # aircraft.* fields are plain strings, not scalars
+        if keys[0] == "aircraft":
+            target[last_key] = str(value)
+        elif scalar_type == "text":
+            target[last_key] = {"value": str(value), "source": "user", "confidence": 1.0}
+        elif scalar_type == "integer":
+            target[last_key] = {"value": int(value), "source": "user", "confidence": 1.0}
+        else:
+            scalar: dict[str, Any] = {"value": float(value), "source": "user", "confidence": 1.0}
+            if default_unit:
+                scalar["unit"] = default_unit
+            target[last_key] = scalar
+
+    return AircraftSpec.model_validate(spec_data)
+
+
+def _pre_fill_none_scalars(data: dict[str, Any], paths: list[str]) -> None:
+    """Replace None scalar fields (only those being patched) with empty dicts.
+
+    Paths like "wing.sweep.value" → check if "wing.sweep" is None, replace with {}.
+    """
+    for path in paths:
+        keys = path.split(".")
+        if len(keys) < 2:
+            continue
+        # Navigate to the parent of the last key (e.g. wing.sweep from wing.sweep.value)
+        parent_keys = keys[:-1]
+        scalar_key = parent_keys[-1]  # e.g. "sweep"
+        current = data
+        for key in parent_keys[:-1]:
+            if not isinstance(current, dict) or key not in current:
+                break
+            current = current[key]
+        else:
+            if isinstance(current, dict) and current.get(scalar_key) is None:
+                current[scalar_key] = {}
+
+
+# ---------------------------------------------------------------------------
+# Tool definitions
+# ---------------------------------------------------------------------------
+
+GENERATE_DESIGN_TOOL: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "generate_design",
-        "description": "根据用户需求生成新的飞机设计 spec。当用户描述全新的飞机需求时使用。必须严格遵循 AircraftSpec 结构。",
+        "description": "根据用户需求生成新的飞机设计。当用户描述全新的飞机需求时使用。",
         "parameters": {
             "type": "object",
             "properties": {
-                "schema_version": {
+                "name": {"type": "string", "description": "飞机名称，英文下划线命名"},
+                "fuselage_length": {"type": "number", "description": "机身长度 (m)"},
+                "fuselage_diameter": {"type": "number", "description": "机身最大直径 (m)"},
+                "wing_position": {
                     "type": "string",
-                    "enum": ["0.1"],
-                    "description": "固定值 0.1",
+                    "enum": ["high", "low", "mid"],
+                    "description": "机翼位置",
                 },
-                "aircraft": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string", "description": "飞机名称，用英文下划线命名"},
-                        "type": {"type": "string", "enum": ["fixed_wing_uav"]},
-                        "layout": {"type": "string", "enum": ["conventional"]},
-                    },
-                    "required": ["name", "type", "layout"],
+                "wing_span": {"type": "number", "description": "翼展 (m)"},
+                "wing_root_chord": {"type": "number", "description": "翼根弦长 (m)"},
+                "wing_tip_chord": {"type": "number", "description": "翼尖弦长 (m)"},
+                "wing_sweep": {"type": "number", "description": "机翼后掠角 (deg)"},
+                "wing_dihedral": {"type": "number", "description": "机翼上反角 (deg)"},
+                "wing_airfoil": {"type": "string", "description": "翼型，如 NACA4412"},
+                "tail_type": {
+                    "type": "string",
+                    "enum": ["conventional", "t-tail", "v-tail"],
+                    "description": "尾翼类型",
                 },
-                "mission": {
-                    "type": "object",
-                    "properties": {
-                        "cruise_speed": {"$ref": "#/$defs/numeric_scalar"},
-                        "payload": {"$ref": "#/$defs/numeric_scalar"},
-                        "priority": {"$ref": "#/$defs/text_scalar"},
-                    },
+                "engine_count": {"type": "integer", "description": "发动机数量"},
+                "engine_position": {
+                    "type": "string",
+                    "enum": ["under_wing", "on_fuselage", "wing_tip", "rear_fuselage"],
+                    "description": "发动机位置",
                 },
-                "fuselage": {
-                    "type": "object",
-                    "properties": {
-                        "length": {"$ref": "#/$defs/numeric_scalar"},
-                        "max_diameter": {"$ref": "#/$defs/numeric_scalar"},
-                    },
-                    "required": ["length"],
-                },
-                "wing": {
-                    "type": "object",
-                    "properties": {
-                        "position": {"$ref": "#/$defs/text_scalar"},
-                        "span": {"$ref": "#/$defs/numeric_scalar"},
-                        "root_chord": {"$ref": "#/$defs/numeric_scalar"},
-                        "tip_chord": {"$ref": "#/$defs/numeric_scalar"},
-                        "sweep": {"$ref": "#/$defs/numeric_scalar"},
-                        "dihedral": {"$ref": "#/$defs/numeric_scalar"},
-                        "airfoil": {"$ref": "#/$defs/text_scalar"},
-                    },
-                    "required": ["position", "span", "root_chord", "tip_chord"],
-                },
-                "tail": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"$ref": "#/$defs/text_scalar"},
-                    },
-                    "required": ["type"],
-                },
-                "engine": {
-                    "type": "object",
-                    "properties": {
-                        "count": {"$ref": "#/$defs/integer_scalar"},
-                        "position": {"$ref": "#/$defs/text_scalar"},
-                    },
-                    "required": ["count"],
+                "cruise_speed": {"type": "number", "description": "巡航速度 (km/h)"},
+                "payload": {"type": "number", "description": "有效载荷 (kg)"},
+                "priority": {
+                    "type": "string",
+                    "enum": ["endurance", "speed", "payload", "range"],
+                    "description": "设计优先级",
                 },
             },
-            "required": ["schema_version", "aircraft", "fuselage", "wing", "tail", "engine"],
-            "$defs": {
-                "numeric_scalar": {
-                    "type": "object",
-                    "properties": {
-                        "value": {"type": "number"},
-                        "unit": {"type": "string"},
-                        "source": {"type": "string", "enum": ["user", "inferred", "rule_default", "system_default"]},
-                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                        "reason": {"type": "string"},
-                    },
-                    "required": ["value", "source", "confidence"],
-                },
-                "integer_scalar": {
-                    "type": "object",
-                    "properties": {
-                        "value": {"type": "integer"},
-                        "source": {"type": "string", "enum": ["user", "inferred", "rule_default", "system_default"]},
-                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                        "reason": {"type": "string"},
-                    },
-                    "required": ["value", "source", "confidence"],
-                },
-                "text_scalar": {
-                    "type": "object",
-                    "properties": {
-                        "value": {"type": "string"},
-                        "source": {"type": "string", "enum": ["user", "inferred", "rule_default", "system_default"]},
-                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                        "reason": {"type": "string"},
-                    },
-                    "required": ["value", "source", "confidence"],
-                },
-            },
+            "required": [
+                "name", "fuselage_length", "wing_position",
+                "wing_span", "wing_root_chord", "wing_tip_chord",
+                "tail_type", "engine_count",
+            ],
         },
     },
 }
 
-MODIFY_DESIGN_TOOL = {
+MODIFY_DESIGN_TOOL: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "modify_design",
-        "description": (
-            "修改当前飞机设计的参数。当用户要求修改现有设计的部分参数时使用。"
-            "必须至少包含一个变更项。"
-            "示例: changes=[{\"path\":\"wing.span.value\",\"value\":14,\"reason\":\"用户要求\"}]"
-        ),
+        "description": "修改当前飞机设计的参数。使用语义化字段名指定要修改的参数。",
         "parameters": {
             "type": "object",
             "properties": {
@@ -190,17 +203,15 @@ MODIFY_DESIGN_TOOL = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "path": {
+                            "field": {
                                 "type": "string",
-                                "description": "点分隔的字段路径，例如 wing.span.value",
+                                "enum": list(FIELD_TO_SPEC_PATH.keys()),
+                                "description": "要修改的参数名",
                             },
                             "value": {"description": "新值"},
-                            "reason": {
-                                "type": "string",
-                                "description": "修改原因",
-                            },
+                            "reason": {"type": "string", "description": "修改原因"},
                         },
-                        "required": ["path", "value"],
+                        "required": ["field", "value"],
                     },
                 }
             },
@@ -208,6 +219,20 @@ MODIFY_DESIGN_TOOL = {
         },
     },
 }
+
+SYSTEM_PROMPT_TEMPLATE = """你是 AeroSpec Agent，一个飞机概念设计助手。
+
+用户用自然语言描述飞机需求，你负责生成或修改参数化设计。
+
+当前设计状态：
+%s
+
+规则：
+- 只处理固定翼无人机（fixed_wing_uav），常规布局（conventional）
+- 新建设计使用 generate_design，修改现有设计使用 modify_design
+- 用户明确给出的参数直接填入，其余参数根据航空工程经验推断合理默认值
+- 生成完成后简要解释设计参数和依据
+"""
 
 
 @dataclass
@@ -234,28 +259,6 @@ class ConversationState:
             messages=data.get("messages", []),
             current_spec=AircraftSpec.model_validate(spec_data) if spec_data else None,
         )
-
-
-def _normalize_spec_keys(data: dict[str, Any]) -> None:
-    """Fix common LLM casing mistakes in spec data."""
-    if "schema_Version" in data and "schema_version" not in data:
-        data["schema_version"] = data.pop("schema_Version")
-    if "schema_version" in data and isinstance(data["schema_version"], str):
-        data["schema_version"] = data["schema_version"].strip('"')
-    _normalize_source_values(data)
-
-
-def _normalize_source_values(obj: Any) -> None:
-    """Recursively fix source field casing: rule_Default → rule_default."""
-    if not isinstance(obj, dict):
-        return
-    for key, val in obj.items():
-        if key == "source" and isinstance(val, str):
-            lower = val.lower()
-            if lower in ("user", "inferred", "rule_default", "system_default"):
-                obj[key] = lower
-        elif isinstance(val, dict):
-            _normalize_source_values(val)
 
 
 def _sse_event(event_type: str, data: Any) -> str:
@@ -322,7 +325,6 @@ class ChatService:
     def _build_system_prompt(self, state: ConversationState) -> str:
         if state.current_spec is not None:
             import tempfile
-            from pathlib import Path
             with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
                 dump_aircraft_spec(state.current_spec, Path(f.name))
                 spec_yaml = Path(f.name).read_text(encoding="utf-8")
@@ -448,21 +450,27 @@ class ChatService:
 
         self._save_state(state)
 
-    async def _handle_generate_design(self, state: ConversationState, args: dict[str, Any], tool_call_id: str) -> AsyncIterator[str]:
+    async def _handle_generate_design(
+        self, state: ConversationState, args: dict[str, Any], tool_call_id: str,
+    ) -> AsyncIterator[str]:
         try:
-            spec_data = args.get("spec", args)
-            _normalize_spec_keys(spec_data)
-            spec = AircraftSpec.model_validate(spec_data)
+            spec = _flat_args_to_spec(args)
         except Exception as exc:
             error_msg = f"spec 校验失败: {exc}"
             yield _sse_event("error", {"content": error_msg})
-            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
             return
 
         if self._job_runner is None:
             error_msg = "job runner not configured"
             yield _sse_event("error", {"content": error_msg})
-            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
             return
 
         yield _sse_event("generation_started", {"design_id": state.design_id})
@@ -479,46 +487,85 @@ class ChatService:
         yield _sse_event("generation_complete", result)
 
         state.messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
+            "role": "tool", "tool_call_id": tool_call_id,
             "content": json.dumps(result, ensure_ascii=False),
         })
 
-    async def _handle_modify_design(self, state: ConversationState, args: dict[str, Any], tool_call_id: str) -> AsyncIterator[str]:
+    async def _handle_modify_design(
+        self, state: ConversationState, args: dict[str, Any], tool_call_id: str,
+    ) -> AsyncIterator[str]:
         if state.current_spec is None:
             error_msg = "没有当前设计，请先使用 generate_design 创建设计"
             yield _sse_event("error", {"content": error_msg})
-            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
             return
 
         changes = args.get("changes", [])
         if not changes:
-            # Try to recover from common LLM mistakes where changes are placed at top level
-            for key in ("path", "value"):
-                if key in args:
-                    changes = [{"path": args["path"], "value": args["value"], "reason": args.get("reason", "")}]
-                    break
-        if not changes:
-            error_msg = (
-                "changes 不能为空。"
-                "请提供至少一个变更项，格式: [{\"path\":\"wing.span.value\",\"value\":14}]"
-            )
+            error_msg = "changes 不能为空，请提供至少一个变更项"
             yield _sse_event("error", {"content": error_msg})
-            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
             return
 
+        # 转换语义化字段为点路径补丁
+        patch_changes: list[dict[str, Any]] = []
+        extra_patches: list[dict[str, Any]] = []
+        for change in changes:
+            field_name = change.get("field", "")
+            if field_name not in FIELD_TO_SPEC_PATH:
+                error_msg = f"未知字段: {field_name}，可选: {', '.join(FIELD_TO_SPEC_PATH.keys())}"
+                yield _sse_event("error", {"content": error_msg})
+                state.messages.append({
+                    "role": "tool", "tool_call_id": tool_call_id,
+                    "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+                })
+                return
+
+            path = FIELD_TO_SPEC_PATH[field_name]
+            value = change["value"]
+            patch_changes.append({"path": path, "value": value})
+
+            # 数值字段：同时更新 source/confidence，有 unit 的也更新
+            if field_name in FIELD_DEFAULT_UNIT:
+                parent = path.rsplit(".", 1)[0]
+                extra_patches.append({"path": f"{parent}.source", "value": "user"})
+                extra_patches.append({"path": f"{parent}.confidence", "value": 1.0})
+                if FIELD_DEFAULT_UNIT[field_name]:
+                    extra_patches.append({"path": f"{parent}.unit", "value": FIELD_DEFAULT_UNIT[field_name]})
+
+        # 预处理: 只对被修改的字段，将 None 标量替换为空 dict
+        data = state.current_spec.model_dump(mode="json")
+        affected_paths = [FIELD_TO_SPEC_PATH[c.get("field", "")] for c in changes]
+        _pre_fill_none_scalars(data, affected_paths)
+
+        # 应用补丁
+        for change in patch_changes + extra_patches:
+            _set_nested(data, change["path"], change["value"])
+
         try:
-            patched = apply_patch(state.current_spec, changes)
+            patched = AircraftSpec.model_validate(data)
         except Exception as exc:
             error_msg = f"spec patch 失败: {exc}"
             yield _sse_event("error", {"content": error_msg})
-            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
             return
 
         if self._job_runner is None:
             error_msg = "job runner not configured"
             yield _sse_event("error", {"content": error_msg})
-            state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": error_msg}, ensure_ascii=False)})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
             return
 
         yield _sse_event("generation_started", {"design_id": state.design_id})
@@ -535,7 +582,6 @@ class ChatService:
         yield _sse_event("generation_complete", result)
 
         state.messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
+            "role": "tool", "tool_call_id": tool_call_id,
             "content": json.dumps(result, ensure_ascii=False),
         })

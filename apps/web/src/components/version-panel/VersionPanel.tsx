@@ -1,30 +1,150 @@
+"use client";
+
 import { useState } from "react";
 
 import type { DesignRuleEntry, PerformanceEstimateEntry, VspaeroAnalysisEntry } from "@/app/page";
+import { VersionCompare } from "./VersionCompare";
+
+type VersionResponse = {
+  files: string[];
+  validation_report?: {
+    spec_echo?: Record<string, unknown>;
+    design_rules?: {
+      rules: DesignRuleEntry[];
+      summary: Record<string, number>;
+    };
+    performance_estimate?: {
+      estimates: PerformanceEstimateEntry[];
+      summary: Record<string, number>;
+    };
+    vspaero_analysis?: VspaeroAnalysisEntry;
+  };
+};
 
 type VersionPanelProps = {
   designRules?: DesignRuleEntry[] | null;
   perfEstimates?: PerformanceEstimateEntry[] | null;
   aeroAnalysis?: VspaeroAnalysisEntry | null;
+  versionList?: number[];
+  currentVersionNo?: number;
+  onCompare?: (v1: number, v2: number) => void;
+  onCancelCompare?: () => void;
+  onSelectVersion?: (versionNo: number) => void;
+  compareVersions?: [number, number] | null;
+  compareData?: [VersionResponse, VersionResponse] | null;
 };
 
 export function VersionPanel({
   designRules,
   perfEstimates,
   aeroAnalysis,
+  versionList,
+  currentVersionNo,
+  onCompare,
+  onCancelCompare,
+  onSelectVersion,
+  compareVersions,
+  compareData,
 }: VersionPanelProps) {
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedFirst, setSelectedFirst] = useState<number | null>(null);
+
   const hasContent = (designRules && designRules.length > 0) || (perfEstimates && perfEstimates.length > 0) || aeroAnalysis;
-  if (!hasContent) return null;
+  const hasVersions = versionList && versionList.length > 0;
+
+  if (!hasContent && !hasVersions) return null;
+
+  const handleCompareClick = () => {
+    setCompareMode(true);
+    setSelectedFirst(null);
+  };
+
+  const handleVersionClick = (v: number) => {
+    if (compareMode) {
+      if (selectedFirst === null) {
+        setSelectedFirst(v);
+      } else if (v !== selectedFirst) {
+        onCompare?.(selectedFirst, v);
+        setCompareMode(false);
+        setSelectedFirst(null);
+      }
+    } else {
+      onSelectVersion?.(v);
+    }
+  };
+
+  const handleCancel = () => {
+    setCompareMode(false);
+    setSelectedFirst(null);
+    onCancelCompare?.();
+  };
+
+  const isComparing = compareVersions != null && compareData != null;
 
   return (
     <section className="bottom-panel">
-      {designRules && designRules.length > 0 && (
-        <DesignRulesSummary rules={designRules} />
+      {hasVersions && (
+        <div className="version-selector">
+          <div className="version-pills">
+            {versionList!.map((v) => {
+              const isCurrent = v === currentVersionNo;
+              const isSelected = v === selectedFirst;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  className={`version-pill ${isCurrent ? "version-pill-active" : ""} ${isSelected ? "version-pill-selected" : ""}`}
+                  onClick={() => handleVersionClick(v)}
+                >
+                  v{v}
+                </button>
+              );
+            })}
+          </div>
+          <div className="version-actions">
+            {compareMode ? (
+              <>
+                <span className="compare-hint">
+                  {selectedFirst == null ? "选择版本 A" : `已选 v${selectedFirst}，选择版本 B`}
+                </span>
+                <button type="button" className="compare-cancel-btn" onClick={handleCancel}>
+                  取消
+                </button>
+              </>
+            ) : (
+              versionList!.length >= 2 && (
+                <button type="button" className="compare-btn" onClick={handleCompareClick}>
+                  对比
+                </button>
+              )
+            )}
+          </div>
+        </div>
       )}
-      {perfEstimates && perfEstimates.length > 0 && (
-        <PerformanceEstimateSummary estimates={perfEstimates} />
+
+      {isComparing && compareData ? (
+        <VersionCompare
+          v1No={compareVersions[0]}
+          v2No={compareVersions[1]}
+          data={compareData}
+        />
+      ) : (
+        <>
+          {designRules && designRules.length > 0 && (
+            <DesignRulesSummary rules={designRules} />
+          )}
+          {perfEstimates && perfEstimates.length > 0 && (
+            <PerformanceEstimateSummary estimates={perfEstimates} />
+          )}
+          {aeroAnalysis && <VspaeroSummary analysis={aeroAnalysis} />}
+        </>
       )}
-      {aeroAnalysis && <VspaeroSummary analysis={aeroAnalysis} />}
+
+      {isComparing && (
+        <button type="button" className="compare-cancel-btn compare-exit-btn" onClick={handleCancel}>
+          退出对比
+        </button>
+      )}
     </section>
   );
 }

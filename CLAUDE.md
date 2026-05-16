@@ -44,6 +44,8 @@ npm run dev     # dev server on http://localhost:3900
 npm run build   # production build
 ```
 
+Next.js dev server 缓存可能导致 CSS/JS 404。修改 globals.css 等样式文件后若页面资源加载失败，需删除 `.next` 目录后重启：`rm -rf apps/web/.next`。
+
 ## Architecture
 
 ```

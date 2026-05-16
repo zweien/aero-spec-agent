@@ -254,6 +254,38 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
   );
 }
 
+const SPEC_FIELD_LABELS: Record<string, string> = {
+  name: "名称",
+  wing_span: "翼展",
+  wing_root_chord: "翼根弦长",
+  wing_tip_chord: "翼尖弦长",
+  wing_sweep: "后掠角",
+  wing_dihedral: "上反角",
+  wing_airfoil: "翼型",
+  wing_position: "机翼位置",
+  fuselage_length: "机长",
+  fuselage_diameter: "机身直径",
+  engine_count: "发动机",
+  engine_position: "发动机位置",
+  tail_type: "尾翼类型",
+  cruise_speed: "巡航速度",
+  payload: "载荷",
+  priority: "优先级",
+};
+
+const SPEC_FIELD_UNIT: Record<string, string> = {
+  wing_span: " m",
+  wing_root_chord: " m",
+  wing_tip_chord: " m",
+  wing_sweep: "°",
+  wing_dihedral: "°",
+  fuselage_length: " m",
+  fuselage_diameter: " m",
+  engine_count: "发",
+  cruise_speed: " km/h",
+  payload: " kg",
+};
+
 function SpecSummary({
   args,
   toolName,
@@ -262,29 +294,12 @@ function SpecSummary({
   toolName: string;
 }): JSX.Element {
   if (toolName === "generate_design") {
-    const aircraft = (args.aircraft ?? {}) as Record<string, unknown>;
-    const wing = (args.wing ?? {}) as Record<string, unknown>;
-    const fuselage = (args.fuselage ?? {}) as Record<string, unknown>;
-    const engine = (args.engine ?? {}) as Record<string, unknown>;
     const entries: Array<{ k: string; v: string }> = [];
-    if ("name" in aircraft)
-      entries.push({ k: "名称", v: String(aircraft.name) });
-    const wingSpan = wing.span as Record<string, unknown> | undefined;
-    if (wingSpan)
-      entries.push({
-        k: "翼展",
-        v: `${wingSpan.value} ${wingSpan.unit ?? "m"}`,
-      });
-    const fuseLen = fuselage.length as Record<string, unknown> | undefined;
-    if (fuseLen)
-      entries.push({
-        k: "机长",
-        v: `${fuseLen.value} ${fuseLen.unit ?? "m"}`,
-      });
-    const wingPos = wing.position as Record<string, unknown> | undefined;
-    if (wingPos) entries.push({ k: "机翼位置", v: String(wingPos.value) });
-    const engCount = engine.count as Record<string, unknown> | undefined;
-    if (engCount) entries.push({ k: "发动机", v: `${engCount.value}发` });
+    for (const [key, val] of Object.entries(args)) {
+      const label = SPEC_FIELD_LABELS[key] ?? key;
+      const unit = SPEC_FIELD_UNIT[key] ?? "";
+      if (val != null) entries.push({ k: label, v: `${val}${unit}` });
+    }
     return (
       <div className="spec-summary">
         {entries.map((e) => (
@@ -299,7 +314,7 @@ function SpecSummary({
 
   if (toolName === "modify_design") {
     const changes = (args.changes ?? []) as Array<{
-      path: string;
+      field: string;
       value: unknown;
       reason?: string;
     }>;
@@ -307,7 +322,9 @@ function SpecSummary({
       <div className="spec-summary">
         {changes.map((c, i) => (
           <div key={i} className="spec-summary-row">
-            <span className="spec-summary-key">{c.path}</span>
+            <span className="spec-summary-key">
+              {SPEC_FIELD_LABELS[c.field] ?? c.field}
+            </span>
             <span className="spec-summary-val">
               {JSON.stringify(c.value)}
             </span>

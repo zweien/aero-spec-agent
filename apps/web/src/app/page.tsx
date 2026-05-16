@@ -87,6 +87,11 @@ export default function Home() {
   const [designRules, setDesignRules] = useState<DesignRuleEntry[] | null>(null);
   const [perfEstimates, setPerfEstimates] = useState<PerformanceEstimateEntry[] | null>(null);
   const [aeroAnalysis, setAeroAnalysis] = useState<VspaeroAnalysisEntry | null>(null);
+  const [versionList, setVersionList] = useState<number[]>([]);
+  const [currentVersionNo, setCurrentVersionNo] = useState<number | undefined>(undefined);
+  const [designId, setDesignId] = useState<string | null>(null);
+  const [compareVersions, setCompareVersions] = useState<[number, number] | null>(null);
+  const [compareData, setCompareData] = useState<[VersionResponse, VersionResponse] | null>(null);
 
   const chatSendMessageRef = useRef<((text: string) => void) | null>(null);
   const [chatWidth, setChatWidth] = useState(38);
@@ -128,14 +133,22 @@ export default function Home() {
     chatSendMessageRef.current = fn;
   }, []);
 
+  const fetchVersionList = useCallback(async (id: string) => {
+    const resp = await fetch(`${API_BASE_URL}/api/designs/${id}/versions`);
+    if (!resp.ok) return;
+    const versions = (await resp.json()) as Array<{ version_no: number }>;
+    setVersionList(versions.map((v) => v.version_no));
+  }, []);
+
   const loadVersion = useCallback(
-    async (designId: string, versionNo: number) => {
+    async (dId: string, versionNo: number) => {
       const resp = await fetch(
-        `${API_BASE_URL}/api/designs/${designId}/versions/${versionNo}`,
+        `${API_BASE_URL}/api/designs/${dId}/versions/${versionNo}`,
       );
       if (!resp.ok) return;
 
       const version = (await resp.json()) as VersionResponse;
+      setCurrentVersionNo(versionNo);
       setPreviewSpec(
         (version.validation_report?.spec_echo ?? null) as AircraftPreviewSpec | null,
       );
@@ -154,11 +167,13 @@ export default function Home() {
 
       const source = selectCadPreviewSource({
         apiBaseUrl: API_BASE_URL,
-        designId,
+        designId: dId,
         versionNo,
         files: version.files,
       });
       setPreviewSource(source);
+      setCompareVersions(null);
+      setCompareData(null);
     },
     [],
   );
@@ -168,9 +183,10 @@ export default function Home() {
       const convId = data.design_id ?? conversationId;
       const vNo = data.version_no;
       if (!vNo) return;
-      void loadVersion(convId, vNo).catch(() => {});
+      setDesignId(convId);
+      void loadVersion(convId, vNo).then(() => fetchVersionList(convId)).catch(() => {});
     },
-    [conversationId, loadVersion],
+    [conversationId, loadVersion, fetchVersionList],
   );
 
   const handleParameterChange = useCallback(
@@ -195,6 +211,32 @@ export default function Home() {
     chatSendMessageRef.current?.(msg);
     setPendingChanges(new Map());
   }, [pendingChanges]);
+
+  const handleCompare = useCallback(
+    async (v1: number, v2: number) => {
+      if (!designId) return;
+      const [r1, r2] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/designs/${designId}/versions/${v1}`).then((r) => r.json()),
+        fetch(`${API_BASE_URL}/api/designs/${designId}/versions/${v2}`).then((r) => r.json()),
+      ]);
+      setCompareData([r1 as VersionResponse, r2 as VersionResponse]);
+      setCompareVersions([v1, v2]);
+    },
+    [designId],
+  );
+
+  const handleCancelCompare = useCallback(() => {
+    setCompareVersions(null);
+    setCompareData(null);
+  }, []);
+
+  const handleSelectVersion = useCallback(
+    (versionNo: number) => {
+      if (!designId) return;
+      void loadVersion(designId, versionNo);
+    },
+    [designId, loadVersion],
+  );
 
   return (
     <main className="workbench">
@@ -237,6 +279,13 @@ export default function Home() {
         designRules={designRules}
         perfEstimates={perfEstimates}
         aeroAnalysis={aeroAnalysis}
+        versionList={versionList}
+        currentVersionNo={currentVersionNo}
+        onCompare={handleCompare}
+        onCancelCompare={handleCancelCompare}
+        onSelectVersion={handleSelectVersion}
+        compareVersions={compareVersions}
+        compareData={compareData}
       />
     </main>
   );
