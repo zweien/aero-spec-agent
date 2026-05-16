@@ -185,6 +185,20 @@ function findPartId(object: THREE.Object3D): AircraftPartId | null {
   return null;
 }
 
+function makePickingOverlayTransparent(root: THREE.Object3D): void {
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    for (const material of materials) {
+      if (material instanceof THREE.MeshStandardMaterial) {
+        material.transparent = true;
+        material.opacity = 0.01;
+        material.depthWrite = false;
+      }
+    }
+  });
+}
+
 function setPartHighlight(root: THREE.Object3D, partId: AircraftPartId, enabled: boolean): void {
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || findPartId(child) !== partId) return;
@@ -279,6 +293,7 @@ export function AircraftThreePreview({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const wireframeRef = useRef<THREE.Group | null>(null);
+  const pickingOverlayRef = useRef<THREE.Group | null>(null);
   const importedRef = useRef<THREE.Object3D | null>(null);
   const selectedPartIdRef = useRef<AircraftPartId | null>(null);
   const onSelectPartRef = useRef<typeof onSelectPart>(onSelectPart);
@@ -332,8 +347,8 @@ export function AircraftThreePreview({
     const pointer = new THREE.Vector2();
 
     function handlePointerDown(event: PointerEvent) {
-      const root = wireframeRef.current;
-      if (!root || importedRef.current) return;
+      const root = pickingOverlayRef.current;
+      if (!root) return;
 
       const rect = activeCanvas.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -392,17 +407,15 @@ export function AircraftThreePreview({
       rendererRef.current = null;
       controlsRef.current = null;
       wireframeRef.current = null;
+      pickingOverlayRef.current = null;
       importedRef.current = null;
     };
   }, []);
 
-  // Update wireframe when spec changes and no GLB loaded
+  // Update wireframe / picking overlay when spec changes
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !isActiveRef.current) return;
-
-    // If an imported model is loaded, don't show wireframe
-    if (importedRef.current) return;
 
     // Remove old wireframe
     if (wireframeRef.current) {
@@ -410,15 +423,32 @@ export function AircraftThreePreview({
       disposeObject3D(wireframeRef.current);
     }
 
-    const aircraft = createAircraftGroup(model);
-    scene.add(aircraft);
-    wireframeRef.current = aircraft;
-    if (selectedPartIdRef.current) {
-      setPartHighlight(aircraft, selectedPartIdRef.current, true);
+    // Remove old picking overlay
+    if (pickingOverlayRef.current) {
+      scene.remove(pickingOverlayRef.current);
+      disposeObject3D(pickingOverlayRef.current);
     }
 
-    if (!modelUrl || !modelFormat) {
-      onStatusChange?.({ state: "parameter" });
+    const aircraft = createAircraftGroup(model);
+
+    if (importedRef.current) {
+      // Real model loaded: create transparent picking overlay
+      makePickingOverlayTransparent(aircraft);
+      scene.add(aircraft);
+      pickingOverlayRef.current = aircraft;
+    } else {
+      // No real model: wireframe IS the picking overlay
+      scene.add(aircraft);
+      wireframeRef.current = aircraft;
+      pickingOverlayRef.current = aircraft;
+
+      if (!modelUrl || !modelFormat) {
+        onStatusChange?.({ state: "parameter" });
+      }
+    }
+
+    if (selectedPartIdRef.current) {
+      setPartHighlight(aircraft, selectedPartIdRef.current, true);
     }
   }, [model, modelUrl, modelFormat, onStatusChange]);
 
@@ -449,10 +479,10 @@ export function AircraftThreePreview({
           disposeObject3D(importedRef.current);
         }
 
-        // Remove wireframe
+        // Convert wireframe to transparent picking overlay
         if (wireframeRef.current) {
-          scene.remove(wireframeRef.current);
-          disposeObject3D(wireframeRef.current);
+          makePickingOverlayTransparent(wireframeRef.current);
+          pickingOverlayRef.current = wireframeRef.current;
           wireframeRef.current = null;
         }
 

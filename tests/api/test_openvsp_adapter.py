@@ -187,3 +187,31 @@ def test_add_geom_checks_openvsp_error_stack_after_call():
     assert adapter.errors == [
         {"context": "AddGeom(WING)", "message": "AddGeom warning"}
     ]
+
+
+def test_error_policy_warn_does_not_raise(monkeypatch):
+    import services.workers.cad_worker.openvsp_generator.openvsp_adapter as mod
+
+    monkeypatch.setattr(mod, "_ERROR_POLICY_FAIL", False)
+
+    fake_vsp = FakeOpenVspModule()
+    manager = FakeErrorManager(["soft warn"])
+    _attach_error_manager(fake_vsp, manager)
+    adapter = OpenVspAdapter(module=fake_vsp)
+
+    errors = adapter.check_errors("warn-test")
+    assert len(errors) == 1
+
+
+def test_error_policy_fail_raises_cad_generation_error(monkeypatch):
+    import services.workers.cad_worker.openvsp_generator.openvsp_adapter as mod
+
+    monkeypatch.setattr(mod, "_ERROR_POLICY_FAIL", True)
+
+    fake_vsp = FakeOpenVspModule()
+    manager = FakeErrorManager(["fatal error"])
+    _attach_error_manager(fake_vsp, manager)
+    adapter = OpenVspAdapter(module=fake_vsp)
+
+    with pytest.raises(CadGenerationError, match="fatal error"):
+        adapter.check_errors("fail-test")

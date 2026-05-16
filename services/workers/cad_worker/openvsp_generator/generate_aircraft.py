@@ -35,6 +35,13 @@ def _scalar_value(scalar: Any, default: float | int | None = None) -> float | in
     return scalar.value
 
 
+def _engine_offset_value(spec: Any, attr: str) -> float:
+    field = getattr(spec.engine, attr, None)
+    if field is not None and hasattr(field, "value"):
+        return float(field.value)
+    return 0.0
+
+
 def _file_size_entry(path: Path) -> dict[str, Any]:
     size = path.stat().st_size if path.exists() else 0
     return {
@@ -99,6 +106,9 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend)
         "wing.tip_chord": _scalar_value(spec.wing.tip_chord),
         "wing.sweep": _scalar_value(spec.wing.sweep, 0.0),
         "wing.dihedral": _scalar_value(spec.wing.dihedral, 0.0),
+        "engine.x_offset": _engine_offset_value(spec, "x_offset"),
+        "engine.y_offset": _engine_offset_value(spec, "y_offset"),
+        "engine.z_offset": _engine_offset_value(spec, "z_offset"),
     }
     for key, expected in parameter_expectations.items():
         validation_report[key] = verification_entry(

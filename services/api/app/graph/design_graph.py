@@ -29,6 +29,24 @@ class DesignGraphState(TypedDict, total=False):
     error_message: str | None
 
 
+_GENERATE_KEYWORDS = ("生成", "设计", "创建", "新建", "做一架", "搞一架")
+_MODIFY_PART_KEYWORDS = ("这个", "选中", "移动", "外移", "内移", "向前", "向后", "向上", "向下")
+
+
+def classify_message_intent(
+    message: str,
+    selected_refs: list[str] | None = None,
+    has_current_spec: bool = False,
+) -> DesignIntent:
+    if not has_current_spec:
+        return "generate_design"
+    if any(kw in message for kw in _GENERATE_KEYWORDS):
+        return "generate_design"
+    if selected_refs and any(kw in message for kw in _MODIFY_PART_KEYWORDS):
+        return "modify_design"
+    return "modify_design"
+
+
 def load_context(state: DesignGraphState) -> DesignGraphState:
     return state
 

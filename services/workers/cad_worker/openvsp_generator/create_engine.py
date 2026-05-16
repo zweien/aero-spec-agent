@@ -12,6 +12,13 @@ def _wing_z(position: str, fuselage_diameter: float) -> float:
     return factors.get(position, 0.0) * fuselage_diameter
 
 
+def _engine_offset(spec: Any, attr: str) -> float:
+    field = getattr(spec.engine, attr, None)
+    if field is not None and hasattr(field, "value"):
+        return float(field.value)
+    return 0.0
+
+
 def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]:
     engine_count = int(spec.engine.count.value)
     if engine_count not in (1, 2):
@@ -31,6 +38,10 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
     wing_position = str(spec.wing.position.value).lower()
     wing_z = _wing_z(wing_position, fuselage_diameter)
 
+    x_offset = _engine_offset(spec, "x_offset")
+    y_offset = _engine_offset(spec, "y_offset")
+    z_offset = _engine_offset(spec, "z_offset")
+
     length = root_chord
     diameter = fuselage_diameter * 0.5
 
@@ -39,39 +50,39 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             spec.engine.position.value if spec.engine.position else "nose"
         )
         if engine_position == "nose":
-            x_rel_location = fuselage_length * 0.5
-            z_rel_location = 0.0
+            base_x = fuselage_length * 0.5
+            base_z = 0.0
         elif engine_position == "tail":
-            x_rel_location = fuselage_length * 0.85
-            z_rel_location = fuselage_diameter * 0.2
+            base_x = fuselage_length * 0.85
+            base_z = fuselage_diameter * 0.2
         else:
-            x_rel_location = wing_x + root_chord * 0.25
-            z_rel_location = wing_z - diameter * 0.6
+            base_x = wing_x + root_chord * 0.25
+            base_z = wing_z - diameter * 0.6
         return [
             _create_engine_nacelle(
                 adapter,
                 name="center_engine",
                 engine_count=engine_count,
-                x_rel_location=x_rel_location,
-                y_offset=0.0,
-                z_rel_location=z_rel_location,
+                x_rel_location=base_x + x_offset,
+                y_offset=y_offset,
+                z_rel_location=base_z + z_offset,
                 length=length,
                 diameter=diameter,
             ),
         ]
 
-    x_rel_location = wing_x + root_chord * 0.25
-    y_offset = wing_span * 0.25
-    z_rel_location = wing_z - diameter * 0.6
+    base_x = wing_x + root_chord * 0.25
+    base_y = wing_span * 0.25
+    base_z = wing_z - diameter * 0.6
 
     return [
         _create_engine_nacelle(
             adapter,
             name="left_engine",
             engine_count=engine_count,
-            x_rel_location=x_rel_location,
-            y_offset=-y_offset,
-            z_rel_location=z_rel_location,
+            x_rel_location=base_x + x_offset,
+            y_offset=-(base_y + y_offset),
+            z_rel_location=base_z + z_offset,
             length=length,
             diameter=diameter,
         ),
@@ -79,9 +90,9 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             adapter,
             name="right_engine",
             engine_count=engine_count,
-            x_rel_location=x_rel_location,
-            y_offset=y_offset,
-            z_rel_location=z_rel_location,
+            x_rel_location=base_x + x_offset,
+            y_offset=base_y + y_offset,
+            z_rel_location=base_z + z_offset,
             length=length,
             diameter=diameter,
         ),

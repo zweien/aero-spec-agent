@@ -83,6 +83,9 @@ class Engine(BaseModel):
 
     count: IntegerScalar
     position: TextScalar | None = None
+    x_offset: NumericScalar | None = None
+    y_offset: NumericScalar | None = None
+    z_offset: NumericScalar | None = None
 
 
 class AircraftSpec(BaseModel):

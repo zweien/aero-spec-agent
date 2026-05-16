@@ -281,6 +281,10 @@ export default function Home() {
     setSelectedRefs(partRef ? [partRef] : []);
   }, []);
 
+  const handleClearSelectedRefs = useCallback(() => {
+    setSelectedRefs([]);
+  }, []);
+
   const handleCompare = useCallback(
     async (v1: number, v2: number) => {
       if (!designId) return;
@@ -323,6 +327,7 @@ export default function Home() {
             conversationId={conversationId}
             apiBaseUrl={API_BASE_URL}
             onGenerationComplete={handleGenerationComplete}
+            onClearSelectedRefs={handleClearSelectedRefs}
             registerSystemMessage={registerSystemMessage}
             registerToolAction={registerToolAction}
             selectedRefs={selectedRefs}

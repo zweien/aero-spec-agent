@@ -32,6 +32,9 @@ FLAT_FIELD_DEFS: dict[str, tuple[str, str | None, str]] = {
     "fuselage_diameter": ("numeric", "m",     "fuselage.max_diameter"),
     "engine_count":      ("integer", None,    "engine.count"),
     "engine_position":   ("text",    None,    "engine.position"),
+    "engine_x_offset":   ("numeric", "m",     "engine.x_offset"),
+    "engine_y_offset":   ("numeric", "m",     "engine.y_offset"),
+    "engine_z_offset":   ("numeric", "m",     "engine.z_offset"),
     "tail_type":         ("text",    None,    "tail.type"),
     "cruise_speed":      ("numeric", "km/h",  "mission.cruise_speed"),
     "payload":           ("numeric", "kg",    "mission.payload"),
@@ -52,6 +55,9 @@ FIELD_TO_SPEC_PATH: dict[str, str] = {
     "fuselage_diameter": "fuselage.max_diameter.value",
     "engine_count": "engine.count.value",
     "engine_position": "engine.position.value",
+    "engine_x_offset": "engine.x_offset.value",
+    "engine_y_offset": "engine.y_offset.value",
+    "engine_z_offset": "engine.z_offset.value",
     "tail_type": "tail.type.value",
     "cruise_speed": "mission.cruise_speed.value",
     "payload": "mission.payload.value",
@@ -64,6 +70,7 @@ FIELD_DEFAULT_UNIT: dict[str, str | None] = {
     "wing_sweep": "deg", "wing_dihedral": "deg",
     "fuselage_length": "m", "fuselage_diameter": "m",
     "engine_count": None, "engine_position": None,
+    "engine_x_offset": "m", "engine_y_offset": "m", "engine_z_offset": "m",
     "cruise_speed": "km/h", "payload": "kg",
 }
 
@@ -73,6 +80,8 @@ FIELD_DEFAULT_UNIT: dict[str, str | None] = {
 
 def _flat_args_to_spec(args: dict[str, Any]) -> AircraftSpec:
     """Convert flat generate_design args to full AircraftSpec with metadata."""
+    inferred_fields = set(args.get("inferred_fields", []))
+
     spec_data: dict[str, Any] = {
         "schema_version": "0.1",
         "aircraft": {
@@ -100,15 +109,18 @@ def _flat_args_to_spec(args: dict[str, Any]) -> AircraftSpec:
         # aircraft.* fields are plain strings, not scalars
         if keys[0] == "aircraft":
             target[last_key] = str(value)
-        elif scalar_type == "text":
-            target[last_key] = {"value": str(value), "source": "user", "confidence": 1.0}
-        elif scalar_type == "integer":
-            target[last_key] = {"value": int(value), "source": "user", "confidence": 1.0}
         else:
-            scalar: dict[str, Any] = {"value": float(value), "source": "user", "confidence": 1.0}
-            if default_unit:
-                scalar["unit"] = default_unit
-            target[last_key] = scalar
+            source = "inferred" if field_name in inferred_fields else "user"
+            confidence = 0.75 if source == "inferred" else 1.0
+            if scalar_type == "text":
+                target[last_key] = {"value": str(value), "source": source, "confidence": confidence}
+            elif scalar_type == "integer":
+                target[last_key] = {"value": int(value), "source": source, "confidence": confidence}
+            else:
+                scalar: dict[str, Any] = {"value": float(value), "source": source, "confidence": confidence}
+                if default_unit:
+                    scalar["unit"] = default_unit
+                target[last_key] = scalar
 
     return AircraftSpec.model_validate(spec_data)
 
@@ -179,6 +191,11 @@ GENERATE_DESIGN_TOOL: dict[str, Any] = {
                     "enum": ["endurance", "speed", "payload", "range"],
                     "description": "设计优先级",
                 },
+                "inferred_fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "哪些参数是你根据经验推断，而不是用户明确给出",
+                },
             },
             "required": [
                 "name", "fuselage_length", "wing_position",
@@ -220,6 +237,55 @@ MODIFY_DESIGN_TOOL: dict[str, Any] = {
     },
 }
 
+MODIFY_SELECTED_PART_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "modify_selected_part",
+        "description": (
+            "根据当前 selected_refs 修改选中的飞机部件。"
+            "当用户引用当前选中的部件（如「这个发动机」「选中的机翼」）并要求移动、放大、缩小等局部修改时使用。"
+            "第一版主要支持发动机位置调整。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "part_ref": {
+                    "type": "string",
+                    "enum": [
+                        "part:left_engine",
+                        "part:right_engine",
+                        "part:fuselage",
+                        "part:main_wing",
+                        "part:tail",
+                    ],
+                    "description": "要修改的部件引用，通常来自当前 selected_refs",
+                },
+                "operation": {
+                    "type": "string",
+                    "enum": [
+                        "move_outboard",
+                        "move_inboard",
+                        "move_forward",
+                        "move_backward",
+                        "move_up",
+                        "move_down",
+                    ],
+                    "description": "对部件执行的移动操作",
+                },
+                "delta_m": {
+                    "type": "number",
+                    "description": "移动距离，单位 m",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "修改原因",
+                },
+            },
+            "required": ["part_ref", "operation", "delta_m"],
+        },
+    },
+}
+
 SYSTEM_PROMPT_TEMPLATE = """你是 AeroSpec Agent，一个飞机概念设计助手。
 
 用户用自然语言描述飞机需求，你负责生成或修改参数化设计。
@@ -233,7 +299,9 @@ SYSTEM_PROMPT_TEMPLATE = """你是 AeroSpec Agent，一个飞机概念设计助�
 规则：
 - 只处理固定翼无人机（fixed_wing_uav），常规布局（conventional）
 - 新建设计使用 generate_design，修改现有设计使用 modify_design
+- 用户引用当前选中部件（如"这个发动机""选中的机翼"）并要求移动等局部修改时，使用 modify_selected_part
 - 用户明确给出的参数直接填入，其余参数根据航空工程经验推断合理默认值
+- 如果某些参数是你根据经验补全的，请把字段名放入 inferred_fields
 - 生成完成后简要解释设计参数和依据
 """
 
@@ -326,7 +394,7 @@ class ChatService:
         return self._conversations[conversation_id]
 
     def build_tools(self) -> list[dict[str, Any]]:
-        return [GENERATE_DESIGN_TOOL, MODIFY_DESIGN_TOOL]
+        return [GENERATE_DESIGN_TOOL, MODIFY_DESIGN_TOOL, MODIFY_SELECTED_PART_TOOL]
 
     def _build_system_prompt(self, state: ConversationState) -> str:
         if state.current_spec is not None:
@@ -443,6 +511,9 @@ class ChatService:
                     yield event
             elif tool_name == "modify_design":
                 async for event in self._handle_modify_design(state, tool_args, tool_call_id):
+                    yield event
+            elif tool_name == "modify_selected_part":
+                async for event in self._handle_modify_selected_part(state, tool_args, tool_call_id):
                     yield event
             else:
                 state.messages.append({
@@ -571,6 +642,117 @@ class ChatService:
         # 应用补丁
         for change in patch_changes + extra_patches:
             _set_nested(data, change["path"], change["value"])
+
+        try:
+            patched = AircraftSpec.model_validate(data)
+        except Exception as exc:
+            error_msg = f"spec patch 失败: {exc}"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
+            return
+
+        if self._job_runner is None:
+            error_msg = "job runner not configured"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
+            return
+
+        yield _sse_event("generation_started", {"design_id": state.design_id})
+        job = self._job_runner.generate(design_id=state.design_id, spec=patched)
+        state.current_spec = patched
+
+        result = {
+            "status": job.status,
+            "version_no": job.version_no,
+            "design_id": job.design_id,
+            "files": list(job.files.keys()),
+            "error_message": job.error_message,
+        }
+        yield _sse_event("generation_complete", result)
+
+        state.messages.append({
+            "role": "tool", "tool_call_id": tool_call_id,
+            "content": json.dumps(result, ensure_ascii=False),
+        })
+
+    # --- engine offset operations ---
+
+    _ENGINE_MOVE_MAP: dict[str, tuple[str, float]] = {
+        "move_outboard": ("y_offset", 1.0),
+        "move_inboard": ("y_offset", -1.0),
+        "move_forward": ("x_offset", 1.0),
+        "move_backward": ("x_offset", -1.0),
+        "move_up": ("z_offset", 1.0),
+        "move_down": ("z_offset", -1.0),
+    }
+
+    async def _handle_modify_selected_part(
+        self, state: ConversationState, args: dict[str, Any], tool_call_id: str,
+    ) -> AsyncIterator[str]:
+        if state.current_spec is None:
+            error_msg = "没有当前设计，请先使用 generate_design 创建设计"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
+            return
+
+        part_ref = args.get("part_ref", "")
+        operation = args.get("operation", "")
+        delta_m = args.get("delta_m")
+
+        if not part_ref or not operation or delta_m is None:
+            error_msg = "缺少必要参数: part_ref, operation, delta_m"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
+            return
+
+        if part_ref not in ("part:left_engine", "part:right_engine"):
+            error_msg = "当前版本仅支持发动机部件移动"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
+            return
+
+        move = self._ENGINE_MOVE_MAP.get(operation)
+        if move is None:
+            error_msg = f"不支持的操作: {operation}"
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({
+                "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
+            return
+
+        offset_field, sign = move
+        new_delta = sign * float(delta_m)
+
+        data = state.current_spec.model_dump(mode="json")
+        offset_path = f"engine.{offset_field}"
+        _pre_fill_none_scalars(data, [f"{offset_path}.value"])
+
+        current_val = 0.0
+        offset_scalar = data.get("engine", {}).get(offset_field)
+        if isinstance(offset_scalar, dict) and "value" in offset_scalar:
+            current_val = float(offset_scalar["value"])
+
+        new_val = current_val + new_delta
+        _set_nested(data, f"{offset_path}.value", new_val)
+        _set_nested(data, f"{offset_path}.source", "user")
+        _set_nested(data, f"{offset_path}.confidence", 1.0)
+        _set_nested(data, f"{offset_path}.unit", "m")
 
         try:
             patched = AircraftSpec.model_validate(data)

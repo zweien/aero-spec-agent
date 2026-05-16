@@ -45,21 +45,32 @@ type ChatPanelProps = {
   conversationId: string;
   apiBaseUrl: string;
   onGenerationComplete: (data: GenerationCompleteData) => void;
+  onClearSelectedRefs?: () => void;
   registerSendMessage?: (fn: (text: string) => void) => void;
   registerSystemMessage?: (fn: (text: string) => void) => void;
   registerToolAction?: (fn: (toolName: string, args: Record<string, unknown>) => ToolActionHandle) => void;
   selectedRefs?: string[];
 };
 
+const PART_REF_LABELS: Record<string, string> = {
+  "part:fuselage": "机身",
+  "part:main_wing": "主翼",
+  "part:tail": "尾翼",
+  "part:left_engine": "左发动机",
+  "part:right_engine": "右发动机",
+};
+
 const TOOL_LABELS: Record<string, string> = {
   generate_design: "生成设计",
   modify_design: "修改设计",
+  modify_selected_part: "修改选中部件",
 };
 
 export function ChatPanel({
   conversationId,
   apiBaseUrl,
   onGenerationComplete,
+  onClearSelectedRefs,
   registerSendMessage,
   registerSystemMessage,
   registerToolAction,
@@ -387,11 +398,21 @@ export function ChatPanel({
       </div>
       {selectedRefs.length > 0 && (
         <div className="selected-ref-bar" aria-label="当前选中对象">
+          <span className="selected-ref-label">已选中：</span>
           {selectedRefs.map((ref) => (
             <span className="selected-ref-chip" key={ref}>
-              {ref}
+              {PART_REF_LABELS[ref] ?? ref}
+              <span className="selected-ref-id">{ref}</span>
             </span>
           ))}
+          <button
+            type="button"
+            className="selected-ref-clear"
+            onClick={onClearSelectedRefs}
+            aria-label="清除选中"
+          >
+            &times;
+          </button>
         </div>
       )}
       <div className="chat-input-row">
@@ -498,10 +519,22 @@ const SPEC_FIELD_LABELS: Record<string, string> = {
   fuselage_diameter: "机身直径",
   engine_count: "发动机",
   engine_position: "发动机位置",
+  engine_x_offset: "发动机 X 偏移",
+  engine_y_offset: "发动机 Y 偏移",
+  engine_z_offset: "发动机 Z 偏移",
   tail_type: "尾翼类型",
   cruise_speed: "巡航速度",
   payload: "载荷",
   priority: "优先级",
+};
+
+const OPERATION_LABELS: Record<string, string> = {
+  move_outboard: "向外移动",
+  move_inboard: "向内移动",
+  move_forward: "向前移动",
+  move_backward: "向后移动",
+  move_up: "向上移动",
+  move_down: "向下移动",
 };
 
 const SPEC_FIELD_UNIT: Record<string, string> = {
@@ -543,24 +576,49 @@ function SpecSummary({
     );
   }
 
-  if (toolName === "modify_design") {
+  if (toolName === "modify_design" || toolName === "modify_selected_part") {
+    if (toolName === "modify_selected_part") {
+      const partRef = String(args.part_ref ?? "");
+      const operation = String(args.operation ?? "");
+      const deltaM = args.delta_m;
+      return (
+        <div className="spec-summary">
+          <div className="spec-summary-row">
+            <span className="spec-summary-key">部件</span>
+            <span className="spec-summary-val">{PART_REF_LABELS[partRef] ?? partRef}</span>
+          </div>
+          <div className="spec-summary-row">
+            <span className="spec-summary-key">操作</span>
+            <span className="spec-summary-val">{OPERATION_LABELS[operation] ?? operation} {String(deltaM)} m</span>
+          </div>
+          {args.reason != null && (
+            <div className="spec-summary-row">
+              <span className="spec-summary-key">原因</span>
+              <span className="spec-summary-val">{String(args.reason)}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     const changes = (args.changes ?? []) as Array<{
-      field: string;
+      field?: string;
+      path?: string;
       value: unknown;
       reason?: string;
     }>;
     return (
       <div className="spec-summary">
-        {changes.map((c, i) => (
-          <div key={i} className="spec-summary-row">
-            <span className="spec-summary-key">
-              {SPEC_FIELD_LABELS[c.field] ?? c.field}
-            </span>
-            <span className="spec-summary-val">
-              {JSON.stringify(c.value)}
-            </span>
-          </div>
-        ))}
+        {changes.map((c, i) => {
+          const key = c.field ?? c.path ?? "unknown";
+          const label = SPEC_FIELD_LABELS[key] ?? key;
+          return (
+            <div key={i} className="spec-summary-row">
+              <span className="spec-summary-key">{label}</span>
+              <span className="spec-summary-val">{JSON.stringify(c.value)}</span>
+            </div>
+          );
+        })}
       </div>
     );
   }

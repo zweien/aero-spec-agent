@@ -471,6 +471,14 @@ textarea:focus {
   gap: 6px;
   min-height: 24px;
   align-items: center;
+  padding: 4px 10px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.selected-ref-label {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .selected-ref-chip {
@@ -481,6 +489,28 @@ textarea:focus {
   padding: 2px 8px;
   font-size: 11px;
   font-family: var(--font-mono);
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.selected-ref-id {
+  opacity: 0.55;
+  font-size: 10px;
+}
+
+.selected-ref-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  margin-left: auto;
+}
+.selected-ref-clear:hover {
+  color: var(--error);
 }
 
 /* --- Tool Cards --- */

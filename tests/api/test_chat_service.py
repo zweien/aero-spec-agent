@@ -7,6 +7,7 @@ from services.api.app.services.chat_service import (
     ConversationState,
     GENERATE_DESIGN_TOOL,
     MODIFY_DESIGN_TOOL,
+    MODIFY_SELECTED_PART_TOOL,
     SYSTEM_PROMPT_TEMPLATE,
     _flat_args_to_spec,
     _pre_fill_none_scalars,
@@ -61,6 +62,7 @@ def test_build_tools_definitions():
     names = [t["function"]["name"] for t in tools]
     assert "generate_design" in names
     assert "modify_design" in names
+    assert "modify_selected_part" in names
 
 
 def test_conversation_state_round_trip():
@@ -176,6 +178,23 @@ def test_flat_args_to_spec_rejects_missing_required():
         _flat_args_to_spec({"name": "bad"})
 
 
+def test_flat_args_to_spec_inferred_fields():
+    args = {
+        **MINIMAL_FLAT_ARGS,
+        "wing_sweep": 5,
+        "fuselage_diameter": 0.6,
+        "inferred_fields": ["wing_sweep", "fuselage_diameter"],
+    }
+    spec = _flat_args_to_spec(args)
+    assert spec.wing.span.source == "user"
+    assert spec.wing.span.confidence == 1.0
+    assert spec.wing.sweep is not None
+    assert spec.wing.sweep.source == "inferred"
+    assert spec.wing.sweep.confidence == 0.75
+    assert spec.fuselage.max_diameter is not None
+    assert spec.fuselage.max_diameter.source == "inferred"
+
+
 # ---------------------------------------------------------------------------
 # Tool schema structure
 # ---------------------------------------------------------------------------
@@ -205,3 +224,21 @@ def test_pre_fill_none_scalars():
     assert data["wing"]["sweep"] == {}
     assert data["wing"]["span"] == {"value": 10}
     assert data["tail"]["type"] is None  # not affected
+
+
+# ---------------------------------------------------------------------------
+# modify_selected_part tool
+# ---------------------------------------------------------------------------
+
+def test_modify_selected_part_tool_schema():
+    params = MODIFY_SELECTED_PART_TOOL["function"]["parameters"]
+    assert "part_ref" in params["properties"]
+    assert "operation" in params["properties"]
+    assert "delta_m" in params["properties"]
+    assert params["required"] == ["part_ref", "operation", "delta_m"]
+
+
+def test_engine_move_map_covers_all_operations():
+    ops = {op for op, _ in ChatService._ENGINE_MOVE_MAP.values()}
+    assert ops == {"y_offset", "x_offset", "z_offset"}
+    assert len(ChatService._ENGINE_MOVE_MAP) == 6

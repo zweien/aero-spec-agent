@@ -1,4 +1,5 @@
 import importlib
+import os
 from pathlib import Path
 from typing import Any
 
@@ -6,6 +7,8 @@ from services.workers.cad_worker.openvsp_generator.errors import (
     CadGenerationError,
     OpenVspUnavailableError,
 )
+
+_ERROR_POLICY_FAIL = os.getenv("OPENVSP_ERROR_POLICY", "warn").lower() == "fail"
 
 
 class OpenVspAdapter:
@@ -138,6 +141,9 @@ class OpenVspAdapter:
             entry = {"context": context, "message": message}
             errors.append(entry)
             self.errors.append(entry)
+        if errors and _ERROR_POLICY_FAIL:
+            summary = "; ".join(e["message"] for e in errors)
+            raise CadGenerationError(f"OpenVSP error(s) in {context}: {summary}")
         return errors
 
     def _error_manager(self) -> Any | None:
