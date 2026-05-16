@@ -169,14 +169,32 @@ def _stable_applied_parameters(
         elif result.name in {"center_engine", "left_engine", "right_engine"}:
             if "engine.count" in result.applied_parameters:
                 applied["engine.count"] = result.applied_parameters["engine.count"]
+            for key in (
+                "engine.x_offset",
+                "engine.y_offset",
+                "engine.z_offset",
+                "base_x",
+                "base_y",
+                "base_z",
+            ):
+                if key in result.applied_parameters:
+                    applied[f"engine.{key}" if key.startswith("base_") else key] = (
+                        result.applied_parameters[key]
+                    )
             _copy_parameters(
                 applied,
                 result.name,
                 result,
                 [
                     "x_rel_location",
-                    "y_rel_location",
+                    "y_offset",
                     "z_rel_location",
+                    "base_x",
+                    "base_y",
+                    "base_z",
+                    "final_x",
+                    "final_y",
+                    "final_z",
                     "length",
                     "diameter",
                     "fineness_ratio",

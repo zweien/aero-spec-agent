@@ -603,6 +603,12 @@ textarea:focus {
   border: 1px solid var(--border);
 }
 
+.tool-card-message {
+  margin-top: 6px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
 .spec-summary {
   display: grid;
   gap: 3px;

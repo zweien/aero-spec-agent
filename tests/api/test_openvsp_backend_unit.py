@@ -95,6 +95,29 @@ def _spec():
     return load_aircraft_spec(valid_spec_data())
 
 
+def _spec_with_engine_offsets():
+    data = valid_spec_data()
+    data["engine"]["x_offset"] = {
+        "value": 0.2,
+        "unit": "m",
+        "source": "user",
+        "confidence": 1.0,
+    }
+    data["engine"]["y_offset"] = {
+        "value": 0.5,
+        "unit": "m",
+        "source": "user",
+        "confidence": 1.0,
+    }
+    data["engine"]["z_offset"] = {
+        "value": -0.1,
+        "unit": "m",
+        "source": "user",
+        "confidence": 1.0,
+    }
+    return load_aircraft_spec(data)
+
+
 def fake_obj_to_glb(_obj_path: Path, glb_path: Path) -> None:
     glb_path.write_bytes(b"glTF\x02\x00\x00\x00\x14\x00\x00\x00")
 
@@ -151,6 +174,41 @@ def test_openvsp_backend_updates_model_before_writing_vsp3(tmp_path: Path):
     call_names = [call[0] for call in fake_vsp.calls]
     assert call_names.index("Update") < call_names.index("WriteVSPFile")
     assert call_names.index("WriteVSPFile") < call_names.index("ExportFile")
+
+
+def test_openvsp_backend_engine_y_offset_affects_left_right_applied_parameters_symmetrically(
+    tmp_path: Path,
+):
+    fake_vsp = FakeOpenVspModule()
+
+    artifacts = OpenVspBackend(
+        obj_to_glb=fake_obj_to_glb,
+        vsp_module=fake_vsp,
+    ).generate(_spec_with_engine_offsets(), tmp_path)
+
+    applied = artifacts.metadata["applied_parameters"]
+    assert applied["engine.x_offset"] == pytest.approx(0.2)
+    assert applied["engine.y_offset"] == pytest.approx(0.5)
+    assert applied["engine.z_offset"] == pytest.approx(-0.1)
+    assert applied["engine.base_y"] == pytest.approx(3.0)
+    assert applied["left_engine.final_y"] == pytest.approx(-3.5)
+    assert applied["right_engine.final_y"] == pytest.approx(3.5)
+
+
+def test_generate_aircraft_reports_engine_offsets_from_openvsp_metadata(
+    tmp_path: Path,
+):
+    fake_vsp = FakeOpenVspModule()
+
+    result = generate_aircraft(
+        spec=_spec_with_engine_offsets(),
+        output_dir=tmp_path,
+        backend=OpenVspBackend(obj_to_glb=fake_obj_to_glb, vsp_module=fake_vsp),
+    )
+
+    assert result.validation_report["engine.x_offset"]["actual"] == pytest.approx(0.2)
+    assert result.validation_report["engine.y_offset"]["actual"] == pytest.approx(0.5)
+    assert result.validation_report["engine.z_offset"]["actual"] == pytest.approx(-0.1)
 
 
 def test_generate_aircraft_uses_openvsp_metadata_for_files_validation_and_log(

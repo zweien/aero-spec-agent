@@ -74,6 +74,11 @@ FIELD_DEFAULT_UNIT: dict[str, str | None] = {
     "cruise_speed": "km/h", "payload": "kg",
 }
 
+SUPPORTED_FIELD_VALUES: dict[str, set[str]] = {
+    "tail_type": {"conventional"},
+    "engine_position": {"under_wing"},
+}
+
 # ---------------------------------------------------------------------------
 # Conversion helpers
 # ---------------------------------------------------------------------------
@@ -175,13 +180,13 @@ GENERATE_DESIGN_TOOL: dict[str, Any] = {
                 "wing_airfoil": {"type": "string", "description": "翼型，如 NACA4412"},
                 "tail_type": {
                     "type": "string",
-                    "enum": ["conventional", "t-tail", "v-tail"],
+                    "enum": ["conventional"],
                     "description": "尾翼类型",
                 },
                 "engine_count": {"type": "integer", "description": "发动机数量"},
                 "engine_position": {
                     "type": "string",
-                    "enum": ["under_wing", "on_fuselage", "wing_tip", "rear_fuselage"],
+                    "enum": ["under_wing"],
                     "description": "发动机位置",
                 },
                 "cruise_speed": {"type": "number", "description": "巡航速度 (km/h)"},
@@ -244,12 +249,14 @@ MODIFY_SELECTED_PART_TOOL: dict[str, Any] = {
         "description": (
             "修改选中的飞机部件参数。根据当前 selected_refs 确定部件类型。\n"
             "支持的操作：\n"
-            "- 机身(part:fuselage): set_length(设置长度/m), set_diameter(设置直径/m)\n"
+            "- 机身(part:fuselage): set_length(设置长度/m), increase_length/decrease_length(长度增量/m), "
+            "set_diameter(设置直径/m), increase_diameter/decrease_diameter(直径增量/m)\n"
             "- 机翼(part:main_wing): set_span(设置翼展/m), set_root_chord(设置翼根弦长/m), "
-            "set_tip_chord(设置翼尖弦长/m), set_sweep(设置后掠角/deg), set_dihedral(设置上反角/deg)\n"
-            "- 尾翼(part:tail): set_tail_type(设置尾翼类型)\n"
+            "set_tip_chord(设置翼尖弦长/m), set_sweep(设置后掠角/deg), set_dihedral(设置上反角/deg), "
+            "increase_*/decrease_* 对应参数增量\n"
+            "- 尾翼(part:tail): set_tail_type(设置尾翼类型；当前仅 conventional)\n"
             "- 发动机(part:left_engine/part:right_engine): move_outboard/inboard/forward/backward/up/down(移动/m，增量)\n"
-            "set_* 操作 value 为目标绝对值；move_* 操作 value 为移动距离增量。"
+            "set_* 操作 value 为目标绝对值；increase_*/decrease_* 和 move_* 操作 value 为增量。"
         ),
         "parameters": {
             "type": "object",
@@ -270,11 +277,25 @@ MODIFY_SELECTED_PART_TOOL: dict[str, Any] = {
                     "enum": [
                         "set_length",
                         "set_diameter",
+                        "increase_length",
+                        "decrease_length",
+                        "increase_diameter",
+                        "decrease_diameter",
                         "set_span",
                         "set_root_chord",
                         "set_tip_chord",
                         "set_sweep",
                         "set_dihedral",
+                        "increase_span",
+                        "decrease_span",
+                        "increase_root_chord",
+                        "decrease_root_chord",
+                        "increase_tip_chord",
+                        "decrease_tip_chord",
+                        "increase_sweep",
+                        "decrease_sweep",
+                        "increase_dihedral",
+                        "decrease_dihedral",
                         "set_tail_type",
                         "move_outboard",
                         "move_inboard",
@@ -283,10 +304,10 @@ MODIFY_SELECTED_PART_TOOL: dict[str, Any] = {
                         "move_up",
                         "move_down",
                     ],
-                    "description": "操作类型。set_* 用绝对值，move_* 用增量。",
+                    "description": "操作类型。set_* 用绝对值，increase/decrease/move 用增量。",
                 },
                 "value": {
-                    "description": "set_* 操作为目标绝对值，move_* 操作为移动增量 (m)",
+                    "description": "set_* 操作为目标绝对值，increase/decrease/move 操作为增量",
                 },
                 "reason": {
                     "type": "string",
@@ -313,12 +334,16 @@ SYSTEM_PROMPT_TEMPLATE = """你是 AeroSpec Agent，一个飞机概念设计助�
 - 新建设计使用 generate_design
 - 修改现有设计使用 modify_design（一次性改多个参数时使用）
 - 当「当前选中对象」非空时，用户的修改请求应优先使用 modify_selected_part
-  - 例如选中了 part:fuselage，用户说"加长2米"，应调用 modify_selected_part(part_ref="part:fuselage", operation="set_length", value=当前长度+2)
+  - 例如选中了 part:fuselage，用户说"加长2米"，应调用 modify_selected_part(part_ref="part:fuselage", operation="increase_length", value=2)
   - 不要使用 modify_design 来修改选中部件的参数
+- 当用户说"加长/增加/扩大/提高/往外/向前"等相对变化时，优先使用 increase_*/decrease_* 或 move_* 操作
+- 当用户说"改成/设置为/设为/变为"时，使用 set_* 绝对值操作
+- 示例：选中 part:fuselage，用户说"机身长度改为9米"，调用 modify_selected_part(part_ref="part:fuselage", operation="set_length", value=9)
+- 示例：选中 part:right_engine，用户说"向外移动0.5米"，调用 modify_selected_part(part_ref="part:right_engine", operation="move_outboard", value=0.5)
 - modify_selected_part 支持的操作：
-  - 机身(part:fuselage): set_length(绝对值/m), set_diameter(绝对值/m)
-  - 机翼(part:main_wing): set_span, set_root_chord, set_tip_chord(绝对值/m), set_sweep, set_dihedral(绝对值/deg)
-  - 尾翼(part:tail): set_tail_type(字符串)
+  - 机身(part:fuselage): set_length/increase_length/decrease_length(m), set_diameter/increase_diameter/decrease_diameter(m)
+  - 机翼(part:main_wing): set/increase/decrease span/root_chord/tip_chord(m), sweep/dihedral(deg)
+  - 尾翼(part:tail): set_tail_type(当前仅 conventional)
   - 发动机(part:left_engine/part:right_engine): move_outboard/inboard/forward/backward/up/down(增量/m)
 - 用户明确给出的参数直接填入，其余参数根据航空工程经验推断合理默认值
 - 如果某些参数是你根据经验补全的，请把字段名放入 inferred_fields
@@ -642,6 +667,22 @@ class ChatService:
                 })
                 return
 
+            if field_name in SUPPORTED_FIELD_VALUES:
+                supported_values = SUPPORTED_FIELD_VALUES[field_name]
+                value_text = str(change.get("value", ""))
+                if value_text not in supported_values:
+                    error_msg = (
+                        f"字段 {field_name} 当前仅支持: {', '.join(sorted(supported_values))}，"
+                        f"已拒绝写入 {value_text}"
+                    )
+                    yield _sse_event("error", {"content": error_msg})
+                    state.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+                    })
+                    return
+
             path = FIELD_TO_SPEC_PATH[field_name]
             value = change["value"]
             patch_changes.append({"path": path, "value": value})
@@ -718,6 +759,35 @@ class ChatService:
         },
     }
 
+    _PART_DELTA_OPERATIONS: dict[str, dict[str, tuple[str, str, str | None, float]]] = {
+        "part:fuselage": {
+            "increase_length": ("fuselage", "length", "m", 1.0),
+            "decrease_length": ("fuselage", "length", "m", -1.0),
+            "increase_diameter": ("fuselage", "max_diameter", "m", 1.0),
+            "decrease_diameter": ("fuselage", "max_diameter", "m", -1.0),
+        },
+        "part:main_wing": {
+            "increase_span": ("wing", "span", "m", 1.0),
+            "decrease_span": ("wing", "span", "m", -1.0),
+            "increase_root_chord": ("wing", "root_chord", "m", 1.0),
+            "decrease_root_chord": ("wing", "root_chord", "m", -1.0),
+            "increase_tip_chord": ("wing", "tip_chord", "m", 1.0),
+            "decrease_tip_chord": ("wing", "tip_chord", "m", -1.0),
+            "increase_sweep": ("wing", "sweep", "deg", 1.0),
+            "decrease_sweep": ("wing", "sweep", "deg", -1.0),
+            "increase_dihedral": ("wing", "dihedral", "deg", 1.0),
+            "decrease_dihedral": ("wing", "dihedral", "deg", -1.0),
+        },
+    }
+
+    _POSITIVE_SCALAR_FIELDS = {
+        ("fuselage", "length"),
+        ("fuselage", "max_diameter"),
+        ("wing", "span"),
+        ("wing", "root_chord"),
+        ("wing", "tip_chord"),
+    }
+
     # --- engine offset operations ---
 
     _ENGINE_MOVE_MAP: dict[str, tuple[str, float]] = {
@@ -750,6 +820,19 @@ class ChatService:
             yield _sse_event("error", {"content": error_msg})
             state.messages.append({
                 "role": "tool", "tool_call_id": tool_call_id,
+                "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+            })
+            return
+
+        if state.selected_refs and part_ref not in state.selected_refs:
+            error_msg = (
+                f"当前选中对象为 {state.selected_refs}，"
+                f"但工具请求修改 {part_ref}，为避免误操作已拒绝。"
+            )
+            yield _sse_event("error", {"content": error_msg})
+            state.messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call_id,
                 "content": json.dumps({"error": error_msg}, ensure_ascii=False),
             })
             return
@@ -789,10 +872,12 @@ class ChatService:
             engine_dict[offset_field]["unit"] = "m"
 
         # --- set operations (absolute value) ---
-        elif part_ref in self._PART_SET_OPERATIONS:
+        elif part_ref in self._PART_SET_OPERATIONS or part_ref in self._PART_DELTA_OPERATIONS:
             ops = self._PART_SET_OPERATIONS[part_ref]
-            if operation not in ops:
-                error_msg = f"部件 {part_ref} 不支持操作 {operation}，可用: {', '.join(ops.keys())}"
+            delta_ops = self._PART_DELTA_OPERATIONS.get(part_ref, {})
+            if operation not in ops and operation not in delta_ops:
+                available_ops = sorted([*ops.keys(), *delta_ops.keys()])
+                error_msg = f"部件 {part_ref} 不支持操作 {operation}，可用: {', '.join(available_ops)}"
                 yield _sse_event("error", {"content": error_msg})
                 state.messages.append({
                     "role": "tool", "tool_call_id": tool_call_id,
@@ -800,7 +885,12 @@ class ChatService:
                 })
                 return
 
-            section, field_name, default_unit = ops[operation]
+            is_delta_operation = operation in delta_ops
+            if is_delta_operation:
+                section, field_name, default_unit, sign = delta_ops[operation]
+            else:
+                section, field_name, default_unit = ops[operation]
+                sign = 1.0
             field_path = f"{section}.{field_name}"
             _pre_fill_none_scalars(data, [f"{field_path}.value"])
 
@@ -810,9 +900,30 @@ class ChatService:
             scalar_dict = section_dict[field_name]
 
             if field_name == "type" and section == "tail":
+                if str(value) != "conventional":
+                    error_msg = "当前 CAD 后端暂只支持 conventional 尾翼，已拒绝其他尾翼类型。"
+                    yield _sse_event("error", {"content": error_msg})
+                    state.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+                    })
+                    return
                 scalar_dict["value"] = str(value)
             else:
-                scalar_dict["value"] = float(value)
+                next_value = float(value)
+                if is_delta_operation:
+                    next_value = float(scalar_dict.get("value", 0)) + sign * next_value
+                if (section, field_name) in self._POSITIVE_SCALAR_FIELDS and next_value <= 0:
+                    error_msg = f"{field_path} 必须大于 0，拒绝写入 {next_value}"
+                    yield _sse_event("error", {"content": error_msg})
+                    state.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": json.dumps({"error": error_msg}, ensure_ascii=False),
+                    })
+                    return
+                scalar_dict["value"] = next_value
             scalar_dict["source"] = "user"
             scalar_dict["confidence"] = 1.0
             if default_unit:
@@ -857,6 +968,7 @@ class ChatService:
             "design_id": job.design_id,
             "files": list(job.files.keys()),
             "error_message": job.error_message,
+            "message": f"已基于选中对象 {part_ref} 完成修改。",
         }
         yield _sse_event("generation_complete", result)
 

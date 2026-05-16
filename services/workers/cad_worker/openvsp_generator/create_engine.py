@@ -51,18 +51,27 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
         )
         if engine_position == "nose":
             base_x = fuselage_length * 0.5
+            base_y = 0.0
             base_z = 0.0
         elif engine_position == "tail":
             base_x = fuselage_length * 0.85
+            base_y = 0.0
             base_z = fuselage_diameter * 0.2
         else:
             base_x = wing_x + root_chord * 0.25
+            base_y = 0.0
             base_z = wing_z - diameter * 0.6
         return [
             _create_engine_nacelle(
                 adapter,
                 name="center_engine",
                 engine_count=engine_count,
+                x_offset=x_offset,
+                y_delta=y_offset,
+                z_offset=z_offset,
+                base_x=base_x,
+                base_y=base_y,
+                base_z=base_z,
                 x_rel_location=base_x + x_offset,
                 y_offset=y_offset,
                 z_rel_location=base_z + z_offset,
@@ -80,6 +89,12 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             adapter,
             name="left_engine",
             engine_count=engine_count,
+            x_offset=x_offset,
+            y_delta=y_offset,
+            z_offset=z_offset,
+            base_x=base_x,
+            base_y=base_y,
+            base_z=base_z,
             x_rel_location=base_x + x_offset,
             y_offset=-(base_y + y_offset),
             z_rel_location=base_z + z_offset,
@@ -90,6 +105,12 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             adapter,
             name="right_engine",
             engine_count=engine_count,
+            x_offset=x_offset,
+            y_delta=y_offset,
+            z_offset=z_offset,
+            base_x=base_x,
+            base_y=base_y,
+            base_z=base_z,
             x_rel_location=base_x + x_offset,
             y_offset=base_y + y_offset,
             z_rel_location=base_z + z_offset,
@@ -109,6 +130,12 @@ def _create_engine_nacelle(
     z_rel_location: float,
     length: float,
     diameter: float,
+    x_offset: float = 0.0,
+    y_delta: float = 0.0,
+    z_offset: float = 0.0,
+    base_x: float = 0.0,
+    base_y: float = 0.0,
+    base_z: float = 0.0,
 ) -> GeometryBuildResult:
     geom_id = adapter.add_geom("POD")
     if diameter <= 0:
@@ -126,6 +153,15 @@ def _create_engine_nacelle(
         geom_id=geom_id,
         applied_parameters={
             "engine.count": engine_count,
+            "engine.x_offset": x_offset,
+            "engine.y_offset": y_delta,
+            "engine.z_offset": z_offset,
+            "base_x": base_x,
+            "base_y": base_y,
+            "base_z": base_z,
+            "final_x": x_rel_location,
+            "final_y": y_offset,
+            "final_z": z_rel_location,
             "x_rel_location": x_rel_location,
             "y_offset": y_offset,
             "z_rel_location": z_rel_location,

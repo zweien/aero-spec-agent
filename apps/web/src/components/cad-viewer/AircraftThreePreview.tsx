@@ -17,6 +17,7 @@ import {
   partRefFromPartId,
   type AircraftPartId,
 } from "./partSelection";
+import { shouldUsePickingOverlay } from "./pickingOverlay";
 
 function disposeMaterial(material: THREE.Material): void {
   for (const value of Object.values(material)) {
@@ -185,15 +186,16 @@ function findPartId(object: THREE.Object3D): AircraftPartId | null {
   return null;
 }
 
-function makePickingOverlayTransparent(root: THREE.Object3D): void {
+function makePickingOverlayInvisible(root: THREE.Object3D): void {
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     for (const material of materials) {
       if (material instanceof THREE.MeshStandardMaterial) {
         material.transparent = true;
-        material.opacity = 0.01;
+        material.opacity = 0;
         material.depthWrite = false;
+        material.colorWrite = false;
       }
     }
   });
@@ -431,9 +433,9 @@ export function AircraftThreePreview({
 
     const aircraft = createAircraftGroup(model);
 
-    if (importedRef.current) {
+    if (shouldUsePickingOverlay(Boolean(importedRef.current))) {
       // Real model loaded: create transparent picking overlay
-      makePickingOverlayTransparent(aircraft);
+      makePickingOverlayInvisible(aircraft);
       scene.add(aircraft);
       pickingOverlayRef.current = aircraft;
     } else {
@@ -481,7 +483,7 @@ export function AircraftThreePreview({
 
         // Convert wireframe to transparent picking overlay
         if (wireframeRef.current) {
-          makePickingOverlayTransparent(wireframeRef.current);
+          makePickingOverlayInvisible(wireframeRef.current);
           pickingOverlayRef.current = wireframeRef.current;
           wireframeRef.current = null;
         }

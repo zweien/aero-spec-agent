@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal, TypedDict
 
 
-DesignIntent = Literal["generate_design", "modify_design", "unknown"]
+DesignIntent = Literal["generate_design", "modify_design", "modify_selected_part", "unknown"]
 
 DESIGN_GRAPH_NODES = (
     "load_context",
@@ -30,7 +30,23 @@ class DesignGraphState(TypedDict, total=False):
 
 
 _GENERATE_KEYWORDS = ("生成", "设计", "创建", "新建", "做一架", "搞一架")
-_MODIFY_PART_KEYWORDS = ("这个", "选中", "移动", "外移", "内移", "向前", "向后", "向上", "向下")
+_MODIFY_PART_KEYWORDS = (
+    "这个",
+    "选中",
+    "移动",
+    "外移",
+    "内移",
+    "向前",
+    "向后",
+    "向上",
+    "向下",
+    "加长",
+    "增加",
+    "减小",
+    "缩短",
+    "扩大",
+    "提高",
+)
 
 
 def classify_message_intent(
@@ -43,7 +59,7 @@ def classify_message_intent(
     if any(kw in message for kw in _GENERATE_KEYWORDS):
         return "generate_design"
     if selected_refs and any(kw in message for kw in _MODIFY_PART_KEYWORDS):
-        return "modify_design"
+        return "modify_selected_part"
     return "modify_design"
 
 

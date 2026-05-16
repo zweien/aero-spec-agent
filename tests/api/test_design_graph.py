@@ -31,7 +31,7 @@ def test_design_graph_state_keeps_selected_refs():
 # classify_message_intent
 # ---------------------------------------------------------------------------
 
-def test_classify_returns_generate_when_no_spec():
+def test_classify_no_spec_as_generate_design():
     assert classify_message_intent(
         "设计一架双发无人机", has_current_spec=False,
     ) == "generate_design"
@@ -43,15 +43,15 @@ def test_classify_returns_generate_on_keyword():
     ) == "generate_design"
 
 
-def test_classify_returns_modify_for_parameter_change():
+def test_classify_existing_design_without_selected_ref_as_modify_design():
     assert classify_message_intent(
         "把翼展改成14米", has_current_spec=True,
     ) == "modify_design"
 
 
-def test_classify_returns_modify_with_selected_refs():
+def test_classify_selected_ref_message_as_modify_selected_part():
     assert classify_message_intent(
-        "把这个发动机外移0.5米",
+        "把这个向外移动0.5米",
         selected_refs=["part:right_engine"],
         has_current_spec=True,
-    ) == "modify_design"
+    ) == "modify_selected_part"

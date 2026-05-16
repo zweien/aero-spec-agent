@@ -12,6 +12,7 @@ export type GenerationCompleteData = {
   version_no?: number;
   design_id?: string;
   files?: string[];
+  message?: string;
 };
 
 type ChatRole = "user" | "assistant" | "system" | "error";
@@ -487,6 +488,10 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
         </div>
       )}
 
+      {!isRunning && result?.message && (
+        <div className="tool-card-message">{result.message}</div>
+      )}
+
       {!isRunning && result?.files && result.files.length > 0 && result.version_no && (
         <div className="tool-card-files">
           {result.files.map((f: string) => (
@@ -531,11 +536,25 @@ const SPEC_FIELD_LABELS: Record<string, string> = {
 const OPERATION_LABELS: Record<string, string> = {
   set_length: "设置长度",
   set_diameter: "设置直径",
+  increase_length: "增加长度",
+  decrease_length: "减少长度",
+  increase_diameter: "增加直径",
+  decrease_diameter: "减少直径",
   set_span: "设置翼展",
   set_root_chord: "设置翼根弦长",
   set_tip_chord: "设置翼尖弦长",
   set_sweep: "设置后掠角",
   set_dihedral: "设置上反角",
+  increase_span: "增加翼展",
+  decrease_span: "减少翼展",
+  increase_root_chord: "增加翼根弦长",
+  decrease_root_chord: "减少翼根弦长",
+  increase_tip_chord: "增加翼尖弦长",
+  decrease_tip_chord: "减少翼尖弦长",
+  increase_sweep: "增加后掠角",
+  decrease_sweep: "减少后掠角",
+  increase_dihedral: "增加上反角",
+  decrease_dihedral: "减少上反角",
   set_tail_type: "设置尾翼类型",
   move_outboard: "向外移动",
   move_inboard: "向内移动",
@@ -543,6 +562,36 @@ const OPERATION_LABELS: Record<string, string> = {
   move_backward: "向后移动",
   move_up: "向上移动",
   move_down: "向下移动",
+};
+
+const OPERATION_UNITS: Record<string, string> = {
+  set_length: " m",
+  set_diameter: " m",
+  increase_length: " m",
+  decrease_length: " m",
+  increase_diameter: " m",
+  decrease_diameter: " m",
+  set_span: " m",
+  set_root_chord: " m",
+  set_tip_chord: " m",
+  increase_span: " m",
+  decrease_span: " m",
+  increase_root_chord: " m",
+  decrease_root_chord: " m",
+  increase_tip_chord: " m",
+  decrease_tip_chord: " m",
+  set_sweep: "°",
+  set_dihedral: "°",
+  increase_sweep: "°",
+  decrease_sweep: "°",
+  increase_dihedral: "°",
+  decrease_dihedral: "°",
+  move_outboard: " m",
+  move_inboard: " m",
+  move_forward: " m",
+  move_backward: " m",
+  move_up: " m",
+  move_down: " m",
 };
 
 const SPEC_FIELD_UNIT: Record<string, string> = {
@@ -589,7 +638,7 @@ function SpecSummary({
       const partRef = String(args.part_ref ?? "");
       const operation = String(args.operation ?? "");
       const val = args.value;
-      const isMove = operation.startsWith("move_");
+      const unit = OPERATION_UNITS[operation] ?? "";
       return (
         <div className="spec-summary">
           <div className="spec-summary-row">
@@ -600,7 +649,7 @@ function SpecSummary({
             <span className="spec-summary-key">操作</span>
             <span className="spec-summary-val">
               {OPERATION_LABELS[operation] ?? operation}{" "}
-              {isMove ? `${val} m` : val != null ? String(val) : ""}
+              {val != null ? `${val}${unit}` : ""}
             </span>
           </div>
           {args.reason != null && (

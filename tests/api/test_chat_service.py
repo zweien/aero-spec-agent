@@ -206,6 +206,8 @@ def test_generate_design_tool_has_no_defs():
     props = GENERATE_DESIGN_TOOL["function"]["parameters"]["properties"]
     assert "wing_span" in props
     assert "wing.position" not in props
+    assert props["tail_type"]["enum"] == ["conventional"]
+    assert props["engine_position"]["enum"] == ["under_wing"]
 
 
 def test_modify_design_tool_has_field_enum():
@@ -240,6 +242,8 @@ def test_modify_selected_part_tool_schema():
     assert params["required"] == ["part_ref", "operation", "value"]
     ops = params["properties"]["operation"]["enum"]
     assert "set_length" in ops
+    assert "increase_length" in ops
+    assert "decrease_span" in ops
     assert "set_span" in ops
     assert "set_tail_type" in ops
     assert "move_outboard" in ops
@@ -271,8 +275,10 @@ class FakeJobRunner:
 
     def __init__(self, tmp_path: Path) -> None:
         self._store = VersionStore(tmp_path)
+        self.generated_specs = []
 
     def generate(self, design_id: str, spec):
+        self.generated_specs.append(spec)
         version_no, _ = self._store.create_version_dir(design_id)
         self._store.write_spec(design_id, version_no, spec)
         return JobRecord(
@@ -295,7 +301,43 @@ def _service_with_spec(tmp_path: Path) -> ChatService:
 
 
 @pytest.mark.anyio
-async def test_handle_modify_selected_part_set_fuselage_length(tmp_path):
+async def test_modify_design_rejects_unsupported_tail_type(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    runner = svc._job_runner
+
+    events = [
+        e async for e in svc._handle_modify_design(
+            state,
+            {"changes": [{"field": "tail_type", "value": "t-tail"}]},
+            "tc-tail-modify",
+        )
+    ]
+
+    assert any(e.startswith("event: error") for e in events)
+    assert runner.generated_specs == []
+
+
+@pytest.mark.anyio
+async def test_modify_design_rejects_unsupported_engine_position(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    runner = svc._job_runner
+
+    events = [
+        e async for e in svc._handle_modify_design(
+            state,
+            {"changes": [{"field": "engine_position", "value": "rear_fuselage"}]},
+            "tc-engine-position-modify",
+        )
+    ]
+
+    assert any(e.startswith("event: error") for e in events)
+    assert runner.generated_specs == []
+
+
+@pytest.mark.anyio
+async def test_modify_selected_part_set_fuselage_length_absolute(tmp_path):
     svc = _service_with_spec(tmp_path)
     state = svc.get_or_create_state("test-mod")
     events = [
@@ -310,6 +352,28 @@ async def test_handle_modify_selected_part_set_fuselage_length(tmp_path):
     assert state.current_spec.fuselage.length.value == 8.5
     assert state.current_spec.fuselage.length.source == "user"
     assert state.current_spec.fuselage.length.confidence == 1.0
+
+
+@pytest.mark.anyio
+async def test_modify_selected_part_rejects_unselected_part(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    state.selected_refs = ["part:right_engine"]
+    original_spec = state.current_spec
+    runner = svc._job_runner
+
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:left_engine", "operation": "move_outboard", "value": 0.5},
+            "tc-unselected",
+        )
+    ]
+
+    assert any(e.startswith("event: error") for e in events)
+    assert "当前选中对象" in "".join(events)
+    assert state.current_spec is original_spec
+    assert runner.generated_specs == []
 
 
 @pytest.mark.anyio
@@ -388,13 +452,31 @@ async def test_handle_modify_selected_part_set_tail_type(tmp_path):
     events = [
         e async for e in svc._handle_modify_selected_part(
             state,
-            {"part_ref": "part:tail", "operation": "set_tail_type", "value": "t-tail"},
+            {"part_ref": "part:tail", "operation": "set_tail_type", "value": "conventional"},
             "tc-5",
         )
     ]
     assert any("generation_complete" in e for e in events)
     assert state.current_spec is not None
-    assert state.current_spec.tail.type.value == "t-tail"
+    assert state.current_spec.tail.type.value == "conventional"
+
+
+@pytest.mark.anyio
+async def test_handle_modify_selected_part_rejects_unsupported_tail_type(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    runner = svc._job_runner
+
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:tail", "operation": "set_tail_type", "value": "t-tail"},
+            "tc-tail-unsupported",
+        )
+    ]
+
+    assert any(e.startswith("event: error") for e in events)
+    assert runner.generated_specs == []
 
 
 @pytest.mark.anyio
@@ -414,9 +496,28 @@ async def test_handle_modify_selected_part_invalid_combination(tmp_path):
 
 
 @pytest.mark.anyio
-async def test_handle_modify_selected_part_engine_move_still_works(tmp_path):
+async def test_modify_selected_part_rejects_invalid_operation_for_part(tmp_path):
     svc = _service_with_spec(tmp_path)
     state = svc.get_or_create_state("test-mod")
+    runner = svc._job_runner
+
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:fuselage", "operation": "set_span", "value": 14.0},
+            "tc-invalid-op",
+        )
+    ]
+
+    assert any(e.startswith("event: error") for e in events)
+    assert runner.generated_specs == []
+
+
+@pytest.mark.anyio
+async def test_modify_selected_part_move_right_engine_outboard_updates_engine_y_offset(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    state.selected_refs = ["part:right_engine"]
     events = [
         e async for e in svc._handle_modify_selected_part(
             state,
@@ -425,6 +526,86 @@ async def test_handle_modify_selected_part_engine_move_still_works(tmp_path):
         )
     ]
     assert any("generation_complete" in e for e in events)
+    assert "已基于选中对象 part:right_engine 完成修改。" in "".join(events)
     assert state.current_spec is not None
     assert state.current_spec.engine.y_offset is not None
     assert state.current_spec.engine.y_offset.value == 0.5
+
+
+@pytest.mark.anyio
+async def test_modify_selected_part_increase_fuselage_length(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    state.selected_refs = ["part:fuselage"]
+
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:fuselage", "operation": "increase_length", "value": 2.0},
+            "tc-increase-length",
+        )
+    ]
+
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.fuselage.length.value == 9.0
+    assert state.current_spec.fuselage.length.unit == "m"
+    assert state.current_spec.fuselage.length.source == "user"
+
+
+@pytest.mark.anyio
+async def test_modify_selected_part_decrease_wing_span(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    state.selected_refs = ["part:main_wing"]
+
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:main_wing", "operation": "decrease_span", "value": 2.0},
+            "tc-decrease-span",
+        )
+    ]
+
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.wing.span.value == 10.0
+    assert state.current_spec.wing.span.unit == "m"
+
+
+@pytest.mark.anyio
+async def test_modify_selected_part_rejects_non_positive_length(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    state.selected_refs = ["part:fuselage"]
+    original_length = state.current_spec.fuselage.length.value
+    runner = svc._job_runner
+
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:fuselage", "operation": "decrease_length", "value": original_length},
+            "tc-non-positive",
+        )
+    ]
+
+    assert any(e.startswith("event: error") for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.fuselage.length.value == original_length
+    assert runner.generated_specs == []
+
+
+def test_generate_design_marks_inferred_fields_as_inferred():
+    args = {
+        **MINIMAL_FLAT_ARGS,
+        "wing_sweep": 5,
+        "fuselage_diameter": 0.6,
+        "inferred_fields": ["wing_sweep", "fuselage_diameter"],
+    }
+
+    spec = _flat_args_to_spec(args)
+
+    assert spec.wing.sweep is not None
+    assert spec.wing.sweep.source == "inferred"
+    assert spec.fuselage.max_diameter is not None
+    assert spec.fuselage.max_diameter.source == "inferred"
