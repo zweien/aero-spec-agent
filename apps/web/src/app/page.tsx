@@ -96,6 +96,7 @@ export default function Home() {
   const [selectedRefs, setSelectedRefs] = useState<string[]>([]);
 
   const chatSystemMessageRef = useRef<((text: string) => void) | null>(null);
+  const chatToolActionRef = useRef<((toolName: string, args: Record<string, unknown>) => import("@/components/chat/ChatPanel").ToolActionHandle) | null>(null);
   const [chatWidth, setChatWidth] = useState(38);
   const mainRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -133,6 +134,10 @@ export default function Home() {
 
   const registerSystemMessage = useCallback((fn: (text: string) => void) => {
     chatSystemMessageRef.current = fn;
+  }, []);
+
+  const registerToolAction = useCallback((fn: (toolName: string, args: Record<string, unknown>) => import("@/components/chat/ChatPanel").ToolActionHandle) => {
+    chatToolActionRef.current = fn;
   }, []);
 
   const fetchVersionList = useCallback(async (id: string) => {
@@ -210,12 +215,12 @@ export default function Home() {
     const changes = Array.from(pendingChanges.entries()).map(
       ([path, value]) => ({ path, value }),
     );
-    const summary = changes.map(({ path, value }) => `${path} = ${value}`);
+
+    const args: Record<string, unknown> = { changes };
+    const action = chatToolActionRef.current?.("modify_design", args);
+    if (!action) return;
 
     setIsApplyingChanges(true);
-    chatSystemMessageRef.current?.(
-      `正在直接修改参数并重新生成模型：\n${summary.join("\n")}`,
-    );
 
     try {
       const response = await fetch(
@@ -228,7 +233,7 @@ export default function Home() {
       );
 
       if (!response.ok) {
-        chatSystemMessageRef.current?.("参数修改失败：后端未接受当前补丁。");
+        action.fail("参数修改失败：后端未接受当前补丁。");
         return;
       }
 
@@ -237,11 +242,10 @@ export default function Home() {
         error_message?: string;
         version_no?: number;
         status?: string;
+        files?: Record<string, string>;
       };
       if (job.status !== "ready" || !job.version_no) {
-        chatSystemMessageRef.current?.(
-          `参数修改失败：${job.error_message ?? "生成任务未完成"}`,
-        );
+        action.fail(`参数修改失败：${job.error_message ?? "生成任务未完成"}`);
         return;
       }
 
@@ -250,11 +254,17 @@ export default function Home() {
       await loadVersion(updatedDesignId, job.version_no);
       await fetchVersionList(updatedDesignId);
 
-      chatSystemMessageRef.current?.(`已直接修改参数：\n${summary.join("\n")}`);
+      const fileNames = job.files ? Object.keys(job.files).map((k) => `${k}`) : [];
+      action.complete({
+        status: job.status,
+        design_id: updatedDesignId,
+        version_no: job.version_no,
+        files: fileNames,
+      });
       setPendingChanges(new Map());
     } catch (exc) {
       const message = exc instanceof Error ? exc.message : "请求失败";
-      chatSystemMessageRef.current?.(`参数修改失败：${message}`);
+      action.fail(`参数修改失败：${message}`);
     } finally {
       setIsApplyingChanges(false);
     }
@@ -314,6 +324,7 @@ export default function Home() {
             apiBaseUrl={API_BASE_URL}
             onGenerationComplete={handleGenerationComplete}
             registerSystemMessage={registerSystemMessage}
+            registerToolAction={registerToolAction}
             selectedRefs={selectedRefs}
           />
         </div>

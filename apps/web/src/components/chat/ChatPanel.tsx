@@ -36,12 +36,18 @@ type ChatMessage = {
   parts: Array<TextPart | ToolPart>;
 };
 
+export type ToolActionHandle = {
+  complete: (output: GenerationCompleteData) => void;
+  fail: (errorMsg: string) => void;
+};
+
 type ChatPanelProps = {
   conversationId: string;
   apiBaseUrl: string;
   onGenerationComplete: (data: GenerationCompleteData) => void;
   registerSendMessage?: (fn: (text: string) => void) => void;
   registerSystemMessage?: (fn: (text: string) => void) => void;
+  registerToolAction?: (fn: (toolName: string, args: Record<string, unknown>) => ToolActionHandle) => void;
   selectedRefs?: string[];
 };
 
@@ -56,6 +62,7 @@ export function ChatPanel({
   onGenerationComplete,
   registerSendMessage,
   registerSystemMessage,
+  registerToolAction,
   selectedRefs = [],
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
@@ -77,6 +84,66 @@ export function ChatPanel({
       },
     ]);
   }, []);
+
+  const startToolAction = useCallback(
+    (toolName: string, args: Record<string, unknown>): ToolActionHandle => {
+      const messageId = `msg-${messageCounterRef.current++}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: messageId,
+          role: "assistant" as ChatRole,
+          parts: [
+            { type: "text" as const, text: "" },
+            {
+              type: "tool" as const,
+              toolCallId: `tool-${toolCounterRef.current++}`,
+              toolName,
+              args,
+              state: "running" as const,
+            },
+          ],
+        },
+      ]);
+      return {
+        complete: (output: GenerationCompleteData) => {
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id !== messageId) return msg;
+              const parts = [...msg.parts];
+              for (let i = parts.length - 1; i >= 0; i--) {
+                const part = parts[i];
+                if (part.type === "tool" && part.state === "running") {
+                  parts[i] = { ...part, output, state: "done" };
+                  break;
+                }
+              }
+              return { ...msg, parts };
+            }),
+          );
+          onGenerationComplete(output);
+        },
+        fail: (errorMsg: string) => {
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id !== messageId) return msg;
+              const parts = [...msg.parts];
+              for (let i = parts.length - 1; i >= 0; i--) {
+                const part = parts[i];
+                if (part.type === "tool" && part.state === "running") {
+                  parts[i] = { ...part, state: "done" };
+                  break;
+                }
+              }
+              return { ...msg, parts };
+            }),
+          );
+          appendMessage("error", errorMsg);
+        },
+      };
+    },
+    [appendMessage, onGenerationComplete],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -242,6 +309,10 @@ export function ChatPanel({
       appendMessage("system", text);
     });
   }, [appendMessage, registerSystemMessage]);
+
+  useEffect(() => {
+    registerToolAction?.(startToolAction);
+  }, [registerToolAction, startToolAction]);
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
