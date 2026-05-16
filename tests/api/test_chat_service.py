@@ -363,6 +363,25 @@ async def test_handle_modify_selected_part_set_sweep_prefills_none(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_handle_modify_selected_part_set_sweep_when_actually_none(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    state.current_spec = _flat_args_to_spec(MINIMAL_FLAT_ARGS)
+    assert state.current_spec.wing.sweep is None
+
+    events = [
+        e async for e in svc._handle_modify_selected_part(
+            state,
+            {"part_ref": "part:main_wing", "operation": "set_sweep", "value": 7.0},
+            "tc-sweep-none",
+        )
+    ]
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec.wing.sweep is not None
+    assert state.current_spec.wing.sweep.value == 7.0
+
+
+@pytest.mark.anyio
 async def test_handle_modify_selected_part_set_tail_type(tmp_path):
     svc = _service_with_spec(tmp_path)
     state = svc.get_or_create_state("test-mod")

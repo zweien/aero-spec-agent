@@ -796,20 +796,20 @@ class ChatService:
             section, field_name, default_unit = ops[operation]
             field_path = f"{section}.{field_name}"
             _pre_fill_none_scalars(data, [f"{field_path}.value"])
-            # Ensure the scalar dict exists even if key is absent
+
             section_dict = data.setdefault(section, {})
             if field_name not in section_dict or section_dict[field_name] is None:
                 section_dict[field_name] = {}
+            scalar_dict = section_dict[field_name]
 
-            # tail.type is a TextScalar — value is a string
             if field_name == "type" and section == "tail":
-                _set_nested(data, f"{field_path}.value", str(value))
+                scalar_dict["value"] = str(value)
             else:
-                _set_nested(data, f"{field_path}.value", float(value))
-            _set_nested(data, f"{field_path}.source", "user")
-            _set_nested(data, f"{field_path}.confidence", 1.0)
+                scalar_dict["value"] = float(value)
+            scalar_dict["source"] = "user"
+            scalar_dict["confidence"] = 1.0
             if default_unit:
-                _set_nested(data, f"{field_path}.unit", default_unit)
+                scalar_dict["unit"] = default_unit
 
         else:
             error_msg = f"不支持操作的部件: {part_ref}，或未知操作: {operation}"
