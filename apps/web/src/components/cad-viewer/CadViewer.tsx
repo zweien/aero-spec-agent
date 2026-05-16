@@ -16,10 +16,11 @@ import {
 type CadViewerProps = {
   modelFormat?: CadPreviewFormat;
   modelUrl?: string;
+  onSelectPart?: (partRef: string | null) => void;
   spec?: AircraftPreviewSpec | null;
 };
 
-export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
+export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec }: CadViewerProps) {
   const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
   const [drawingsPct, setDrawingsPct] = useState(28);
   const [topPct, setTopPct] = useState(50);
@@ -83,6 +84,7 @@ export function CadViewer({ modelFormat, modelUrl, spec }: CadViewerProps) {
               <AircraftThreePreview
                 modelFormat={modelFormat}
                 modelUrl={modelUrl}
+                onSelectPart={onSelectPart}
                 onStatusChange={handleStatusChange}
                 spec={spec}
               />

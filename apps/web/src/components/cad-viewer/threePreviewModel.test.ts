@@ -35,6 +35,17 @@ test("buildAircraftThreeModel maps spec dimensions into 3D aircraft parts", () =
   assert.equal(model.tail.vertical.rotation.x, Math.PI / 2);
 });
 
+test("buildAircraftThreeModel exposes stable part ids for selectable fallback geometry", () => {
+  const model = buildAircraftThreeModel(spec);
+
+  assert.equal(model.fuselage.partId, "fuselage");
+  assert.equal(model.wing.partId, "main_wing");
+  assert.equal(model.tail.horizontal.partId, "tail");
+  assert.equal(model.tail.vertical.partId, "tail");
+  assert.equal(model.engines[0].partId, "left_engine");
+  assert.equal(model.engines[1].partId, "right_engine");
+});
+
 test("buildAircraftThreeModel uses stable defaults for optional geometry", () => {
   const model = buildAircraftThreeModel({
     ...spec,

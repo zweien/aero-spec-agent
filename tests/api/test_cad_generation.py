@@ -29,8 +29,26 @@ def test_fake_backend_writes_expected_artifacts(tmp_path: Path):
         "actual": True,
         "status": "pass",
     }
+    for key in [
+        "fuselage.length",
+        "fuselage.max_diameter",
+        "wing.root_chord",
+        "wing.tip_chord",
+        "wing.sweep",
+        "wing.dihedral",
+    ]:
+        assert result.validation_report[key]["status"] == "pass"
+
+    assert result.validation_report["file_sizes"]["vsp3"]["actual"] > 0
+    assert result.validation_report["file_sizes"]["glb"]["actual"] > 0
+    assert result.validation_report["glb.parseable"] == {
+        "expected": True,
+        "actual": True,
+        "status": "pass",
+    }
 
     validation_report = json.loads((tmp_path / "validation_report.json").read_text(encoding="utf-8"))
     assert validation_report["backend"]["actual"] == "fake"
     assert validation_report["vsp3"]["exists"] is True
     assert validation_report["vsp3.exists"]["status"] == "pass"
+    assert validation_report["glb.parseable"]["status"] == "pass"

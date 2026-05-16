@@ -25,6 +25,34 @@ def test_chat_endpoint_returns_sse_content_type(client):
         assert "text/event-stream" in response.headers["content-type"]
 
 
+def test_chat_endpoint_forwards_selected_refs(client):
+    captured = {}
+
+    with patch("services.api.app.routers.chat.chat_service") as mock_svc:
+        async def fake_stream(*, conversation_id, message, selected_refs):
+            captured["conversation_id"] = conversation_id
+            captured["message"] = message
+            captured["selected_refs"] = selected_refs
+            yield 'event: message\ndata: {"content": "ok"}\n\n'
+
+        mock_svc.chat_stream = fake_stream
+        response = client.post(
+            "/api/chat",
+            json={
+                "conversation_id": "test-conv",
+                "message": "hello",
+                "selected_refs": ["part:right_engine"],
+            },
+        )
+
+    assert response.status_code == 200
+    assert captured == {
+        "conversation_id": "test-conv",
+        "message": "hello",
+        "selected_refs": ["part:right_engine"],
+    }
+
+
 def test_chat_endpoint_rejects_empty_message(client):
     response = client.post(
         "/api/chat",

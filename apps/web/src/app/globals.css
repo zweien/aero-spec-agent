@@ -325,6 +325,12 @@ textarea:focus {
   color: var(--accent-bright);
 }
 
+.chat-bubble-system .chat-avatar {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+}
+
 .chat-bubble-error .chat-avatar {
   background: var(--error-bg);
   color: var(--error);
@@ -349,6 +355,13 @@ textarea:focus {
 .chat-bubble-assistant .chat-bubble-body {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
+  border-bottom-left-radius: 3px;
+}
+
+.chat-bubble-system .chat-bubble-body {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
   border-bottom-left-radius: 3px;
 }
 
@@ -450,6 +463,24 @@ textarea:focus {
   border-top-color: transparent;
   width: 12px;
   height: 12px;
+}
+
+.selected-ref-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+  align-items: center;
+}
+
+.selected-ref-chip {
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-bright);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
 }
 
 /* --- Tool Cards --- */
@@ -1099,6 +1130,11 @@ textarea:focus {
   transition: all 0.15s;
 }
 
+.apply-changes-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .apply-changes-pending {
   background: var(--accent);
   color: #fff;
@@ -1107,6 +1143,11 @@ textarea:focus {
 
 .apply-changes-pending:hover:not(:disabled) {
   filter: brightness(1.1);
+}
+
+.apply-changes-applying {
+  cursor: wait;
+  filter: saturate(0.8);
 }
 
 /* =============================================

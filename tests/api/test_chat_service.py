@@ -1,9 +1,7 @@
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.chat_service import (
     ChatService,
     ConversationState,
@@ -12,7 +10,6 @@ from services.api.app.services.chat_service import (
     SYSTEM_PROMPT_TEMPLATE,
     _flat_args_to_spec,
     _pre_fill_none_scalars,
-    FIELD_TO_SPEC_PATH,
 )
 from services.api.app.services.spec_io import load_aircraft_spec
 
@@ -73,6 +70,7 @@ def test_conversation_state_round_trip():
         design_id="test-rt",
         messages=[{"role": "user", "content": "hello"}],
         current_spec=spec,
+        selected_refs=["part:right_engine"],
     )
     data = state.to_dict()
     restored = ConversationState.from_dict(data)
@@ -80,6 +78,22 @@ def test_conversation_state_round_trip():
     assert len(restored.messages) == 1
     assert restored.current_spec is not None
     assert restored.current_spec.wing.span.value == spec.wing.span.value
+    assert restored.selected_refs == ["part:right_engine"]
+
+
+def test_system_prompt_includes_selected_refs_context():
+    svc = ChatService()
+    state = ConversationState(
+        conversation_id="selected-ctx",
+        design_id="selected-ctx",
+        selected_refs=["part:right_engine", "part:main_wing"],
+    )
+
+    prompt = svc._build_system_prompt(state)
+
+    assert "当前选中对象" in prompt
+    assert "part:right_engine" in prompt
+    assert "part:main_wing" in prompt
 
 
 def test_persistence_saves_and_loads(tmp_path):
@@ -94,6 +108,28 @@ def test_persistence_saves_and_loads(tmp_path):
     assert len(loaded.messages) == 1
     assert loaded.messages[0]["content"] == "test msg"
     assert loaded.current_spec is not None
+
+
+@pytest.mark.anyio
+async def test_chat_stream_emits_error_event_when_llm_client_fails(monkeypatch):
+    svc = ChatService()
+
+    def fail_client():
+        raise RuntimeError("missing llm credentials")
+
+    monkeypatch.setattr(svc, "_get_client", fail_client)
+    events = [
+        event
+        async for event in svc.chat_stream(
+            conversation_id="llm-fail",
+            message="hello",
+            selected_refs=[],
+        )
+    ]
+
+    assert len(events) == 1
+    assert events[0].startswith("event: error")
+    assert "missing llm credentials" in events[0]
 
 
 # ---------------------------------------------------------------------------

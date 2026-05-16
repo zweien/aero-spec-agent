@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Scalar = {
   value: string | number;
@@ -28,6 +28,7 @@ type ParameterPanelProps = {
   onParameterChange?: (path: string, value: string | number) => void;
   onApplyChanges?: () => void;
   pendingCount?: number;
+  isApplying?: boolean;
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -121,19 +122,31 @@ function EditableValue({
   const draftRef = useRef(String(scalar.value));
   const committedRef = useRef(scalar.value);
 
-  const commit = useCallback(() => {
-    const draft = draftRef.current;
-    const newValue =
-      typeof scalar.value === "number" ? Number(draft) : draft;
-    if (
-      newValue !== committedRef.current &&
-      !(typeof newValue === "number" && Number.isNaN(newValue))
-    ) {
+  useEffect(() => {
+    if (editing) return;
+    draftRef.current = String(scalar.value);
+    committedRef.current = scalar.value;
+  }, [editing, scalar.value]);
+
+  const stageDraft = useCallback(
+    (draft: string) => {
+      draftRef.current = draft;
+      const newValue =
+        typeof scalar.value === "number" ? Number(draft) : draft;
+
+      if (typeof newValue === "number" && Number.isNaN(newValue)) return;
+      if (newValue === committedRef.current) return;
+
       committedRef.current = newValue;
       onCommit(newValue);
-    }
+    },
+    [scalar.value, onCommit],
+  );
+
+  const commit = useCallback(() => {
+    stageDraft(draftRef.current);
     setEditing(false);
-  }, [scalar.value, onCommit]);
+  }, [stageDraft]);
 
   if (!editing) {
     return (
@@ -158,12 +171,13 @@ function EditableValue({
       autoFocus
       step={typeof scalar.value === "number" ? "any" : undefined}
       onChange={(e) => {
-        draftRef.current = e.target.value;
+        stageDraft(e.target.value);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           commit();
         } else if (e.key === "Escape") {
+          draftRef.current = String(committedRef.current);
           setEditing(false);
         }
       }}
@@ -202,6 +216,7 @@ export function ParameterPanel({
   onParameterChange,
   onApplyChanges,
   pendingCount = 0,
+  isApplying = false,
 }: ParameterPanelProps) {
   const parameters = spec ? extractParameters(spec) : [];
   const [collapsed, setCollapsed] = useState(false);
@@ -259,11 +274,17 @@ export function ParameterPanel({
       {onApplyChanges && (
         <button
           type="button"
-          className={`apply-changes-btn ${pendingCount > 0 ? "apply-changes-pending" : ""}`}
-          disabled={pendingCount === 0}
+          className={`apply-changes-btn ${pendingCount > 0 ? "apply-changes-pending" : ""} ${
+            isApplying ? "apply-changes-applying" : ""
+          }`}
+          disabled={pendingCount === 0 || isApplying}
           onClick={onApplyChanges}
         >
-          {pendingCount > 0 ? `确认修改 (${pendingCount})` : "确认修改"}
+          {isApplying
+            ? "正在应用..."
+            : pendingCount > 0
+              ? `确认修改 (${pendingCount})`
+              : "确认修改"}
         </button>
       )}
     </section>

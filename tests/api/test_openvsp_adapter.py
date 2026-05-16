@@ -48,6 +48,36 @@ class FakeOpenVspModule:
         Path(path).write_text(f"export {export_type}\n", encoding="utf-8")
 
 
+class FakeVspError:
+    def __init__(self, message: str) -> None:
+        self.message = message
+
+    def GetErrorString(self) -> str:
+        return self.message
+
+
+class FakeErrorManager:
+    def __init__(self, errors: list[str] | None = None) -> None:
+        self.errors = [FakeVspError(error) for error in (errors or [])]
+
+    def GetNumTotalErrors(self) -> int:
+        return len(self.errors)
+
+    def PopLastError(self) -> FakeVspError:
+        return self.errors.pop()
+
+    def push(self, message: str) -> None:
+        self.errors.append(FakeVspError(message))
+
+
+def _attach_error_manager(fake_vsp: FakeOpenVspModule, manager: FakeErrorManager) -> None:
+    fake_vsp.ErrorMgrSingleton = type(
+        "ErrorMgrSingleton",
+        (),
+        {"getInstance": staticmethod(lambda: manager)},
+    )
+
+
 def test_adapter_delegates_openvsp_calls_in_order(tmp_path: Path):
     fake_vsp = FakeOpenVspModule()
     adapter = OpenVspAdapter(module=fake_vsp)
@@ -122,3 +152,38 @@ def test_adapter_raises_clear_error_when_openvsp_module_is_missing(
 
     with pytest.raises(OpenVspUnavailableError, match="OpenVSP Python bindings"):
         adapter.clear_model()
+
+
+def test_check_errors_records_openvsp_error_stack():
+    fake_vsp = FakeOpenVspModule()
+    manager = FakeErrorManager(["bad span"])
+    _attach_error_manager(fake_vsp, manager)
+    adapter = OpenVspAdapter(module=fake_vsp)
+
+    errors = adapter.check_errors("manual")
+
+    assert errors == [{"context": "manual", "message": "bad span"}]
+    assert adapter.errors == errors
+
+
+def test_add_geom_checks_openvsp_error_stack_after_call():
+    class ErroringAddGeomModule(FakeOpenVspModule):
+        def __init__(self, manager: FakeErrorManager) -> None:
+            super().__init__()
+            self.manager = manager
+
+        def AddGeom(self, kind: str, parent_id: str) -> str | None:
+            geom_id = super().AddGeom(kind, parent_id)
+            self.manager.push("AddGeom warning")
+            return geom_id
+
+    manager = FakeErrorManager()
+    fake_vsp = ErroringAddGeomModule(manager)
+    _attach_error_manager(fake_vsp, manager)
+    adapter = OpenVspAdapter(module=fake_vsp)
+
+    adapter.add_geom("WING")
+
+    assert adapter.errors == [
+        {"context": "AddGeom(WING)", "message": "AddGeom warning"}
+    ]

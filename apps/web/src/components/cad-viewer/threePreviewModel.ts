@@ -4,6 +4,7 @@ import {
   type AircraftPreviewSpec,
   wingZ,
 } from "./previewGeometry.ts";
+import type { AircraftPartId } from "./partSelection.ts";
 
 type Vec3 = {
   x: number;
@@ -19,10 +20,12 @@ type Rot3 = {
 
 export type AircraftThreeModel = {
   fuselage: {
+    partId: AircraftPartId;
     length: number;
     diameter: number;
   };
   wing: {
+    partId: AircraftPartId;
     span: number;
     rootChord: number;
     tipChord: number;
@@ -30,11 +33,13 @@ export type AircraftThreeModel = {
   };
   tail: {
     horizontal: {
+      partId: AircraftPartId;
       span: number;
       chord: number;
       position: Vec3;
     };
     vertical: {
+      partId: AircraftPartId;
       span: number;
       chord: number;
       position: Vec3;
@@ -42,6 +47,7 @@ export type AircraftThreeModel = {
     };
   };
   engines: Array<{
+    partId: AircraftPartId;
     length: number;
     diameter: number;
     finenessRatio: number;
@@ -70,10 +76,12 @@ export function buildAircraftThreeModel(spec: AircraftPreviewSpec): AircraftThre
 
   return {
     fuselage: {
+      partId: "fuselage",
       length: fuselageLength,
       diameter: fuselageDiameter,
     },
     wing: {
+      partId: "main_wing",
       span: wingSpan,
       rootChord,
       tipChord,
@@ -81,11 +89,13 @@ export function buildAircraftThreeModel(spec: AircraftPreviewSpec): AircraftThre
     },
     tail: {
       horizontal: {
+        partId: "tail",
         span: wingSpan * 0.28,
         chord: rootChord * 0.45,
         position: { x: fuselageLength * 0.42, y: 0, z: 0 },
       },
       vertical: {
+        partId: "tail",
         span: wingSpan * 0.16,
         chord: rootChord * 0.55,
         position: { x: fuselageLength * 0.42, y: 0, z: fuselageDiameter * 0.4 },
@@ -96,12 +106,14 @@ export function buildAircraftThreeModel(spec: AircraftPreviewSpec): AircraftThre
       engineCount >= 2
         ? [
             {
+              partId: "left_engine",
               length: nacelleLength,
               diameter: nacelleDiameter,
               finenessRatio,
               position: { x: enginePosition.x, y: -engineY, z: enginePosition.z },
             },
             {
+              partId: "right_engine",
               length: nacelleLength,
               diameter: nacelleDiameter,
               finenessRatio,

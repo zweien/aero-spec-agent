@@ -90,10 +90,12 @@ export default function Home() {
   const [versionList, setVersionList] = useState<number[]>([]);
   const [currentVersionNo, setCurrentVersionNo] = useState<number | undefined>(undefined);
   const [designId, setDesignId] = useState<string | null>(null);
+  const [isApplyingChanges, setIsApplyingChanges] = useState(false);
   const [compareVersions, setCompareVersions] = useState<[number, number] | null>(null);
   const [compareData, setCompareData] = useState<[VersionResponse, VersionResponse] | null>(null);
+  const [selectedRefs, setSelectedRefs] = useState<string[]>([]);
 
-  const chatSendMessageRef = useRef<((text: string) => void) | null>(null);
+  const chatSystemMessageRef = useRef<((text: string) => void) | null>(null);
   const [chatWidth, setChatWidth] = useState(38);
   const mainRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -129,8 +131,8 @@ export default function Home() {
     setPendingChanges(new Map());
   }, [specData]);
 
-  const registerSendMessage = useCallback((fn: (text: string) => void) => {
-    chatSendMessageRef.current = fn;
+  const registerSystemMessage = useCallback((fn: (text: string) => void) => {
+    chatSystemMessageRef.current = fn;
   }, []);
 
   const fetchVersionList = useCallback(async (id: string) => {
@@ -202,15 +204,72 @@ export default function Home() {
     [],
   );
 
-  const handleApplyChanges = useCallback(() => {
-    if (pendingChanges.size === 0) return;
-    const parts = Array.from(pendingChanges.entries()).map(
-      ([path, value]) => `${path} = ${value}`,
+  const handleApplyChanges = useCallback(async () => {
+    if (pendingChanges.size === 0 || isApplyingChanges) return;
+    const activeDesignId = designId ?? conversationId;
+    const changes = Array.from(pendingChanges.entries()).map(
+      ([path, value]) => ({ path, value }),
     );
-    const msg = `修改参数：\n${parts.join("\n")}`;
-    chatSendMessageRef.current?.(msg);
-    setPendingChanges(new Map());
-  }, [pendingChanges]);
+    const summary = changes.map(({ path, value }) => `${path} = ${value}`);
+
+    setIsApplyingChanges(true);
+    chatSystemMessageRef.current?.(
+      `正在直接修改参数并重新生成模型：\n${summary.join("\n")}`,
+    );
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/designs/${activeDesignId}/spec`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ changes }),
+        },
+      );
+
+      if (!response.ok) {
+        chatSystemMessageRef.current?.("参数修改失败：后端未接受当前补丁。");
+        return;
+      }
+
+      const job = (await response.json()) as {
+        design_id?: string;
+        error_message?: string;
+        version_no?: number;
+        status?: string;
+      };
+      if (job.status !== "ready" || !job.version_no) {
+        chatSystemMessageRef.current?.(
+          `参数修改失败：${job.error_message ?? "生成任务未完成"}`,
+        );
+        return;
+      }
+
+      const updatedDesignId = job.design_id ?? activeDesignId;
+      setDesignId(updatedDesignId);
+      await loadVersion(updatedDesignId, job.version_no);
+      await fetchVersionList(updatedDesignId);
+
+      chatSystemMessageRef.current?.(`已直接修改参数：\n${summary.join("\n")}`);
+      setPendingChanges(new Map());
+    } catch (exc) {
+      const message = exc instanceof Error ? exc.message : "请求失败";
+      chatSystemMessageRef.current?.(`参数修改失败：${message}`);
+    } finally {
+      setIsApplyingChanges(false);
+    }
+  }, [
+    conversationId,
+    designId,
+    fetchVersionList,
+    isApplyingChanges,
+    loadVersion,
+    pendingChanges,
+  ]);
+
+  const handleSelectPart = useCallback((partRef: string | null) => {
+    setSelectedRefs(partRef ? [partRef] : []);
+  }, []);
 
   const handleCompare = useCallback(
     async (v1: number, v2: number) => {
@@ -254,7 +313,8 @@ export default function Home() {
             conversationId={conversationId}
             apiBaseUrl={API_BASE_URL}
             onGenerationComplete={handleGenerationComplete}
-            registerSendMessage={registerSendMessage}
+            registerSystemMessage={registerSystemMessage}
+            selectedRefs={selectedRefs}
           />
         </div>
         <div
@@ -266,12 +326,14 @@ export default function Home() {
             modelFormat={previewSource?.format}
             modelUrl={previewSource?.url}
             spec={previewSpec}
+            onSelectPart={handleSelectPart}
           />
           <ParameterPanel
             spec={draftSpec}
             onParameterChange={handleParameterChange}
             onApplyChanges={handleApplyChanges}
             pendingCount={pendingChanges.size}
+            isApplying={isApplyingChanges}
           />
         </div>
       </div>

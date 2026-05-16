@@ -13,6 +13,10 @@ import {
 } from "./threePreviewModel";
 import type { CadPreviewFormat } from "./cadPreviewSource";
 import type { CadPreviewStatus } from "./cadPreviewStatus";
+import {
+  partRefFromPartId,
+  type AircraftPartId,
+} from "./partSelection";
 
 function disposeMaterial(material: THREE.Material): void {
   for (const value of Object.values(material)) {
@@ -105,8 +109,9 @@ function createAircraftGroup(model: AircraftThreeModel): THREE.Group {
 
   const fuselage = new THREE.Mesh(
     new THREE.CapsuleGeometry(model.fuselage.diameter / 2, model.fuselage.length, 16, 24),
-    fuselageMaterial,
+    fuselageMaterial.clone(),
   );
+  fuselage.userData.partId = model.fuselage.partId;
   fuselage.rotation.z = Math.PI / 2;
   group.add(fuselage);
 
@@ -115,8 +120,9 @@ function createAircraftGroup(model: AircraftThreeModel): THREE.Group {
     model.wing.tipChord,
     model.wing.span,
     0.08,
-    wingMaterial,
+    wingMaterial.clone(),
   );
+  wing.userData.partId = model.wing.partId;
   wing.position.set(-model.fuselage.length * 0.08, 0, model.wing.z);
   group.add(wing);
 
@@ -124,8 +130,9 @@ function createAircraftGroup(model: AircraftThreeModel): THREE.Group {
     model.tail.horizontal.chord,
     model.tail.horizontal.span,
     0.06,
-    tailMaterial,
+    tailMaterial.clone(),
   );
+  horizontalTail.userData.partId = model.tail.horizontal.partId;
   horizontalTail.position.set(
     model.tail.horizontal.position.x,
     model.tail.horizontal.position.y,
@@ -137,8 +144,9 @@ function createAircraftGroup(model: AircraftThreeModel): THREE.Group {
     model.tail.vertical.chord,
     model.tail.vertical.span,
     0.06,
-    tailMaterial,
+    tailMaterial.clone(),
   );
+  verticalTail.userData.partId = model.tail.vertical.partId;
   verticalTail.position.set(
     model.tail.vertical.position.x,
     model.tail.vertical.position.y,
@@ -154,14 +162,40 @@ function createAircraftGroup(model: AircraftThreeModel): THREE.Group {
   for (const engine of model.engines) {
     const nacelle = new THREE.Mesh(
       new THREE.CylinderGeometry(engine.diameter / 2, engine.diameter / 2, engine.length, 24),
-      engineMaterial,
+      engineMaterial.clone(),
     );
+    nacelle.userData.partId = engine.partId;
     nacelle.rotation.z = Math.PI / 2;
     nacelle.position.set(engine.position.x, engine.position.y, engine.position.z);
     group.add(nacelle);
   }
 
   return group;
+}
+
+function findPartId(object: THREE.Object3D): AircraftPartId | null {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const partId = current.userData.partId;
+    if (typeof partId === "string") {
+      return partId as AircraftPartId;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function setPartHighlight(root: THREE.Object3D, partId: AircraftPartId, enabled: boolean): void {
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh) || findPartId(child) !== partId) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    for (const material of materials) {
+      if (material instanceof THREE.MeshStandardMaterial) {
+        material.emissive.setHex(enabled ? 0x38bdf8 : 0x000000);
+        material.emissiveIntensity = enabled ? 0.55 : 0;
+      }
+    }
+  });
 }
 
 function prepareImportedModel(object: THREE.Object3D): boolean {
@@ -227,12 +261,14 @@ type AircraftThreePreviewProps = {
   modelFormat?: CadPreviewFormat;
   modelUrl?: string;
   onStatusChange?: (status: CadPreviewStatus) => void;
+  onSelectPart?: (partRef: string | null) => void;
   spec: AircraftPreviewSpec;
 };
 
 export function AircraftThreePreview({
   modelFormat,
   modelUrl,
+  onSelectPart,
   onStatusChange,
   spec,
 }: AircraftThreePreviewProps) {
@@ -244,13 +280,20 @@ export function AircraftThreePreview({
   const controlsRef = useRef<OrbitControls | null>(null);
   const wireframeRef = useRef<THREE.Group | null>(null);
   const importedRef = useRef<THREE.Object3D | null>(null);
+  const selectedPartIdRef = useRef<AircraftPartId | null>(null);
+  const onSelectPartRef = useRef<typeof onSelectPart>(onSelectPart);
   const animFrameRef = useRef(0);
   const isActiveRef = useRef(true);
+
+  useEffect(() => {
+    onSelectPartRef.current = onSelectPart;
+  }, [onSelectPart]);
 
   // Scene setup — runs once
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const activeCanvas = canvas;
 
     isActiveRef.current = true;
 
@@ -285,6 +328,38 @@ export function AircraftThreePreview({
     grid.position.z = -0.75;
     scene.add(grid);
 
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function handlePointerDown(event: PointerEvent) {
+      const root = wireframeRef.current;
+      if (!root || importedRef.current) return;
+
+      const rect = activeCanvas.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const hit = raycaster
+        .intersectObjects(root.children, true)
+        .find((intersection) => findPartId(intersection.object));
+      const nextPartId = hit ? findPartId(hit.object) : null;
+      const prevPartId = selectedPartIdRef.current;
+
+      if (prevPartId) {
+        setPartHighlight(root, prevPartId, false);
+      }
+      selectedPartIdRef.current = nextPartId;
+      if (nextPartId) {
+        setPartHighlight(root, nextPartId, true);
+        onSelectPartRef.current?.(partRefFromPartId(nextPartId));
+      } else {
+        onSelectPartRef.current?.(null);
+      }
+    }
+
+    activeCanvas.addEventListener("pointerdown", handlePointerDown);
+
     function resize() {
       const el = canvasRef.current;
       if (!el) return;
@@ -309,6 +384,7 @@ export function AircraftThreePreview({
     return () => {
       isActiveRef.current = false;
       window.cancelAnimationFrame(animFrameRef.current);
+      activeCanvas.removeEventListener("pointerdown", handlePointerDown);
       controls.dispose();
       disposeObject3D(scene);
       renderer.dispose();
@@ -337,6 +413,9 @@ export function AircraftThreePreview({
     const aircraft = createAircraftGroup(model);
     scene.add(aircraft);
     wireframeRef.current = aircraft;
+    if (selectedPartIdRef.current) {
+      setPartHighlight(aircraft, selectedPartIdRef.current, true);
+    }
 
     if (!modelUrl || !modelFormat) {
       onStatusChange?.({ state: "parameter" });

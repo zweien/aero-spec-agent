@@ -1,12 +1,11 @@
 "use client";
 
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DefaultChatTransport } from "ai";
-import { useChat } from "@ai-sdk/react";
+import { type JSX, useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
+import { createChatSseParser } from "./chatSse";
 
 export type GenerationCompleteData = {
   status?: string;
@@ -15,15 +14,26 @@ export type GenerationCompleteData = {
   files?: string[];
 };
 
+type ChatRole = "user" | "assistant" | "system" | "error";
+
+type TextPart = {
+  type: "text";
+  text: string;
+};
+
 type ToolPart = {
-  type: string;
+  type: "tool";
   toolCallId: string;
   toolName: string;
   args?: Record<string, unknown>;
-  input?: Record<string, unknown>;
   output?: Record<string, unknown>;
-  result?: Record<string, unknown>;
-  state: string;
+  state: "running" | "done";
+};
+
+type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  parts: Array<TextPart | ToolPart>;
 };
 
 type ChatPanelProps = {
@@ -31,6 +41,8 @@ type ChatPanelProps = {
   apiBaseUrl: string;
   onGenerationComplete: (data: GenerationCompleteData) => void;
   registerSendMessage?: (fn: (text: string) => void) => void;
+  registerSystemMessage?: (fn: (text: string) => void) => void;
+  selectedRefs?: string[];
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -43,28 +55,28 @@ export function ChatPanel({
   apiBaseUrl,
   onGenerationComplete,
   registerSendMessage,
+  registerSystemMessage,
+  selectedRefs = [],
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
-  const processedCalls = useRef(new Set<string>());
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [status, setStatus] = useState<"idle" | "streaming">("idle");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messageCounterRef = useRef(1);
+  const toolCounterRef = useRef(1);
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        body: { conversation_id: conversationId },
-      }),
-    [conversationId],
-  );
+  const isStreaming = status === "streaming";
 
-  const { messages, sendMessage, status } = useChat({ transport });
-
-  const isStreaming = status === "streaming" || status === "submitted";
-
-  useEffect(() => {
-    registerSendMessage?.((text: string) => {
-      void sendMessage({ text });
-    });
-  }, [registerSendMessage, sendMessage]);
+  const appendMessage = useCallback((role: ChatRole, text: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `msg-${messageCounterRef.current++}`,
+        role,
+        parts: [{ type: "text", text }],
+      },
+    ]);
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -73,33 +85,170 @@ export function ChatPanel({
     });
   }, [messages]);
 
-  useEffect(() => {
-    for (const message of messages) {
-      for (const part of message.parts ?? []) {
-        const toolPart = part as unknown as ToolPart;
-        if (
-          toolPart.toolCallId &&
-          toolPart.state === "output-available" &&
-          !processedCalls.current.has(toolPart.toolCallId)
-        ) {
-          processedCalls.current.add(toolPart.toolCallId);
-          const output = (toolPart.output ?? toolPart.result) as
-            | GenerationCompleteData
-            | undefined;
-          if (output) {
-            onGenerationComplete(output);
+  const appendAssistantText = useCallback((messageId: string, text: string) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        const parts = [...msg.parts];
+        const last = parts[parts.length - 1];
+        if (last?.type === "text") {
+          parts[parts.length - 1] = { ...last, text: last.text + text };
+        } else {
+          parts.push({ type: "text", text });
+        }
+        return { ...msg, parts };
+      }),
+    );
+  }, []);
+
+  const appendToolCall = useCallback(
+    (messageId: string, toolName: string, args: Record<string, unknown>) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                parts: [
+                  ...msg.parts,
+                  {
+                    type: "tool",
+                    toolCallId: `tool-${toolCounterRef.current++}`,
+                    toolName,
+                    args,
+                    state: "running",
+                  },
+                ],
+              }
+            : msg,
+        ),
+      );
+    },
+    [],
+  );
+
+  const completeLatestTool = useCallback(
+    (messageId: string, output: GenerationCompleteData) => {
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== messageId) return msg;
+          const parts = [...msg.parts];
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const part = parts[i];
+            if (part.type === "tool" && part.state === "running") {
+              parts[i] = { ...part, output, state: "done" };
+              break;
+            }
+          }
+          return { ...msg, parts };
+        }),
+      );
+      onGenerationComplete(output);
+    },
+    [onGenerationComplete],
+  );
+
+  const sendChatMessage = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || status === "streaming") return;
+
+      const userId = `msg-${messageCounterRef.current++}`;
+      const assistantId = `msg-${messageCounterRef.current++}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: userId,
+          role: "user",
+          parts: [{ type: "text", text: trimmed }],
+        },
+        {
+          id: assistantId,
+          role: "assistant",
+          parts: [{ type: "text", text: "" }],
+        },
+      ]);
+      setStatus("streaming");
+
+      const parser = createChatSseParser();
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversation_id: conversationId,
+            message: trimmed,
+            selected_refs: selectedRefs,
+          }),
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`Chat API failed with status ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          for (const event of parser.push(decoder.decode(value, { stream: true }))) {
+            if (event.type === "message") {
+              appendAssistantText(assistantId, String(event.data.content ?? ""));
+            } else if (event.type === "tool_call") {
+              let args: Record<string, unknown> = {};
+              try {
+                args = JSON.parse(String(event.data.arguments ?? "{}"));
+              } catch {
+                args = {};
+              }
+              appendToolCall(assistantId, String(event.data.name ?? ""), args);
+            } else if (event.type === "generation_started") {
+              appendAssistantText(assistantId, "\n\n正在生成 CAD 模型...\n");
+            } else if (event.type === "generation_complete") {
+              completeLatestTool(assistantId, event.data as GenerationCompleteData);
+            } else if (event.type === "error") {
+              appendMessage("error", String(event.data.content ?? "未知错误"));
+            }
           }
         }
+      } catch (exc) {
+        const message = exc instanceof Error ? exc.message : "Chat 请求失败";
+        appendMessage("error", message);
+      } finally {
+        setStatus("idle");
       }
-    }
-  }, [messages, onGenerationComplete]);
+    },
+    [
+      apiBaseUrl,
+      appendAssistantText,
+      appendMessage,
+      appendToolCall,
+      completeLatestTool,
+      conversationId,
+      selectedRefs,
+      status,
+    ],
+  );
+
+  useEffect(() => {
+    registerSendMessage?.((text: string) => {
+      void sendChatMessage(text);
+    });
+  }, [registerSendMessage, sendChatMessage]);
+
+  useEffect(() => {
+    registerSystemMessage?.((text: string) => {
+      appendMessage("system", text);
+    });
+  }, [appendMessage, registerSystemMessage]);
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
     setInput("");
-    void sendMessage({ text: trimmed });
-  }, [input, isStreaming, sendMessage]);
+    void sendChatMessage(trimmed);
+  }, [input, isStreaming, sendChatMessage]);
 
   return (
     <section className="panel chat-panel">
@@ -120,36 +269,41 @@ export function ChatPanel({
             className={`chat-bubble chat-bubble-${msg.role}`}
           >
             <div className="chat-avatar">
-              {msg.role === "user" ? "你" : "AI"}
+              {msg.role === "user"
+                ? "你"
+                : msg.role === "system"
+                  ? "系"
+                  : msg.role === "error"
+                    ? "!"
+                    : "AI"}
             </div>
             <div className="chat-bubble-body">
               {(msg.parts ?? []).map((part, i) => {
                 if (part.type === "text") {
-                  const text = (part as { type: "text"; text: string }).text;
                   const isLastTextPart =
                     i ===
                     (msg.parts ?? []).findLastIndex(
                       (p) => p.type === "text",
                     );
-                  return text ? (
+                  return part.text ? (
                     <span key={i}>
                       <Markdown remarkPlugins={[remarkGfm]}>
-                        {text}
+                        {part.text}
                       </Markdown>
                       {isStreaming &&
                         msg.role === "assistant" &&
                         isLastTextPart &&
                         status === "streaming" && (
                           <span className="streaming-cursor" />
-                        )}
+                      )}
                     </span>
                   ) : null;
                 }
-                if (part.type.startsWith("tool-")) {
+                if (part.type === "tool") {
                   return (
                     <ToolCard
                       key={i}
-                      part={part as unknown as ToolPart}
+                      part={part}
                       apiBaseUrl={apiBaseUrl}
                     />
                   );
@@ -160,6 +314,15 @@ export function ChatPanel({
           </div>
         ))}
       </div>
+      {selectedRefs.length > 0 && (
+        <div className="selected-ref-bar" aria-label="当前选中对象">
+          {selectedRefs.map((ref) => (
+            <span className="selected-ref-chip" key={ref}>
+              {ref}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="chat-input-row">
         <textarea
           aria-label="设计需求"
@@ -196,13 +359,10 @@ export function ChatPanel({
 
 function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) {
   const [expanded, setExpanded] = useState(false);
-  const toolName = part.toolName || part.type.replace(/^tool-/, "");
+  const toolName = part.toolName;
   const label = TOOL_LABELS[toolName] ?? toolName;
-  const isRunning =
-    part.state === "input-streaming" ||
-    part.state === "input-available" ||
-    part.state === "call";
-  const result = (part.output ?? part.result) as GenerationCompleteData | undefined;
+  const isRunning = part.state === "running";
+  const result = part.output as GenerationCompleteData | undefined;
 
   return (
     <div
@@ -220,7 +380,7 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
         )}
       </div>
 
-      {(part.args ?? part.input) && (
+      {part.args && (
         <button
           type="button"
           className="tool-card-toggle"
@@ -229,9 +389,9 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
           {expanded ? "▾ 收起参数" : "▸ 查看参数"}
         </button>
       )}
-      {expanded && (part.args ?? part.input) && (
+      {expanded && part.args && (
         <div className="tool-card-args">
-          <SpecSummary args={(part.args ?? part.input)!} toolName={toolName} />
+          <SpecSummary args={part.args} toolName={toolName} />
         </div>
       )}
 

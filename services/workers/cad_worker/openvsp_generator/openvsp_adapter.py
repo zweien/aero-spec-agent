@@ -11,6 +11,7 @@ from services.workers.cad_worker.openvsp_generator.errors import (
 class OpenVspAdapter:
     def __init__(self, module: Any | None = None) -> None:
         self._module = module
+        self.errors: list[dict[str, str]] = []
 
     @property
     def _vsp(self) -> Any:
@@ -29,6 +30,7 @@ class OpenVspAdapter:
 
     def add_geom(self, kind: str, parent_id: str = "") -> str:
         geom_id = self._vsp.AddGeom(kind, parent_id)
+        self.check_errors(f"AddGeom({kind})")
         if not geom_id:
             raise CadGenerationError(f"OpenVSP AddGeom failed for geometry kind: {kind}")
         return geom_id
@@ -46,6 +48,7 @@ class OpenVspAdapter:
                 f"OpenVSP FindParm failed for parameter: {parm_name}"
             )
         self._vsp.SetParmVal(parm_id, value)
+        self.check_errors(f"SetParmVal({parm_name})")
 
     def write_vsp_file(self, path: Path | str) -> None:
         self._vsp.WriteVSPFile(str(path))
@@ -74,12 +77,14 @@ class OpenVspAdapter:
             )
         resolved_set_id = self.default_set_id() if set_id is None else set_id
         self._vsp.ExportFile(str(path), resolved_set_id, export_type)
+        self.check_errors(f"ExportFile({path.name})")
 
     def default_set_id(self) -> int:
         return int(getattr(self._vsp, "SET_ALL", 0))
 
     def update(self) -> None:
         self._vsp.Update()
+        self.check_errors("Update")
 
     def set_vspaero_ref_wing(self, wing_id: str) -> None:
         self._vsp.SetVSPAERORefWingID(wing_id)
@@ -94,7 +99,9 @@ class OpenVspAdapter:
         self._vsp.SetDoubleAnalysisInput(name, key, vals, 0)
 
     def exec_analysis(self, name: str) -> str:
-        return self._vsp.ExecAnalysis(name)
+        result_id = self._vsp.ExecAnalysis(name)
+        self.check_errors(f"ExecAnalysis({name})")
+        return result_id
 
     def get_double_results(self, result_id: str, name: str) -> list[float]:
         return list(self._vsp.GetDoubleResults(result_id, name))
@@ -110,3 +117,48 @@ class OpenVspAdapter:
 
     def add_to_set(self, set_id: int, geom_id: str) -> None:
         self._vsp.SetSetFlag(geom_id, set_id, True)
+
+    def check_errors(self, context: str) -> list[dict[str, str]]:
+        manager = self._error_manager()
+        if manager is None:
+            return []
+
+        try:
+            num_errors = int(manager.GetNumTotalErrors())
+        except Exception:
+            return []
+
+        errors: list[dict[str, str]] = []
+        for _ in range(num_errors):
+            try:
+                error = manager.PopLastError()
+            except Exception:
+                break
+            message = _openvsp_error_message(error)
+            entry = {"context": context, "message": message}
+            errors.append(entry)
+            self.errors.append(entry)
+        return errors
+
+    def _error_manager(self) -> Any | None:
+        vsp = self._vsp
+        singleton = getattr(vsp, "ErrorMgrSingleton", None)
+        if singleton is not None and hasattr(singleton, "getInstance"):
+            return singleton.getInstance()
+        getter = getattr(vsp, "ErrorMgrSingleton_getInstance", None)
+        if getter is not None:
+            return getter()
+        if hasattr(vsp, "GetNumTotalErrors") and hasattr(vsp, "PopLastError"):
+            return vsp
+        return None
+
+
+def _openvsp_error_message(error: Any) -> str:
+    getter = getattr(error, "GetErrorString", None)
+    if getter is not None:
+        return str(getter())
+    for attr in ("m_ErrorString", "error_string", "message"):
+        value = getattr(error, attr, None)
+        if value:
+            return str(value)
+    return str(error)

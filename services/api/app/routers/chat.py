@@ -11,6 +11,7 @@ chat_service = ChatService()
 class ChatRequest(BaseModel):
     conversation_id: str = Field(min_length=1)
     message: str = Field(min_length=1)
+    selected_refs: list[str] = Field(default_factory=list)
 
 
 def set_job_runner(runner) -> None:
@@ -23,6 +24,7 @@ async def chat(req: ChatRequest):
         chat_service.chat_stream(
             conversation_id=req.conversation_id,
             message=req.message,
+            selected_refs=req.selected_refs,
         ),
         media_type="text/event-stream",
     )

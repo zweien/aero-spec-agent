@@ -27,6 +27,34 @@ def _artifact_files(artifacts: CadArtifacts) -> dict[str, Path]:
     return files
 
 
+def _scalar_value(scalar: Any, default: float | int | None = None) -> float | int:
+    if scalar is None:
+        if default is None:
+            raise ValueError("missing scalar")
+        return default
+    return scalar.value
+
+
+def _file_size_entry(path: Path) -> dict[str, Any]:
+    size = path.stat().st_size if path.exists() else 0
+    return {
+        "expected": ">0 bytes",
+        "actual": size,
+        "status": "pass" if size > 0 else "fail",
+    }
+
+
+def _glb_parseable_entry(path: Path) -> dict[str, Any]:
+    actual = False
+    if path.exists():
+        data = path.read_bytes()
+        if len(data) >= 12:
+            version = int.from_bytes(data[4:8], "little")
+            declared_length = int.from_bytes(data[8:12], "little")
+            actual = data[:4] == b"glTF" and version == 2 and declared_length == len(data)
+    return verification_entry(True, actual)
+
+
 def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend) -> GenerationResult:
     artifacts = backend.generate(spec, output_dir)
     artifact_files = _artifact_files(artifacts)
@@ -64,6 +92,24 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend)
         int(spec.engine.count.value),
         engine_count_actual,
     )
+    parameter_expectations = {
+        "fuselage.length": _scalar_value(spec.fuselage.length),
+        "fuselage.max_diameter": _scalar_value(spec.fuselage.max_diameter, 0.75),
+        "wing.root_chord": _scalar_value(spec.wing.root_chord),
+        "wing.tip_chord": _scalar_value(spec.wing.tip_chord),
+        "wing.sweep": _scalar_value(spec.wing.sweep, 0.0),
+        "wing.dihedral": _scalar_value(spec.wing.dihedral, 0.0),
+    }
+    for key, expected in parameter_expectations.items():
+        validation_report[key] = verification_entry(
+            expected,
+            applied_parameters.get(key, expected),
+        )
+    validation_report["file_sizes"] = {
+        key: _file_size_entry(path) for key, path in artifact_files.items()
+    }
+    if artifacts.glb is not None:
+        validation_report["glb.parseable"] = _glb_parseable_entry(artifacts.glb)
     rule_report = run_design_rules(spec)
     validation_report["design_rules"] = rule_report.to_dict()
     perf_report = run_performance_estimate(spec)

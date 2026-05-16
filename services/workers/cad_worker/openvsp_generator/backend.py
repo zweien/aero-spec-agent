@@ -41,7 +41,7 @@ class FakeCadBackend:
         glb = output_dir / "aircraft.glb"
         vsp3.write_text(f"fake vsp3 for {spec.aircraft.name}\n", encoding="utf-8")
         step.write_text("ISO-10303-21;\nEND-ISO-10303-21;\n", encoding="utf-8")
-        glb.write_bytes(b"glTF\x02\x00\x00\x00\x14\x00\x00\x00")
+        glb.write_bytes(_minimal_glb())
         metadata: dict[str, Any] = {"backend": "fake"}
         if _vspaero_enabled():
             from services.workers.cad_worker.openvsp_generator.vspaero_analysis import (
@@ -111,6 +111,7 @@ class OpenVspBackend:
             "step.exists": step_validation,
             "obj.exists": obj_validation,
             "glb.exists": glb_validation,
+            "openvsp.errors": _openvsp_error_validation(adapter.errors),
             "wing.span": verification_entry(
                 float(spec.wing.span.value),
                 applied_parameters.get("wing.span"),
@@ -130,6 +131,7 @@ class OpenVspBackend:
                 "components": _components(build_results),
                 "applied_parameters": applied_parameters,
                 "validation": validation,
+                "openvsp_errors": adapter.errors,
                 "vspaero_analysis": vspaero_data,
             },
         )
@@ -199,3 +201,20 @@ def _copy_parameters(
     for key in keys:
         if key in result.applied_parameters:
             target[f"{prefix}.{key}"] = result.applied_parameters[key]
+
+
+def _minimal_glb() -> bytes:
+    json_chunk = b'{"asset":{"version":"2.0"}}'
+    padding = (4 - len(json_chunk) % 4) % 4
+    json_chunk += b" " * padding
+    chunk_header = len(json_chunk).to_bytes(4, "little") + b"JSON"
+    total_length = 12 + len(chunk_header) + len(json_chunk)
+    return b"glTF" + (2).to_bytes(4, "little") + total_length.to_bytes(4, "little") + chunk_header + json_chunk
+
+
+def _openvsp_error_validation(errors: list[dict[str, str]]) -> dict[str, object]:
+    return {
+        "expected": [],
+        "actual": errors,
+        "status": "pass" if not errors else "fail",
+    }

@@ -227,6 +227,9 @@ SYSTEM_PROMPT_TEMPLATE = """你是 AeroSpec Agent，一个飞机概念设计助�
 当前设计状态：
 %s
 
+当前选中对象：
+{selected_refs}
+
 规则：
 - 只处理固定翼无人机（fixed_wing_uav），常规布局（conventional）
 - 新建设计使用 generate_design，修改现有设计使用 modify_design
@@ -241,6 +244,7 @@ class ConversationState:
     design_id: str
     messages: list[dict[str, str]] = field(default_factory=list)
     current_spec: AircraftSpec | None = None
+    selected_refs: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -248,6 +252,7 @@ class ConversationState:
             "design_id": self.design_id,
             "messages": self.messages,
             "current_spec": self.current_spec.model_dump(mode="json") if self.current_spec else None,
+            "selected_refs": self.selected_refs,
         }
 
     @classmethod
@@ -258,6 +263,7 @@ class ConversationState:
             design_id=data["design_id"],
             messages=data.get("messages", []),
             current_spec=AircraftSpec.model_validate(spec_data) if spec_data else None,
+            selected_refs=list(data.get("selected_refs", [])),
         )
 
 
@@ -331,14 +337,21 @@ class ChatService:
             Path(f.name).unlink(missing_ok=True)
         else:
             spec_yaml = "尚无设计"
-        return SYSTEM_PROMPT_TEMPLATE % spec_yaml
+        selected_context = "\n".join(state.selected_refs) if state.selected_refs else "无"
+        return (SYSTEM_PROMPT_TEMPLATE % spec_yaml).replace(
+            "{selected_refs}",
+            selected_context,
+        )
 
     async def chat_stream(
         self,
         conversation_id: str,
         message: str,
+        selected_refs: list[str] | None = None,
     ) -> AsyncIterator[str]:
         state = self.get_or_create_state(conversation_id)
+        if selected_refs is not None:
+            state.selected_refs = list(selected_refs)
         state.messages.append({"role": "user", "content": message})
 
         system_prompt = self._build_system_prompt(state)
@@ -347,42 +360,48 @@ class ChatService:
         collected_content = ""
         tool_calls_collected: dict[int, dict[str, Any]] = {}
 
-        response = await self._get_client().chat.completions.create(
-            model=self._model,
-            messages=api_messages,
-            tools=self.build_tools(),
-            stream=True,
-        )
+        try:
+            response = await self._get_client().chat.completions.create(
+                model=self._model,
+                messages=api_messages,
+                tools=self.build_tools(),
+                stream=True,
+            )
 
-        async for chunk in response:
-            choice = chunk.choices[0] if chunk.choices else None
-            if choice is None:
-                continue
+            async for chunk in response:
+                choice = chunk.choices[0] if chunk.choices else None
+                if choice is None:
+                    continue
 
-            delta = choice.delta
+                delta = choice.delta
 
-            if delta.content:
-                collected_content += delta.content
-                yield _sse_event("message", delta.content)
+                if delta.content:
+                    collected_content += delta.content
+                    yield _sse_event("message", delta.content)
 
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    if tc.index not in tool_calls_collected:
-                        tool_calls_collected[tc.index] = {
-                            "id": tc.id or "",
-                            "name": "",
-                            "arguments": "",
-                        }
-                    if tc.id:
-                        tool_calls_collected[tc.index]["id"] = tc.id
-                    if tc.function:
-                        if tc.function.name:
-                            tool_calls_collected[tc.index]["name"] = tc.function.name
-                        if tc.function.arguments:
-                            tool_calls_collected[tc.index]["arguments"] += tc.function.arguments
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        if tc.index not in tool_calls_collected:
+                            tool_calls_collected[tc.index] = {
+                                "id": tc.id or "",
+                                "name": "",
+                                "arguments": "",
+                            }
+                        if tc.id:
+                            tool_calls_collected[tc.index]["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                tool_calls_collected[tc.index]["name"] = tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_collected[tc.index]["arguments"] += tc.function.arguments
 
-            if choice.finish_reason == "tool_calls":
-                break
+                if choice.finish_reason == "tool_calls":
+                    break
+        except Exception as exc:
+            error_msg = str(exc)
+            yield _sse_event("error", {"content": error_msg})
+            self._save_state(state)
+            return
 
         assistant_msg: dict[str, Any] = {"role": "assistant", "content": collected_content or None}
         if tool_calls_collected:
@@ -432,18 +451,23 @@ class ChatService:
                     "content": json.dumps({"error": f"unknown tool: {tool_name}"}, ensure_ascii=False),
                 })
 
-        second_response = await self._get_client().chat.completions.create(
-            model=self._model,
-            messages=[{"role": "system", "content": system_prompt}] + state.messages,
-            stream=True,
-        )
-
         final_content = ""
-        async for chunk in second_response:
-            choice = chunk.choices[0] if chunk.choices else None
-            if choice and choice.delta and choice.delta.content:
-                final_content += choice.delta.content
-                yield _sse_event("message", choice.delta.content)
+        try:
+            second_response = await self._get_client().chat.completions.create(
+                model=self._model,
+                messages=[{"role": "system", "content": system_prompt}] + state.messages,
+                stream=True,
+            )
+
+            async for chunk in second_response:
+                choice = chunk.choices[0] if chunk.choices else None
+                if choice and choice.delta and choice.delta.content:
+                    final_content += choice.delta.content
+                    yield _sse_event("message", choice.delta.content)
+        except Exception as exc:
+            yield _sse_event("error", {"content": str(exc)})
+            self._save_state(state)
+            return
 
         if final_content:
             state.messages.append({"role": "assistant", "content": final_content})
