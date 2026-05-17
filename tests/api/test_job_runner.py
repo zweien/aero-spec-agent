@@ -91,6 +91,19 @@ def test_job_runner_run_queued_job_succeeds_and_persists(tmp_path: Path):
     assert (tmp_path / "storage/designs/demo/versions/1/validation_report.json").exists()
 
 
+def test_enqueue_generate_sets_timestamps(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    runner = JobRunner(store=store, backend=FakeCadBackend())
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+
+    job = runner.enqueue_generate(design_id="demo", spec=spec)
+
+    assert job.created_at
+    assert job.updated_at
+    assert job.duration is None
+    assert job.version_status == "pending"
+
+
 def test_failed_async_job_is_not_listed_as_usable_version(tmp_path: Path):
     class FailingBackend(FakeCadBackend):
         def generate(self, spec, output_dir):

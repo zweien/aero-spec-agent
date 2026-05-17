@@ -2,6 +2,7 @@ import json
 import logging
 import threading
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
@@ -11,6 +12,10 @@ from services.workers.cad_worker.openvsp_generator.backend_factory import get_ca
 from services.workers.cad_worker.openvsp_generator.generate_aircraft import generate_aircraft
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
@@ -23,6 +28,10 @@ class JobRecord:
     current_step: str
     error_message: str | None = None
     files: dict[str, str] = field(default_factory=dict)
+    created_at: str = ""
+    updated_at: str = ""
+    duration: float | None = None
+    version_status: str = "pending"
 
 
 class JobRunner:
@@ -49,6 +58,7 @@ class JobRunner:
 
     def enqueue_generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
         job_id = str(uuid4())
+        now = _utcnow()
         version_no, _ = self.store.create_version_dir(design_id)
         job = JobRecord(
             id=job_id,
@@ -57,6 +67,10 @@ class JobRunner:
             status="queued",
             progress=0,
             current_step="queued",
+            created_at=now,
+            updated_at=now,
+            duration=None,
+            version_status="pending",
         )
         self._remember(job)
         self._save_job(job)
