@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
+from services.api.app.schemas.job import job_to_response
 from services.api.app.services.job_runner import JobRunner
 from services.api.app.services.spec_patch import apply_patch
 from services.api.app.services.version_store import VersionStore
@@ -19,9 +20,7 @@ runner = JobRunner(store=VersionStore())
 
 
 def _job_response(job) -> dict[str, object]:
-    data = job.__dict__.copy()
-    data["job_id"] = job.id
-    return data
+    return job_to_response(job)
 
 
 @router.post("/designs/{design_id}/generate", status_code=202)
