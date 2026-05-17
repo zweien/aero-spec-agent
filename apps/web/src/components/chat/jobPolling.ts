@@ -1,27 +1,16 @@
-export type GenerationJobStatus =
-  | "queued"
-  | "running"
-  | "succeeded"
-  | "failed";
+import type { JobStatus, JobPollResult } from "@/types/job";
 
-export type GenerationJob = {
+export type { JobStatus, JobPollResult };
+
+type GenerationJob = {
   id: string;
   design_id?: string;
   version_no?: number;
-  status?: GenerationJobStatus;
+  status?: JobStatus;
   progress?: number;
   current_step?: string;
   error_message?: string | null;
   files?: Record<string, string> | string[];
-};
-
-export type GenerationJobResult = {
-  id: string;
-  design_id?: string;
-  version_no?: number;
-  status: GenerationJobStatus;
-  progress?: number;
-  files?: string[];
 };
 
 type WaitForGenerationJobOptions = {
@@ -38,7 +27,7 @@ export async function waitForGenerationJob({
   intervalMs = 1000,
   maxAttempts = 120,
   fetchFn = fetch,
-}: WaitForGenerationJobOptions): Promise<GenerationJobResult> {
+}: WaitForGenerationJobOptions): Promise<JobPollResult> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const response = await fetchFn(`${apiBaseUrl}/api/jobs/${jobId}`);
     if (!response.ok) {
@@ -61,7 +50,7 @@ export async function waitForGenerationJob({
   throw new Error("生成任务超时");
 }
 
-function normalizeJobResult(job: GenerationJob): GenerationJobResult {
+function normalizeJobResult(job: GenerationJob): JobPollResult {
   return {
     id: job.id,
     design_id: job.design_id,
