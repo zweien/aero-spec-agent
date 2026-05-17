@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pytest
@@ -218,3 +219,35 @@ def test_list_versions_includes_legacy_dirs_without_version_status(tmp_path: Pat
     assert data["status"] == "pending"
     assert data["job_id"] is None
     assert store.version_status.read("demo", version_no) == "pending"
+
+
+def test_concurrent_create_version_dir_produces_unique_numbers(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    num_versions = 20
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(store.create_version_dir, "demo") for _ in range(num_versions)]
+        results = [f.result() for f in as_completed(futures)]
+
+    version_nos = sorted(vno for vno, _ in results)
+    assert version_nos == list(range(1, num_versions + 1))
+
+    for vno, path in results:
+        assert (path / "version_status.json").exists()
+        data = json.loads((path / "version_status.json").read_text())
+        assert data["status"] == "pending"
+
+
+def test_concurrent_enqueue_generate_produces_unique_versions(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    runner = JobRunner(store=store, backend=FakeCadBackend())
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+    num_jobs = 10
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(runner.enqueue_generate, "demo", spec) for _ in range(num_jobs)]
+        jobs = [f.result() for f in as_completed(futures)]
+
+    version_nos = sorted(job.version_no for job in jobs)
+    assert version_nos == list(range(1, num_jobs + 1))
+    assert len(set(job.id for job in jobs)) == num_jobs
