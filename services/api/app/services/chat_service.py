@@ -245,6 +245,7 @@ class ChatService:
         conversation_id: str,
         message: str,
         selected_refs: list[str] | None = None,
+        background_tasks: Any | None = None,
     ) -> AsyncIterator[str]:
         state = self.get_or_create_state(conversation_id)
         if selected_refs is not None:
@@ -338,6 +339,18 @@ class ChatService:
             tool_call_id = tc_data["id"]
 
             yield _sse_event("tool_call", {"name": tool_name, "arguments": tool_args_str})
+            logger.debug(
+                "chat shadow_intent_actual_tool=%s",
+                json.dumps(
+                    {
+                        "message": message,
+                        "selected_refs": state.selected_refs,
+                        "shadow_intent": shadow_intent,
+                        "actual_tool": tool_name,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
 
             try:
                 tool_args = json.loads(tool_args_str)
@@ -347,13 +360,28 @@ class ChatService:
                 continue
 
             if tool_name == "generate_design":
-                async for event in self._handle_generate_design(state, tool_args, tool_call_id):
+                async for event in self._handle_generate_design(
+                    state,
+                    tool_args,
+                    tool_call_id,
+                    background_tasks=background_tasks,
+                ):
                     yield event
             elif tool_name == "modify_design":
-                async for event in self._handle_modify_design(state, tool_args, tool_call_id):
+                async for event in self._handle_modify_design(
+                    state,
+                    tool_args,
+                    tool_call_id,
+                    background_tasks=background_tasks,
+                ):
                     yield event
             elif tool_name == "modify_selected_part":
-                async for event in self._handle_modify_selected_part(state, tool_args, tool_call_id):
+                async for event in self._handle_modify_selected_part(
+                    state,
+                    tool_args,
+                    tool_call_id,
+                    background_tasks=background_tasks,
+                ):
                     yield event
             else:
                 state.messages.append({
@@ -386,7 +414,11 @@ class ChatService:
         self._save_state(state)
 
     async def _handle_generate_design(
-        self, state: ConversationState, args: dict[str, Any], tool_call_id: str,
+        self,
+        state: ConversationState,
+        args: dict[str, Any],
+        tool_call_id: str,
+        background_tasks: Any | None = None,
     ) -> AsyncIterator[str]:
         try:
             spec = _flat_args_to_spec(args)
@@ -408,18 +440,18 @@ class ChatService:
             })
             return
 
-        yield _sse_event("generation_started", {"design_id": state.design_id})
-        job = self._job_runner.generate(design_id=state.design_id, spec=spec)
-        state.current_spec = spec
-
-        result = {
-            "status": job.status,
-            "version_no": job.version_no,
-            "design_id": job.design_id,
-            "files": list(job.files.keys()),
-            "error_message": job.error_message,
-        }
-        yield _sse_event("generation_complete", result)
+        if background_tasks is not None and hasattr(self._job_runner, "enqueue_generate"):
+            job = self._job_runner.enqueue_generate(design_id=state.design_id, spec=spec)
+            background_tasks.add_task(self._job_runner.run_queued_job, job.id, spec)
+            state.current_spec = spec
+            result = _job_result(job)
+            yield _sse_event("generation_started", result)
+        else:
+            yield _sse_event("generation_started", {"design_id": state.design_id})
+            job = self._job_runner.generate(design_id=state.design_id, spec=spec)
+            state.current_spec = spec
+            result = _job_result(job)
+            yield _sse_event("generation_complete", result)
 
         state.messages.append({
             "role": "tool", "tool_call_id": tool_call_id,
@@ -427,7 +459,11 @@ class ChatService:
         })
 
     async def _handle_modify_design(
-        self, state: ConversationState, args: dict[str, Any], tool_call_id: str,
+        self,
+        state: ConversationState,
+        args: dict[str, Any],
+        tool_call_id: str,
+        background_tasks: Any | None = None,
     ) -> AsyncIterator[str]:
         if state.current_spec is None:
             error_msg = "没有当前设计，请先使用 generate_design 创建设计"
@@ -519,18 +555,18 @@ class ChatService:
             })
             return
 
-        yield _sse_event("generation_started", {"design_id": state.design_id})
-        job = self._job_runner.generate(design_id=state.design_id, spec=patched)
-        state.current_spec = patched
-
-        result = {
-            "status": job.status,
-            "version_no": job.version_no,
-            "design_id": job.design_id,
-            "files": list(job.files.keys()),
-            "error_message": job.error_message,
-        }
-        yield _sse_event("generation_complete", result)
+        if background_tasks is not None and hasattr(self._job_runner, "enqueue_generate"):
+            job = self._job_runner.enqueue_generate(design_id=state.design_id, spec=patched)
+            background_tasks.add_task(self._job_runner.run_queued_job, job.id, patched)
+            state.current_spec = patched
+            result = _job_result(job)
+            yield _sse_event("generation_started", result)
+        else:
+            yield _sse_event("generation_started", {"design_id": state.design_id})
+            job = self._job_runner.generate(design_id=state.design_id, spec=patched)
+            state.current_spec = patched
+            result = _job_result(job)
+            yield _sse_event("generation_complete", result)
 
         state.messages.append({
             "role": "tool", "tool_call_id": tool_call_id,
@@ -538,7 +574,11 @@ class ChatService:
         })
 
     async def _handle_modify_selected_part(
-        self, state: ConversationState, args: dict[str, Any], tool_call_id: str,
+        self,
+        state: ConversationState,
+        args: dict[str, Any],
+        tool_call_id: str,
+        background_tasks: Any | None = None,
     ) -> AsyncIterator[str]:
         if state.current_spec is None:
             error_msg = "没有当前设计，请先使用 generate_design 创建设计"
@@ -589,21 +629,34 @@ class ChatService:
             })
             return
 
-        yield _sse_event("generation_started", {"design_id": state.design_id})
-        job = self._job_runner.generate(design_id=state.design_id, spec=patched)
-        state.current_spec = patched
-
-        result = {
-            "status": job.status,
-            "version_no": job.version_no,
-            "design_id": job.design_id,
-            "files": list(job.files.keys()),
-            "error_message": job.error_message,
-            "message": f"已基于选中对象 {part_ref} 完成修改。",
-        }
-        yield _sse_event("generation_complete", result)
+        if background_tasks is not None and hasattr(self._job_runner, "enqueue_generate"):
+            job = self._job_runner.enqueue_generate(design_id=state.design_id, spec=patched)
+            background_tasks.add_task(self._job_runner.run_queued_job, job.id, patched)
+            state.current_spec = patched
+            result = _job_result(job, message=f"已基于选中对象 {part_ref} 完成修改。")
+            yield _sse_event("generation_started", result)
+        else:
+            yield _sse_event("generation_started", {"design_id": state.design_id})
+            job = self._job_runner.generate(design_id=state.design_id, spec=patched)
+            state.current_spec = patched
+            result = _job_result(job, message=f"已基于选中对象 {part_ref} 完成修改。")
+            yield _sse_event("generation_complete", result)
 
         state.messages.append({
             "role": "tool", "tool_call_id": tool_call_id,
             "content": json.dumps(result, ensure_ascii=False),
         })
+
+
+def _job_result(job: Any, message: str | None = None) -> dict[str, Any]:
+    result = {
+        "job_id": job.id,
+        "status": job.status,
+        "version_no": job.version_no,
+        "design_id": job.design_id,
+        "files": list(job.files.keys()),
+        "error_message": job.error_message,
+    }
+    if message:
+        result["message"] = message
+    return result

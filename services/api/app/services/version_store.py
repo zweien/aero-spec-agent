@@ -69,7 +69,7 @@ class VersionStore:
             return []
         versions = []
         for path in sorted(versions_root.iterdir(), key=lambda p: int(p.name) if p.name.isdigit() else 0):
-            if path.is_dir() and path.name.isdigit():
+            if path.is_dir() and path.name.isdigit() and (path / "validation_report.json").exists():
                 versions.append({"version_no": int(path.name)})
         return versions
 

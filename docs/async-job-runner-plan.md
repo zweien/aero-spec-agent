@@ -16,14 +16,16 @@ This is simple and keeps tests deterministic, but OpenVSP generation can block r
 
 ## Phase 1: In-process BackgroundTasks
 
+Status: implemented for the HTTP generation endpoints and chat-triggered generation. The synchronous `JobRunner.generate(...)` path remains available for unit tests and narrow internal callers.
+
 Use FastAPI `BackgroundTasks` as the first migration step.
 
 1. Add a `JobRecord` state transition model: `queued`, `running`, `succeeded`, `failed`.
 2. Create a job before generation starts and return `202 Accepted` with `job_id`, `design_id`, and the intended version number.
-3. Run the existing `JobRunner.generate(...)` in a background task.
-4. Persist job status and error messages in a small JSON record next to the design or in a dedicated `storage/jobs/` directory.
+3. Run the existing CAD generation boundary in a background task.
+4. Persist job status and error messages in `storage/jobs/{job_id}.json`.
 5. Add `GET /api/jobs/{job_id}` for polling.
-6. Keep the current synchronous path available for tests until the frontend polling path is fully covered.
+6. Keep the current synchronous path available for tests and direct unit-level generation.
 
 Failure rule: a failed background job may leave diagnostic files, but it must not make the failed version appear as the current usable version.
 

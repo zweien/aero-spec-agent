@@ -56,3 +56,55 @@ def test_job_runner_creates_incrementing_versions(tmp_path: Path):
     assert second_job.version_no == 2
     assert (tmp_path / "storage/designs/demo/versions/1/aircraft_spec.yaml").exists()
     assert (tmp_path / "storage/designs/demo/versions/2/aircraft_spec.yaml").exists()
+
+
+def test_job_runner_enqueue_persists_queued_job(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    runner = JobRunner(store=store, backend=FakeCadBackend())
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+
+    job = runner.enqueue_generate(design_id="demo", spec=spec)
+
+    assert job.status == "queued"
+    assert job.progress == 0
+    job_path = tmp_path / "storage/jobs" / f"{job.id}.json"
+    assert job_path.exists()
+
+    reloaded = JobRunner(store=store, backend=FakeCadBackend()).get(job.id)
+    assert reloaded is not None
+    assert reloaded.status == "queued"
+    assert reloaded.version_no == job.version_no
+
+
+def test_job_runner_run_queued_job_succeeds_and_persists(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    runner = JobRunner(store=store, backend=FakeCadBackend())
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+    job = runner.enqueue_generate(design_id="demo", spec=spec)
+
+    runner.run_queued_job(job.id, spec)
+
+    finished = JobRunner(store=store, backend=FakeCadBackend()).get(job.id)
+    assert finished is not None
+    assert finished.status == "succeeded"
+    assert finished.progress == 100
+    assert (tmp_path / "storage/designs/demo/versions/1/validation_report.json").exists()
+
+
+def test_failed_async_job_is_not_listed_as_usable_version(tmp_path: Path):
+    class FailingBackend(FakeCadBackend):
+        def generate(self, spec, output_dir):
+            raise RuntimeError("cad failed")
+
+    store = VersionStore(root=tmp_path / "storage")
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+    JobRunner(store=store, backend=FakeCadBackend()).generate(design_id="demo", spec=spec)
+    runner = JobRunner(store=store, backend=FailingBackend())
+    job = runner.enqueue_generate(design_id="demo", spec=spec)
+
+    runner.run_queued_job(job.id, spec)
+
+    failed = runner.get(job.id)
+    assert failed is not None
+    assert failed.status == "failed"
+    assert store.list_versions("demo") == [{"version_no": 1}]

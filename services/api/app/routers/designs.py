@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
@@ -18,13 +18,18 @@ router = APIRouter(prefix="/api", tags=["designs"])
 runner = JobRunner(store=VersionStore())
 
 
-@router.post("/designs/{design_id}/generate")
-async def generate_design(design_id: str, request: Request):
+@router.post("/designs/{design_id}/generate", status_code=202)
+async def generate_design(
+    design_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
     raw_body = await request.body()
     try:
         data = yaml.safe_load(raw_body.decode("utf-8"))
         spec = AircraftSpec.model_validate(data)
-        job = runner.generate(design_id=design_id, spec=spec)
+        job = runner.enqueue_generate(design_id=design_id, spec=spec)
+        background_tasks.add_task(runner.run_queued_job, job.id, spec)
     except (UnicodeDecodeError, yaml.YAMLError, ValidationError) as exc:
         raise HTTPException(status_code=400, detail="invalid aircraft spec") from exc
     except ValueError as exc:
@@ -83,7 +88,12 @@ def _sync_chat_spec(design_id: str, spec: AircraftSpec) -> None:
 
 
 @router.patch("/designs/{design_id}/spec")
-async def patch_spec(design_id: str, request: Request):
+async def patch_spec(
+    design_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    response: Response,
+):
     raw = await request.body()
     try:
         body = json.loads(raw.decode("utf-8"))
@@ -110,8 +120,10 @@ async def patch_spec(design_id: str, request: Request):
     except (KeyError, ValidationError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    job = runner.generate(design_id=design_id, spec=patched)
+    job = runner.enqueue_generate(design_id=design_id, spec=patched)
+    background_tasks.add_task(runner.run_queued_job, job.id, patched)
     _sync_chat_spec(design_id, patched)
+    response.status_code = 202
     return job.__dict__
 
 

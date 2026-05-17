@@ -6,8 +6,11 @@ import remarkGfm from "remark-gfm";
 
 import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
 import { createChatSseParser } from "./chatSse";
+import { waitForGenerationJob } from "./jobPolling";
 
 export type GenerationCompleteData = {
+  job_id?: string;
+  id?: string;
   status?: string;
   version_no?: number;
   design_id?: string;
@@ -226,6 +229,27 @@ export function ChatPanel({
     [onGenerationComplete],
   );
 
+  const failLatestTool = useCallback(
+    (messageId: string, errorMsg: string) => {
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== messageId) return msg;
+          const parts = [...msg.parts];
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const part = parts[i];
+            if (part.type === "tool" && part.state === "running") {
+              parts[i] = { ...part, state: "done" };
+              break;
+            }
+          }
+          return { ...msg, parts };
+        }),
+      );
+      appendMessage("error", errorMsg);
+    },
+    [appendMessage],
+  );
+
   const sendChatMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -284,8 +308,39 @@ export function ChatPanel({
               appendToolCall(assistantId, String(event.data.name ?? ""), args);
             } else if (event.type === "generation_started") {
               appendAssistantText(assistantId, "\n\n正在生成 CAD 模型...\n");
+              const jobId = String(event.data.job_id ?? event.data.id ?? "");
+              if (jobId) {
+                void waitForGenerationJob({ apiBaseUrl, jobId })
+                  .then((job) => {
+                    completeLatestTool(assistantId, {
+                      ...(event.data as GenerationCompleteData),
+                      ...job,
+                      job_id: job.id,
+                    });
+                  })
+                  .catch((exc) => {
+                    const message = exc instanceof Error ? exc.message : "生成任务失败";
+                    failLatestTool(assistantId, message);
+                  });
+              }
             } else if (event.type === "generation_complete") {
-              completeLatestTool(assistantId, event.data as GenerationCompleteData);
+              const jobId = String(event.data.job_id ?? event.data.id ?? "");
+              if (jobId && event.data.status !== "ready" && event.data.status !== "succeeded") {
+                void waitForGenerationJob({ apiBaseUrl, jobId })
+                  .then((job) => {
+                    completeLatestTool(assistantId, {
+                      ...(event.data as GenerationCompleteData),
+                      ...job,
+                      job_id: job.id,
+                    });
+                  })
+                  .catch((exc) => {
+                    const message = exc instanceof Error ? exc.message : "生成任务失败";
+                    failLatestTool(assistantId, message);
+                  });
+              } else {
+                completeLatestTool(assistantId, event.data as GenerationCompleteData);
+              }
             } else if (event.type === "error") {
               appendMessage("error", String(event.data.content ?? "未知错误"));
             }
@@ -304,6 +359,7 @@ export function ChatPanel({
       appendMessage,
       appendToolCall,
       completeLatestTool,
+      failLatestTool,
       conversationId,
       selectedRefs,
       status,

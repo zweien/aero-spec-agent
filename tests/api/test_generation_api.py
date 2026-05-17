@@ -20,21 +20,31 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return TestClient(app)
 
 
-def test_generate_endpoint_returns_ready_job(client: TestClient):
+def _wait_for_job(client: TestClient, job_id: str) -> dict[str, object]:
+    response = client.get(f"/api/jobs/{job_id}")
+    assert response.status_code == 200
+    return response.json()
+
+
+def test_generate_endpoint_returns_accepted_job(client: TestClient):
     spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
 
     response = client.post("/api/designs/demo/generate", content=spec_text)
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
-    assert data["status"] == "ready"
+    assert data["status"] == "queued"
     assert data["version_no"] >= 1
-    assert data["progress"] == 100
+    assert data["progress"] == 0
+    finished = _wait_for_job(client, data["id"])
+    assert finished["status"] == "succeeded"
+    assert finished["progress"] == 100
 
 
 def test_version_endpoint_returns_files(client: TestClient):
     spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
     job = client.post("/api/designs/demo-api/generate", content=spec_text).json()
+    _wait_for_job(client, job["id"])
 
     response = client.get(f"/api/designs/demo-api/versions/{job['version_no']}")
 
@@ -46,6 +56,7 @@ def test_version_endpoint_returns_files(client: TestClient):
 def test_version_file_endpoint_returns_generated_artifact(client: TestClient):
     spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
     job = client.post("/api/designs/demo-file/generate", content=spec_text).json()
+    _wait_for_job(client, job["id"])
 
     response = client.get(f"/api/designs/demo-file/versions/{job['version_no']}/files/aircraft.vsp3")
 
@@ -62,6 +73,7 @@ def test_version_file_endpoint_rejects_path_traversal(client: TestClient):
 def test_version_file_endpoint_returns_404_for_missing_file(client: TestClient):
     spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
     job = client.post("/api/designs/demo-missing-file/generate", content=spec_text).json()
+    _wait_for_job(client, job["id"])
 
     response = client.get(f"/api/designs/demo-missing-file/versions/{job['version_no']}/files/missing.glb")
 

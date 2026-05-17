@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -19,12 +19,13 @@ def set_job_runner(runner) -> None:
 
 
 @router.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, background_tasks: BackgroundTasks):
     return StreamingResponse(
         chat_service.chat_stream(
             conversation_id=req.conversation_id,
             message=req.message,
             selected_refs=req.selected_refs,
+            background_tasks=background_tasks,
         ),
         media_type="text/event-stream",
     )

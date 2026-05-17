@@ -103,7 +103,7 @@ def _apply_engine_move(
     value: Any,
 ) -> None:
     if part_ref not in ("part:left_engine", "part:right_engine"):
-        raise SelectedPartPatchError(f"操作 {operation} 仅适用于发动机部件")
+        raise SelectedPartPatchError(f"部件 {part_ref} 不支持操作 {operation}，该操作仅适用于发动机部件")
 
     offset_field, sign = ENGINE_MOVE_MAP[operation]
     offset_path = f"engine.{offset_field}"

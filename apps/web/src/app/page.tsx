@@ -9,6 +9,7 @@ import {
 } from "@/components/cad-viewer/cadPreviewSource";
 import type { AircraftPreviewSpec } from "@/components/cad-viewer/previewGeometry";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { waitForGenerationJob } from "@/components/chat/jobPolling";
 import { ParameterPanel } from "@/components/parameter-panel/ParameterPanel";
 import type { AircraftSpecData } from "@/components/parameter-panel/ParameterPanel";
 import { SettingsPanel } from "@/components/settings-panel/SettingsPanel";
@@ -238,28 +239,45 @@ export default function Home() {
       }
 
       const job = (await response.json()) as {
+        id?: string;
+        job_id?: string;
         design_id?: string;
         error_message?: string;
         version_no?: number;
         status?: string;
         files?: Record<string, string>;
       };
-      if (job.status !== "ready" || !job.version_no) {
+
+      const jobId = job.job_id ?? job.id;
+      const completedJob =
+        jobId && job.status !== "ready" && job.status !== "succeeded"
+          ? await waitForGenerationJob({ apiBaseUrl: API_BASE_URL, jobId })
+          : {
+              id: jobId ?? "",
+              status: job.status,
+              design_id: job.design_id,
+              version_no: job.version_no,
+              files: job.files ? Object.keys(job.files) : undefined,
+            };
+
+      if (
+        (completedJob.status !== "ready" && completedJob.status !== "succeeded") ||
+        !completedJob.version_no
+      ) {
         action.fail(`参数修改失败：${job.error_message ?? "生成任务未完成"}`);
         return;
       }
 
-      const updatedDesignId = job.design_id ?? activeDesignId;
+      const updatedDesignId = completedJob.design_id ?? activeDesignId;
       setDesignId(updatedDesignId);
-      await loadVersion(updatedDesignId, job.version_no);
+      await loadVersion(updatedDesignId, completedJob.version_no);
       await fetchVersionList(updatedDesignId);
 
-      const fileNames = job.files ? Object.keys(job.files).map((k) => `${k}`) : [];
       action.complete({
-        status: job.status,
+        status: completedJob.status,
         design_id: updatedDesignId,
-        version_no: job.version_no,
-        files: fileNames,
+        version_no: completedJob.version_no,
+        files: completedJob.files,
       });
       setPendingChanges(new Map());
     } catch (exc) {

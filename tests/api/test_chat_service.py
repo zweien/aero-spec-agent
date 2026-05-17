@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -167,6 +168,85 @@ async def test_chat_stream_logs_shadow_intent_for_selected_part_message(
 
     assert events[0].startswith("event: error")
     assert "shadow_intent=modify_selected_part" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_chat_stream_logs_shadow_intent_with_actual_tool(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    state.selected_refs = ["part:right_engine"]
+
+    class AsyncChunks:
+        def __init__(self, chunks):
+            self._chunks = chunks
+
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            for chunk in self._chunks:
+                yield chunk
+
+    class FakeCompletions:
+        async def create(self, *, tools=None, **kwargs):
+            if tools:
+                return AsyncChunks([
+                    SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                delta=SimpleNamespace(
+                                    content=None,
+                                    tool_calls=[
+                                        SimpleNamespace(
+                                            index=0,
+                                            id="tc-log",
+                                            function=SimpleNamespace(
+                                                name="modify_selected_part",
+                                                arguments=json.dumps({
+                                                    "part_ref": "part:right_engine",
+                                                    "operation": "move_outboard",
+                                                    "value": 0.5,
+                                                }),
+                                            ),
+                                        )
+                                    ],
+                                ),
+                                finish_reason="tool_calls",
+                            )
+                        ]
+                    )
+                ])
+            return AsyncChunks([
+                SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            delta=SimpleNamespace(content="完成"),
+                            finish_reason="stop",
+                        )
+                    ]
+                )
+            ])
+
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    monkeypatch.setattr(svc, "_get_client", lambda: fake_client)
+
+    with caplog.at_level(logging.DEBUG, logger="services.api.app.services.chat_service"):
+        events = [
+            event
+            async for event in svc.chat_stream(
+                conversation_id="test-mod",
+                message="把这个向外移动0.5米",
+                selected_refs=["part:right_engine"],
+            )
+        ]
+
+    assert any(event.startswith("event: generation_complete") for event in events)
+    assert '"shadow_intent": "modify_selected_part"' in caplog.text
+    assert '"actual_tool": "modify_selected_part"' in caplog.text
 
 
 # ---------------------------------------------------------------------------

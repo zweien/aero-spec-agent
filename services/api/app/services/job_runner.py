@@ -1,5 +1,7 @@
+import json
 import logging
-from dataclasses import dataclass, field
+import threading
+from dataclasses import asdict, dataclass, field
 from uuid import uuid4
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
@@ -28,6 +30,7 @@ class JobRunner:
         self.store = store
         self.backend = backend if backend is not None else get_cad_backend()
         self.jobs: dict[str, JobRecord] = {}
+        self._lock = threading.RLock()
 
     def generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
         job_id = str(uuid4())
@@ -40,22 +43,94 @@ class JobRunner:
             progress=10,
             current_step="writing_spec",
         )
-        self.jobs[job_id] = job
+        self._remember(job)
+        self._run_generation(job, spec, output_dir=output_dir, success_status="ready")
+        return job
+
+    def enqueue_generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
+        job_id = str(uuid4())
+        version_no, _ = self.store.create_version_dir(design_id)
+        job = JobRecord(
+            id=job_id,
+            design_id=design_id,
+            version_no=version_no,
+            status="queued",
+            progress=0,
+            current_step="queued",
+        )
+        self._remember(job)
+        self._save_job(job)
+        return job
+
+    def run_queued_job(self, job_id: str, spec: AircraftSpec) -> JobRecord:
+        job = self.get(job_id)
+        if job is None:
+            raise ValueError(f"job not found: {job_id}")
+        output_dir = self.store.version_dir(job.design_id, job.version_no)
+        self._run_generation(job, spec, output_dir=output_dir, success_status="succeeded")
+        return job
+
+    def _run_generation(
+        self,
+        job: JobRecord,
+        spec: AircraftSpec,
+        *,
+        output_dir,
+        success_status: str,
+    ) -> None:
+        job.status = "running"
+        job.progress = 10
+        job.current_step = "writing_spec"
+        self._save_job(job)
         try:
-            self.store.write_spec(design_id, version_no, spec)
+            self.store.write_spec(job.design_id, job.version_no, spec)
             job.current_step = "generating_cad"
             job.progress = 50
+            self._save_job(job)
             result = generate_aircraft(spec=spec, output_dir=output_dir, backend=self.backend)
-            job.status = "ready"
+            job.status = success_status
             job.progress = 100
-            job.current_step = "ready"
+            job.current_step = success_status
             job.files = {key: str(path) for key, path in result.files.items()}
         except Exception as exc:
-            logger.exception("Generation job failed for design_id=%s version_no=%s", design_id, version_no)
+            logger.exception(
+                "Generation job failed for design_id=%s version_no=%s",
+                job.design_id,
+                job.version_no,
+            )
             job.status = "failed"
             job.current_step = "failed"
             job.error_message = str(exc)
-        return job
+        finally:
+            self._save_job(job)
 
     def get(self, job_id: str) -> JobRecord | None:
-        return self.jobs.get(job_id)
+        with self._lock:
+            if job_id in self.jobs:
+                return self.jobs[job_id]
+            path = self._job_path(job_id)
+            if not path.exists():
+                return None
+            data = json.loads(path.read_text(encoding="utf-8"))
+            job = JobRecord(**data)
+            self.jobs[job_id] = job
+            return job
+
+    def _remember(self, job: JobRecord) -> None:
+        with self._lock:
+            self.jobs[job.id] = job
+
+    def _jobs_root(self):
+        return self.store.root / "jobs"
+
+    def _job_path(self, job_id: str):
+        return self._jobs_root() / f"{job_id}.json"
+
+    def _save_job(self, job: JobRecord) -> None:
+        with self._lock:
+            self.jobs[job.id] = job
+            self._jobs_root().mkdir(parents=True, exist_ok=True)
+            self._job_path(job.id).write_text(
+                json.dumps(asdict(job), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
