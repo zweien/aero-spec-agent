@@ -9,7 +9,7 @@ import {
 } from "@/components/cad-viewer/cadPreviewSource";
 import type { AircraftPreviewSpec } from "@/components/cad-viewer/previewGeometry";
 import { ChatPanel } from "@/components/chat/ChatPanel";
-import { waitForGenerationJob } from "@/components/chat/jobPolling";
+import { pollJobToCompletion } from "@/lib/generationFlow";
 import { ParameterPanel } from "@/components/parameter-panel/ParameterPanel";
 import type { AircraftSpecData } from "@/components/parameter-panel/ParameterPanel";
 import { SettingsPanel } from "@/components/settings-panel/SettingsPanel";
@@ -248,23 +248,21 @@ export default function Home() {
         files?: Record<string, string>;
       };
 
-      const jobId = job.job_id ?? job.id;
-      const completedJob =
-        jobId && job.status !== "succeeded"
-          ? await waitForGenerationJob({ apiBaseUrl: API_BASE_URL, jobId })
-          : {
-              id: jobId ?? "",
-              status: job.status,
-              design_id: job.design_id,
-              version_no: job.version_no,
-              files: job.files ? Object.keys(job.files) : undefined,
-            };
+      const jobId = job.job_id ?? job.id ?? "";
+      const completedJob = await pollJobToCompletion({
+        apiBaseUrl: API_BASE_URL,
+        jobId,
+        initialStatus: job.status,
+        design_id: job.design_id,
+        version_no: job.version_no,
+        files: job.files,
+      });
 
       if (
         completedJob.status !== "succeeded" ||
         !completedJob.version_no
       ) {
-        action.fail(`参数修改失败：${job.error_message ?? "生成任务未完成"}`);
+        action.fail(`参数修改失败：${completedJob.error_message ?? job.error_message ?? "生成任务未完成"}`);
         return;
       }
 
