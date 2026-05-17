@@ -2,8 +2,7 @@ export type GenerationJobStatus =
   | "queued"
   | "running"
   | "succeeded"
-  | "failed"
-  | "ready";
+  | "failed";
 
 export type GenerationJob = {
   id: string;
@@ -50,7 +49,7 @@ export async function waitForGenerationJob({
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "生成任务失败");
     }
-    if (job.status === "succeeded" || job.status === "ready") {
+    if (job.status === "succeeded") {
       return normalizeJobResult(job);
     }
 
