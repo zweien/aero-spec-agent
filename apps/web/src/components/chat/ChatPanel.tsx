@@ -325,7 +325,7 @@ export function ChatPanel({
               }
             } else if (event.type === "generation_complete") {
               const jobId = String(event.data.job_id ?? event.data.id ?? "");
-              if (jobId && event.data.status !== "ready" && event.data.status !== "succeeded") {
+              if (jobId && event.data.status !== "succeeded") {
                 void waitForGenerationJob({ apiBaseUrl, jobId })
                   .then((job) => {
                     completeLatestTool(assistantId, {

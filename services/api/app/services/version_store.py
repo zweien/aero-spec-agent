@@ -100,8 +100,6 @@ class VersionStore:
                 data = json.loads(status_path.read_text(encoding="utf-8"))
                 if data.get("status") != "succeeded":
                     continue
-            elif not (path / "validation_report.json").exists():
-                continue
             versions.append({"version_no": int(path.name)})
         return versions
 

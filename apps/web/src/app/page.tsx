@@ -250,7 +250,7 @@ export default function Home() {
 
       const jobId = job.job_id ?? job.id;
       const completedJob =
-        jobId && job.status !== "ready" && job.status !== "succeeded"
+        jobId && job.status !== "succeeded"
           ? await waitForGenerationJob({ apiBaseUrl: API_BASE_URL, jobId })
           : {
               id: jobId ?? "",
@@ -261,7 +261,7 @@ export default function Home() {
             };
 
       if (
-        (completedJob.status !== "ready" && completedJob.status !== "succeeded") ||
+        completedJob.status !== "succeeded" ||
         !completedJob.version_no
       ) {
         action.fail(`参数修改失败：${job.error_message ?? "生成任务未完成"}`);

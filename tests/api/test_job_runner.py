@@ -193,7 +193,21 @@ def test_list_versions_excludes_failed_and_pending(tmp_path: Path):
     assert version_nos == [1, 3]
 
 
-def test_create_version_dir_writes_pending_status(tmp_path: Path):
+def test_list_versions_includes_legacy_dirs_without_version_status(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    versions_root = tmp_path / "storage/designs/demo/versions"
+    versions_root.mkdir(parents=True)
+
+    # Legacy version dir: no version_status.json, no validation_report.json
+    (versions_root / "1").mkdir()
+    # Legacy version dir: no version_status.json, has validation_report.json
+    v2 = versions_root / "2"
+    v2.mkdir()
+    (v2 / "validation_report.json").write_text("{}", encoding="utf-8")
+
+    versions = store.list_versions("demo")
+    version_nos = [v["version_no"] for v in versions]
+    assert version_nos == [1, 2]
     store = VersionStore(root=tmp_path / "storage")
 
     version_no, path = store.create_version_dir("demo")
