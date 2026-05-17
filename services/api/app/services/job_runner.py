@@ -118,8 +118,13 @@ class JobRunner:
                 from datetime import datetime as _dt, timezone as _tz
                 created = _dt.fromisoformat(job.created_at)
                 job.duration = (_dt.now(_tz.utc) - created).total_seconds()
-            self.store.write_version_status(
-                job.design_id, job.version_no, "succeeded", job_id=job.id
+            self.store.version_status.write(
+                job.design_id, job.version_no,
+                status="succeeded",
+                job_id=job.id,
+                current_step="succeeded",
+                files=job.files,
+                duration_ms=job.duration * 1000 if job.duration else None,
             )
         except Exception as exc:
             logger.exception(
@@ -136,8 +141,13 @@ class JobRunner:
                 from datetime import datetime as _dt, timezone as _tz
                 created = _dt.fromisoformat(job.created_at)
                 job.duration = (_dt.now(_tz.utc) - created).total_seconds()
-            self.store.write_version_status(
-                job.design_id, job.version_no, "failed", job_id=job.id
+            self.store.version_status.write(
+                job.design_id, job.version_no,
+                status="failed",
+                job_id=job.id,
+                current_step="failed",
+                error_message=job.error_message,
+                duration_ms=job.duration * 1000 if job.duration else None,
             )
         finally:
             self._save_job(job)

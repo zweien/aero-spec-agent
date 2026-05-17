@@ -146,7 +146,7 @@ def test_successful_job_writes_succeeded_version_status(tmp_path: Path):
     data = json.loads(status_path.read_text())
     assert data["status"] == "succeeded"
     assert data["job_id"] == job.id
-    assert store.read_version_status("demo", 1) == "succeeded"
+    assert store.version_status.read("demo", 1) == "succeeded"
 
 
 def test_failed_job_writes_failed_version_status(tmp_path: Path):
@@ -166,7 +166,7 @@ def test_failed_job_writes_failed_version_status(tmp_path: Path):
     assert status_path.exists()
     data = json.loads(status_path.read_text())
     assert data["status"] == "failed"
-    assert store.read_version_status("demo", 2) == "failed"
+    assert store.version_status.read("demo", 2) == "failed"
 
 
 def test_list_versions_excludes_failed_and_pending(tmp_path: Path):
@@ -217,4 +217,4 @@ def test_list_versions_includes_legacy_dirs_without_version_status(tmp_path: Pat
     data = json.loads(status_path.read_text())
     assert data["status"] == "pending"
     assert data["job_id"] is None
-    assert store.read_version_status("demo", version_no) == "pending"
+    assert store.version_status.read("demo", version_no) == "pending"
