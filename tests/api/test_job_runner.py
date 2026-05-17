@@ -8,6 +8,16 @@ from services.api.app.services.version_store import VersionStore
 from services.workers.cad_worker.openvsp_generator.backend import FakeCadBackend
 
 
+def test_sync_generate_returns_succeeded_not_ready(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    runner = JobRunner(store=store, backend=FakeCadBackend())
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+
+    job = runner.generate(design_id="demo", spec=spec)
+
+    assert job.status == "succeeded"
+
+
 def test_job_runner_creates_version_files(tmp_path: Path):
     store = VersionStore(root=tmp_path / "storage")
     runner = JobRunner(store=store, backend=FakeCadBackend())
@@ -15,7 +25,7 @@ def test_job_runner_creates_version_files(tmp_path: Path):
 
     job = runner.generate(design_id="demo", spec=spec)
 
-    assert job.status == "ready"
+    assert job.status == "succeeded"
     assert job.version_no == 1
     assert (tmp_path / "storage/designs/demo/versions/1/aircraft_spec.yaml").exists()
     assert (tmp_path / "storage/designs/demo/versions/1/validation_report.json").exists()
@@ -50,9 +60,9 @@ def test_job_runner_creates_incrementing_versions(tmp_path: Path):
     first_job = runner.generate(design_id="demo", spec=spec)
     second_job = runner.generate(design_id="demo", spec=spec)
 
-    assert first_job.status == "ready"
+    assert first_job.status == "succeeded"
     assert first_job.version_no == 1
-    assert second_job.status == "ready"
+    assert second_job.status == "succeeded"
     assert second_job.version_no == 2
     assert (tmp_path / "storage/designs/demo/versions/1/aircraft_spec.yaml").exists()
     assert (tmp_path / "storage/designs/demo/versions/2/aircraft_spec.yaml").exists()

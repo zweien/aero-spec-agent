@@ -43,6 +43,7 @@ class JobRunner:
 
     def generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
         job_id = str(uuid4())
+        now = _utcnow()
         version_no, output_dir = self.store.create_version_dir(design_id)
         job = JobRecord(
             id=job_id,
@@ -51,9 +52,12 @@ class JobRunner:
             status="running",
             progress=10,
             current_step="writing_spec",
+            created_at=now,
+            updated_at=now,
+            version_status="pending",
         )
         self._remember(job)
-        self._run_generation(job, spec, output_dir=output_dir, success_status="ready")
+        self._run_generation(job, spec, output_dir=output_dir, success_status="succeeded")
         return job
 
     def enqueue_generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
