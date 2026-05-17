@@ -93,8 +93,16 @@ class VersionStore:
             return []
         versions = []
         for path in sorted(versions_root.iterdir(), key=lambda p: int(p.name) if p.name.isdigit() else 0):
-            if path.is_dir() and path.name.isdigit() and (path / "validation_report.json").exists():
-                versions.append({"version_no": int(path.name)})
+            if not (path.is_dir() and path.name.isdigit()):
+                continue
+            status_path = path / "version_status.json"
+            if status_path.exists():
+                data = json.loads(status_path.read_text(encoding="utf-8"))
+                if data.get("status") != "succeeded":
+                    continue
+            elif not (path / "validation_report.json").exists():
+                continue
+            versions.append({"version_no": int(path.name)})
         return versions
 
     def version_file(self, design_id: str, version_no: int, filename: str) -> Path:

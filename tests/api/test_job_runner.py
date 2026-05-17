@@ -169,6 +169,30 @@ def test_failed_job_writes_failed_version_status(tmp_path: Path):
     assert store.read_version_status("demo", 2) == "failed"
 
 
+def test_list_versions_excludes_failed_and_pending(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+
+    # Version 1: succeeded
+    JobRunner(store=store, backend=FakeCadBackend()).generate(design_id="demo", spec=spec)
+
+    # Version 2: failed
+    class FailingBackend(FakeCadBackend):
+        def generate(self, spec, output_dir):
+            raise RuntimeError("fail")
+
+    runner_fail = JobRunner(store=store, backend=FailingBackend())
+    job = runner_fail.enqueue_generate(design_id="demo", spec=spec)
+    runner_fail.run_queued_job(job.id, spec)
+
+    # Version 3: succeeded
+    JobRunner(store=store, backend=FakeCadBackend()).generate(design_id="demo", spec=spec)
+
+    versions = store.list_versions("demo")
+    version_nos = [v["version_no"] for v in versions]
+    assert version_nos == [1, 3]
+
+
 def test_create_version_dir_writes_pending_status(tmp_path: Path):
     store = VersionStore(root=tmp_path / "storage")
 
