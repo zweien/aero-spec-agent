@@ -146,6 +146,19 @@ def test_version_file_endpoint_returns_404_for_missing_file(client: TestClient):
     assert response.status_code == 404
 
 
+def test_job_response_includes_new_metadata_fields(client: TestClient):
+    spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
+
+    job = client.post("/api/designs/demo-meta/generate", content=spec_text).json()
+    finished = _wait_for_job(client, job["id"])
+
+    assert finished["created_at"]
+    assert finished["updated_at"]
+    assert finished["duration"] is not None
+    assert finished["duration"] > 0
+    assert finished["version_status"] == "succeeded"
+
+
 def test_cors_allows_configured_local_web_origin(client: TestClient):
     response = client.options(
         "/api/designs/demo/generate",
