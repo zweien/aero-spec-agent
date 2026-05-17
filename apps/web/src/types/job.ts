@@ -16,7 +16,7 @@ export type JobRecord = {
   files: Record<string, string>;
   created_at: string;
   updated_at: string;
-  duration: number | null;
+  duration_ms: number | null;
   version_status: string;
 };
 

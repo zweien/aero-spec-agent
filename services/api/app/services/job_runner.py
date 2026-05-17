@@ -30,7 +30,7 @@ class JobRecord:
     files: dict[str, str] = field(default_factory=dict)
     created_at: str = ""
     updated_at: str = ""
-    duration: float | None = None
+    duration_ms: float | None = None
     version_status: str = "pending"
 
 
@@ -73,7 +73,7 @@ class JobRunner:
             current_step="queued",
             created_at=now,
             updated_at=now,
-            duration=None,
+            duration_ms=None,
             version_status="pending",
         )
         self._remember(job)
@@ -117,14 +117,15 @@ class JobRunner:
             if job.created_at:
                 from datetime import datetime as _dt, timezone as _tz
                 created = _dt.fromisoformat(job.created_at)
-                job.duration = (_dt.now(_tz.utc) - created).total_seconds()
+                elapsed = (_dt.now(_tz.utc) - created).total_seconds()
+                job.duration_ms = round(elapsed * 1000, 1)
             self.store.version_status.write(
                 job.design_id, job.version_no,
                 status="succeeded",
                 job_id=job.id,
                 current_step="succeeded",
                 files=job.files,
-                duration_ms=job.duration * 1000 if job.duration else None,
+                duration_ms=job.duration_ms,
             )
         except Exception as exc:
             logger.exception(
@@ -140,14 +141,15 @@ class JobRunner:
             if job.created_at:
                 from datetime import datetime as _dt, timezone as _tz
                 created = _dt.fromisoformat(job.created_at)
-                job.duration = (_dt.now(_tz.utc) - created).total_seconds()
+                elapsed = (_dt.now(_tz.utc) - created).total_seconds()
+                job.duration_ms = round(elapsed * 1000, 1)
             self.store.version_status.write(
                 job.design_id, job.version_no,
                 status="failed",
                 job_id=job.id,
                 current_step="failed",
                 error_message=job.error_message,
-                duration_ms=job.duration * 1000 if job.duration else None,
+                duration_ms=job.duration_ms,
             )
         finally:
             self._save_job(job)

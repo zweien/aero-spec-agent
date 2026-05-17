@@ -154,8 +154,8 @@ def test_job_response_includes_new_metadata_fields(client: TestClient):
 
     assert finished["created_at"]
     assert finished["updated_at"]
-    assert finished["duration"] is not None
-    assert finished["duration"] > 0
+    assert finished["duration_ms"] is not None
+    assert finished["duration_ms"] > 0
     assert finished["version_status"] == "succeeded"
 
 

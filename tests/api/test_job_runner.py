@@ -112,7 +112,7 @@ def test_enqueue_generate_sets_timestamps(tmp_path: Path):
 
     assert job.created_at
     assert job.updated_at
-    assert job.duration is None
+    assert job.duration_ms is None
     assert job.version_status == "pending"
 
 

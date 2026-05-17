@@ -697,7 +697,7 @@ def _job_result(job: Any, message: str | None = None) -> dict[str, Any]:
         "version_status": getattr(job, "version_status", "pending"),
         "created_at": getattr(job, "created_at", ""),
         "updated_at": getattr(job, "updated_at", ""),
-        "duration": getattr(job, "duration", None),
+        "duration_ms": getattr(job, "duration_ms", None),
     }
     if message:
         result["message"] = message
