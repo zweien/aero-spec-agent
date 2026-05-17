@@ -251,3 +251,27 @@ def test_concurrent_enqueue_generate_produces_unique_versions(tmp_path: Path):
     version_nos = sorted(job.version_no for job in jobs)
     assert version_nos == list(range(1, num_jobs + 1))
     assert len(set(job.id for job in jobs)) == num_jobs
+
+
+def test_concurrent_enqueue_and_run_produces_unique_versions(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    runner = JobRunner(store=store, backend=FakeCadBackend())
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+    num_jobs = 6
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = []
+        for _ in range(num_jobs):
+            job = runner.enqueue_generate(design_id="demo", spec=spec)
+            futures.append(executor.submit(runner.run_queued_job, job.id, spec))
+        for f in as_completed(futures):
+            f.result()
+
+    version_nos = sorted(
+        int(p.name)
+        for p in (tmp_path / "storage/designs/demo/versions").iterdir()
+        if p.is_dir() and p.name.isdigit()
+    )
+    assert version_nos == list(range(1, num_jobs + 1))
+    for vno in version_nos:
+        assert store.version_status.read("demo", vno) == "succeeded"
