@@ -172,6 +172,10 @@ def test_diagnostics_endpoint_returns_job_and_version_details(client: TestClient
     assert data["job"]["status"] == "succeeded"
     assert data["version_status"] is not None
     assert data["version_status"]["status"] == "succeeded"
+    assert data["validation_report"] is not None
+    assert isinstance(data["files_exist"], dict)
+    assert data["files_exist"]["aircraft_spec.yaml"] is True
+    assert data["files_exist"]["generation_log.json"] is True
 
 
 def test_diagnostics_endpoint_for_failed_job(client: TestClient, monkeypatch: pytest.MonkeyPatch):

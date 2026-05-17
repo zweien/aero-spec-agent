@@ -66,10 +66,25 @@ def get_job_diagnostics(job_id: str):
         except Exception:
             generation_log = None
 
+    validation_report = None
+    report_path = runner.store.version_dir(job.design_id, job.version_no) / "validation_report.json"
+    if report_path.exists():
+        try:
+            validation_report = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception:
+            validation_report = None
+
+    vdir = runner.store.version_dir(job.design_id, job.version_no)
+    expected_files = ["aircraft_spec.yaml", "aircraft.vsp3", "aircraft.step", "aircraft.glb",
+                      "validation_report.json", "generation_log.json"]
+    files_exist = {name: (vdir / name).is_file() for name in expected_files}
+
     return {
         "job": _job_response(job),
         "version_status": version_status,
         "generation_log": generation_log,
+        "validation_report": validation_report,
+        "files_exist": files_exist,
     }
 
 
