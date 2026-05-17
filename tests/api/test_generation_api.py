@@ -159,6 +159,55 @@ def test_job_response_includes_new_metadata_fields(client: TestClient):
     assert finished["version_status"] == "succeeded"
 
 
+def test_diagnostics_endpoint_returns_job_and_version_details(client: TestClient):
+    spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
+    first_job = client.post("/api/designs/demo-diag/generate", content=spec_text).json()
+    _wait_for_job(client, first_job["id"])
+
+    response = client.get(f"/api/jobs/{first_job['id']}/diagnostics")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["job"]["id"] == first_job["id"]
+    assert data["job"]["status"] == "succeeded"
+    assert data["version_status"] is not None
+    assert data["version_status"]["status"] == "succeeded"
+
+
+def test_diagnostics_endpoint_for_failed_job(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    class FailingBackend(FakeCadBackend):
+        def generate(self, spec, output_dir):
+            raise RuntimeError("cad exploded")
+
+    spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
+    first_job = client.post("/api/designs/demo-diag-fail/generate", content=spec_text).json()
+    _wait_for_job(client, first_job["id"])
+
+    failing_runner = JobRunner(
+        store=designs_router.runner.store,
+        backend=FailingBackend(),
+    )
+    monkeypatch.setattr(designs_router, "runner", failing_runner)
+
+    response = client.post("/api/designs/demo-diag-fail/generate", content=spec_text)
+    job = response.json()
+    _wait_for_job(client, job["id"])
+
+    response = client.get(f"/api/jobs/{job['id']}/diagnostics")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["job"]["status"] == "failed"
+    assert data["version_status"]["status"] == "failed"
+    assert data["generation_log"] is None or isinstance(data["generation_log"], dict)
+
+
+def test_diagnostics_endpoint_returns_404_for_missing_job(client: TestClient):
+    response = client.get("/api/jobs/nonexistent-job-id/diagnostics")
+
+    assert response.status_code == 404
+
+
 def test_cors_allows_configured_local_web_origin(client: TestClient):
     response = client.options(
         "/api/designs/demo/generate",

@@ -50,6 +50,29 @@ def get_job(job_id: str):
     return _job_response(job)
 
 
+@router.get("/jobs/{job_id}/diagnostics")
+def get_job_diagnostics(job_id: str):
+    job = runner.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    version_status = runner.store.version_status.read_raw(job.design_id, job.version_no)
+
+    generation_log = None
+    log_path = runner.store.version_dir(job.design_id, job.version_no) / "generation_log.json"
+    if log_path.exists():
+        try:
+            generation_log = json.loads(log_path.read_text(encoding="utf-8"))
+        except Exception:
+            generation_log = None
+
+    return {
+        "job": _job_response(job),
+        "version_status": version_status,
+        "generation_log": generation_log,
+    }
+
+
 @router.get("/designs/{design_id}/versions")
 def list_versions(design_id: str):
     try:
