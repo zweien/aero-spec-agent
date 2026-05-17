@@ -81,6 +81,42 @@ def _flat_args_to_spec(args: dict[str, Any]) -> AircraftSpec:
     return AircraftSpec.model_validate(spec_data)
 
 
+def _normalize_modify_field_name(field_name: str) -> str | None:
+    if field_name in FIELD_TO_SPEC_PATH:
+        return field_name
+    candidates = [
+        known
+        for known in FIELD_TO_SPEC_PATH
+        if _is_single_edit_apart(field_name, known)
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
+def _is_single_edit_apart(value: str, target: str) -> bool:
+    if value == target:
+        return True
+    if abs(len(value) - len(target)) > 1:
+        return False
+
+    if len(value) == len(target):
+        return sum(left != right for left, right in zip(value, target)) == 1
+
+    shorter, longer = (value, target) if len(value) < len(target) else (target, value)
+    i = j = edits = 0
+    while i < len(shorter) and j < len(longer):
+        if shorter[i] == longer[j]:
+            i += 1
+            j += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return False
+        j += 1
+    return True
+
+
 def _pre_fill_none_scalars(data: dict[str, Any], paths: list[str]) -> None:
     """Replace None scalar fields (only those being patched) with empty dicts.
 
@@ -487,10 +523,12 @@ class ChatService:
         # 转换语义化字段为点路径补丁
         patch_changes: list[dict[str, Any]] = []
         extra_patches: list[dict[str, Any]] = []
+        affected_paths: list[str] = []
         for change in changes:
-            field_name = change.get("field", "")
-            if field_name not in FIELD_TO_SPEC_PATH:
-                error_msg = f"未知字段: {field_name}，可选: {', '.join(FIELD_TO_SPEC_PATH.keys())}"
+            requested_field_name = str(change.get("field", ""))
+            field_name = _normalize_modify_field_name(requested_field_name)
+            if field_name is None:
+                error_msg = f"未知字段: {requested_field_name}，可选: {', '.join(FIELD_TO_SPEC_PATH.keys())}"
                 yield _sse_event("error", {"content": error_msg})
                 state.messages.append({
                     "role": "tool", "tool_call_id": tool_call_id,
@@ -517,6 +555,7 @@ class ChatService:
             path = FIELD_TO_SPEC_PATH[field_name]
             value = change["value"]
             patch_changes.append({"path": path, "value": value})
+            affected_paths.append(path)
 
             # 数值字段：同时更新 source/confidence，有 unit 的也更新
             if field_name in FIELD_DEFAULT_UNIT:
@@ -528,7 +567,6 @@ class ChatService:
 
         # 预处理: 只对被修改的字段，将 None 标量替换为空 dict
         data = state.current_spec.model_dump(mode="json")
-        affected_paths = [FIELD_TO_SPEC_PATH[c.get("field", "")] for c in changes]
         _pre_fill_none_scalars(data, affected_paths)
 
         # 应用补丁

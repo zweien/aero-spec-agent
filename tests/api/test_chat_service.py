@@ -648,6 +648,44 @@ async def test_modify_design_rejects_unsupported_engine_position(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_modify_design_corrects_unique_one_character_field_typo(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+
+    events = [
+        e async for e in svc._handle_modify_design(
+            state,
+            {"changes": [{"field": "fuselage_ength", "value": 3.0}]},
+            "tc-field-typo",
+        )
+    ]
+
+    assert any("generation_complete" in e for e in events)
+    assert state.current_spec is not None
+    assert state.current_spec.fuselage.length.value == 3.0
+    assert state.current_spec.fuselage.length.source == "user"
+
+
+@pytest.mark.anyio
+async def test_modify_design_rejects_unknown_field_without_unique_typo_match(tmp_path):
+    svc = _service_with_spec(tmp_path)
+    state = svc.get_or_create_state("test-mod")
+    runner = svc._job_runner
+
+    events = [
+        e async for e in svc._handle_modify_design(
+            state,
+            {"changes": [{"field": "bad_field", "value": 3.0}]},
+            "tc-bad-field",
+        )
+    ]
+
+    assert any(e.startswith("event: error") for e in events)
+    assert "未知字段: bad_field" in "".join(events)
+    assert runner.generated_specs == []
+
+
+@pytest.mark.anyio
 async def test_modify_selected_part_set_fuselage_length_absolute(tmp_path):
     svc = _service_with_spec(tmp_path)
     state = svc.get_or_create_state("test-mod")
