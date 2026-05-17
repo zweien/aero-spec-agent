@@ -95,3 +95,12 @@ Still useful:
 - `OPENVSP_ERROR_POLICY=fail` route-level regression test with an adapter error stack.
 - Concurrent requests allocate distinct version numbers under load.
 - Browser-level QA for the full chat `generation_started -> polling -> loadVersion` path.
+
+## Next Agent Focus
+
+Do not return to selected-part basics unless a regression appears. The next useful work is:
+
+- Async task consistency across new endpoints and UI actions.
+- Failed job diagnostics and version status metadata.
+- Frontend polling QA for every path that can create a version.
+- Concurrency protection around version allocation.
