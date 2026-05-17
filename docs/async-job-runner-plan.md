@@ -27,8 +27,8 @@ Completed:
 3. `JobRunner.run_queued_job(...)` runs the existing CAD generation boundary after enqueue.
 4. Job state and error messages are persisted in `storage/jobs/{job_id}.json`.
 5. `GET /api/jobs/{job_id}` supports frontend polling.
-6. `POST /api/designs/{design_id}/generate` returns `202 Accepted` with job metadata.
-7. `PATCH /api/designs/{design_id}/spec` returns `202 Accepted` with job metadata.
+6. `POST /api/designs/{design_id}/generate` returns `202 Accepted` with `job_id` and job metadata.
+7. `PATCH /api/designs/{design_id}/spec` returns `202 Accepted` with `job_id` and job metadata.
 8. `/api/chat` receives FastAPI `BackgroundTasks`; `generate_design`, `modify_design`, and `modify_selected_part` emit `generation_started` with `job_id` when running through the async path.
 9. The web client polls `GET /api/jobs/{job_id}` for chat generation, selected-part modification, design modification, and parameter panel PATCH.
 10. The synchronous `JobRunner.generate(...)` path remains available for deterministic unit tests and direct internal callers.
@@ -84,9 +84,9 @@ GET /api/designs/{design_id}/versions/{version_no}
 Covered:
 
 - Fake backend success job reaches `succeeded` and creates expected artifacts.
-- `/api/chat` emits `generation_started` with `job_id`, and the job is queryable through `/api/jobs/{job_id}`.
-- `/api/designs/{design_id}/generate` returns `202` and a pollable job.
-- `/api/designs/{design_id}/spec` returns `202` and a pollable job for the new version.
+- `/api/chat` emits `generation_started` with `job_id` for `generate_design`, `modify_design`, and `modify_selected_part`; each job is queryable through `/api/jobs/{job_id}`.
+- `/api/designs/{design_id}/generate` returns `202` with `job_id` and a pollable job.
+- `/api/designs/{design_id}/spec` returns `202` with `job_id` and a pollable job for the new version.
 - Fake backend failure records `failed` and keeps the previous version as the only usable listed version.
 - Frontend polling handles `succeeded` and `failed` in unit tests.
 

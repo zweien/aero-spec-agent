@@ -34,6 +34,7 @@ def test_generate_endpoint_returns_accepted_job(client: TestClient):
     assert response.status_code == 202
     data = response.json()
     assert data["id"]
+    assert data["job_id"] == data["id"]
     assert data["status"] == "queued"
     assert data["version_no"] >= 1
     assert data["progress"] == 0
@@ -85,6 +86,7 @@ def test_patch_spec_endpoint_returns_accepted_job_and_new_version(client: TestCl
     assert response.status_code == 202
     data = response.json()
     assert data["id"]
+    assert data["job_id"] == data["id"]
     assert data["status"] == "queued"
     assert data["version_no"] == first_job["version_no"] + 1
 
@@ -121,6 +123,7 @@ def test_failed_backend_job_is_queryable_but_not_listed_as_usable_version(
 
     assert response.status_code == 202
     data = response.json()
+    assert data["job_id"] == data["id"]
     assert data["status"] == "queued"
     assert data["version_no"] == first_job["version_no"] + 1
 

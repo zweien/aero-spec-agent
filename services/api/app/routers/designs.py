@@ -18,6 +18,12 @@ router = APIRouter(prefix="/api", tags=["designs"])
 runner = JobRunner(store=VersionStore())
 
 
+def _job_response(job) -> dict[str, object]:
+    data = job.__dict__.copy()
+    data["job_id"] = job.id
+    return data
+
+
 @router.post("/designs/{design_id}/generate", status_code=202)
 async def generate_design(
     design_id: str,
@@ -34,7 +40,7 @@ async def generate_design(
         raise HTTPException(status_code=400, detail="invalid aircraft spec") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return job.__dict__
+    return _job_response(job)
 
 
 @router.get("/jobs/{job_id}")
@@ -42,7 +48,7 @@ def get_job(job_id: str):
     job = runner.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
-    return job.__dict__
+    return _job_response(job)
 
 
 @router.get("/designs/{design_id}/versions")
@@ -124,7 +130,7 @@ async def patch_spec(
     background_tasks.add_task(runner.run_queued_job, job.id, patched)
     _sync_chat_spec(design_id, patched)
     response.status_code = 202
-    return job.__dict__
+    return _job_response(job)
 
 
 @router.get("/settings")

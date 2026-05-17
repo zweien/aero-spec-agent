@@ -55,7 +55,11 @@ class _AsyncChunks:
             yield chunk
 
 
-class _GenerateDesignCompletions:
+class _ToolCallCompletions:
+    def __init__(self, tool_name: str, arguments: dict[str, object]) -> None:
+        self._tool_name = tool_name
+        self._arguments = arguments
+
     async def create(self, *, tools=None, **kwargs):
         if tools:
             return _AsyncChunks([
@@ -69,8 +73,8 @@ class _GenerateDesignCompletions:
                                         index=0,
                                         id="tc-generate-api",
                                         function=SimpleNamespace(
-                                            name="generate_design",
-                                            arguments=json.dumps(MINIMAL_FLAT_ARGS),
+                                            name=self._tool_name,
+                                            arguments=json.dumps(self._arguments),
                                         ),
                                     )
                                 ],
@@ -84,12 +88,17 @@ class _GenerateDesignCompletions:
             SimpleNamespace(
                 choices=[
                     SimpleNamespace(
-                        delta=SimpleNamespace(content="设计已提交生成。"),
+                        delta=SimpleNamespace(content="设计已提交后台生成。"),
                         finish_reason="stop",
                     )
                 ]
             )
         ])
+
+
+class _GenerateDesignCompletions(_ToolCallCompletions):
+    def __init__(self) -> None:
+        super().__init__("generate_design", MINIMAL_FLAT_ARGS)
 
 
 def test_conversation_state_is_created():
@@ -475,19 +484,47 @@ def _sse_events(text: str) -> list[str]:
     return [block for block in text.split("\n\n") if block.strip()]
 
 
-def test_chat_route_generate_design_returns_background_job_id(tmp_path, monkeypatch):
+def _client_with_chat_service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, completions) -> tuple[TestClient, ChatService]:
     runner = JobRunner(
         store=VersionStore(root=tmp_path / "storage"),
         backend=FakeCadBackend(),
     )
     svc = ChatService(storage_root=tmp_path / "conversations")
     svc.set_job_runner(runner)
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=_GenerateDesignCompletions()))
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
     monkeypatch.setattr(svc, "_get_client", lambda: fake_client)
     monkeypatch.setattr(chat_router, "chat_service", svc)
     monkeypatch.setattr(designs_router, "runner", runner)
+    return TestClient(app), svc
 
-    with TestClient(app) as client:
+
+def _generation_started_payload(response_text: str) -> dict[str, object]:
+    generation_events = [
+        event
+        for event in _sse_events(response_text)
+        if event.startswith("event: generation_started")
+    ]
+    assert len(generation_events) == 1
+    return _sse_payload(generation_events[0])
+
+
+def _assert_job_succeeded(client: TestClient, job_id: object, version_no: object) -> None:
+    job_response = client.get(f"/api/jobs/{job_id}")
+    assert job_response.status_code == 200
+    job = job_response.json()
+    assert job["status"] == "succeeded"
+    assert job["progress"] == 100
+    assert job["version_no"] == version_no
+
+
+def test_chat_route_generate_design_returns_background_job_id(tmp_path, monkeypatch):
+    client, _ = _client_with_chat_service(
+        tmp_path,
+        monkeypatch,
+        _GenerateDesignCompletions(),
+    )
+
+    with client:
         response = client.post(
             "/api/chat",
             json={
@@ -498,24 +535,80 @@ def test_chat_route_generate_design_returns_background_job_id(tmp_path, monkeypa
         )
 
         assert response.status_code == 200
-        generation_events = [
-            event
-            for event in _sse_events(response.text)
-            if event.startswith("event: generation_started")
-        ]
-        assert len(generation_events) == 1
-        payload = _sse_payload(generation_events[0])
+        payload = _generation_started_payload(response.text)
         assert payload["design_id"] == "chat-api-generate"
         assert payload["status"] == "queued"
         assert payload["version_no"] == 1
         assert payload["job_id"]
+        _assert_job_succeeded(client, payload["job_id"], payload["version_no"])
 
-        job_response = client.get(f"/api/jobs/{payload['job_id']}")
-        assert job_response.status_code == 200
-        job = job_response.json()
-        assert job["status"] == "succeeded"
-        assert job["progress"] == 100
-        assert job["version_no"] == 1
+
+def test_chat_route_modify_design_returns_background_job_id(tmp_path, monkeypatch):
+    client, svc = _client_with_chat_service(
+        tmp_path,
+        monkeypatch,
+        _ToolCallCompletions(
+            "modify_design",
+            {"changes": [{"field": "fuselage_length", "value": 8.0}]},
+        ),
+    )
+    state = svc.get_or_create_state("chat-api-modify")
+    state.current_spec = load_aircraft_spec(EXAMPLE)
+
+    with client:
+        response = client.post(
+            "/api/chat",
+            json={
+                "conversation_id": "chat-api-modify",
+                "message": "把机身长度改成 8 米",
+                "selected_refs": [],
+            },
+        )
+
+        assert response.status_code == 200
+        payload = _generation_started_payload(response.text)
+        assert payload["design_id"] == "chat-api-modify"
+        assert payload["status"] == "queued"
+        assert payload["version_no"] == 1
+        assert payload["job_id"]
+        _assert_job_succeeded(client, payload["job_id"], payload["version_no"])
+
+
+def test_chat_route_modify_selected_part_returns_background_job_id(tmp_path, monkeypatch):
+    client, svc = _client_with_chat_service(
+        tmp_path,
+        monkeypatch,
+        _ToolCallCompletions(
+            "modify_selected_part",
+            {
+                "part_ref": "part:right_engine",
+                "operation": "move_outboard",
+                "value": 0.5,
+            },
+        ),
+    )
+    state = svc.get_or_create_state("chat-api-selected")
+    state.current_spec = load_aircraft_spec(EXAMPLE)
+    state.selected_refs = ["part:right_engine"]
+
+    with client:
+        response = client.post(
+            "/api/chat",
+            json={
+                "conversation_id": "chat-api-selected",
+                "message": "把这个向外移动 0.5 米",
+                "selected_refs": ["part:right_engine"],
+            },
+        )
+
+        assert response.status_code == 200
+        payload = _generation_started_payload(response.text)
+        assert payload["design_id"] == "chat-api-selected"
+        assert payload["status"] == "queued"
+        assert payload["version_no"] == 1
+        assert payload["job_id"]
+        assert payload["message"] == "已基于选中对象 part:right_engine 完成修改。"
+        _assert_job_succeeded(client, payload["job_id"], payload["version_no"])
 
 
 @pytest.mark.anyio
