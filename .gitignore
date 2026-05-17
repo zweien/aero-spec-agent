@@ -6,6 +6,7 @@ storage/
 node_modules/
 .next/
 dist/
+*.tsbuildinfo
 .gstack/
 .bak
 .env
