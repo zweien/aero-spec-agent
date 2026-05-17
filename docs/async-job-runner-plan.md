@@ -16,18 +16,36 @@ This is simple and keeps tests deterministic, but OpenVSP generation can block r
 
 ## Phase 1: In-process BackgroundTasks
 
-Status: implemented for the HTTP generation endpoints and chat-triggered generation. The synchronous `JobRunner.generate(...)` path remains available for unit tests and narrow internal callers.
+Status: implemented for the HTTP generation endpoints, parameter PATCH, and chat-triggered generation. The synchronous `JobRunner.generate(...)` path remains available for unit tests and narrow internal callers.
 
 Use FastAPI `BackgroundTasks` as the first migration step.
 
-1. Add a `JobRecord` state transition model: `queued`, `running`, `succeeded`, `failed`.
-2. Create a job before generation starts and return `202 Accepted` with `job_id`, `design_id`, and the intended version number.
-3. Run the existing CAD generation boundary in a background task.
-4. Persist job status and error messages in `storage/jobs/{job_id}.json`.
-5. Add `GET /api/jobs/{job_id}` for polling.
-6. Keep the current synchronous path available for tests and direct unit-level generation.
+Completed:
+
+1. `JobRecord` models `queued`, `running`, `succeeded`, and `failed`.
+2. `JobRunner.enqueue_generate(...)` creates the job before generation starts.
+3. `JobRunner.run_queued_job(...)` runs the existing CAD generation boundary after enqueue.
+4. Job state and error messages are persisted in `storage/jobs/{job_id}.json`.
+5. `GET /api/jobs/{job_id}` supports frontend polling.
+6. `POST /api/designs/{design_id}/generate` returns `202 Accepted` with job metadata.
+7. `PATCH /api/designs/{design_id}/spec` returns `202 Accepted` with job metadata.
+8. `/api/chat` receives FastAPI `BackgroundTasks`; `generate_design`, `modify_design`, and `modify_selected_part` emit `generation_started` with `job_id` when running through the async path.
+9. The web client polls `GET /api/jobs/{job_id}` for chat generation, selected-part modification, design modification, and parameter panel PATCH.
+10. The synchronous `JobRunner.generate(...)` path remains available for deterministic unit tests and direct internal callers.
 
 Failure rule: a failed background job may leave diagnostic files, but it must not make the failed version appear as the current usable version.
+
+Current failure isolation:
+
+- `VersionStore.list_versions(...)` only returns version directories that contain `validation_report.json`.
+- A failed job can be queried through `GET /api/jobs/{job_id}` with `status="failed"` and `error_message`.
+- The frontend waits for `succeeded` before loading a version, so failed jobs are surfaced as errors instead of replacing the previous usable version.
+
+Remaining Phase 1 hardening:
+
+- Add a small concurrent generation test that proves version numbers remain distinct under overlapping requests.
+- Add an explicit diagnostic-version convention if failed version directories need to be shown in a separate UI later.
+- Add structured job timestamps (`created_at`, `started_at`, `finished_at`) before introducing external queues.
 
 ## Phase 2: Durable Queue
 
@@ -63,8 +81,17 @@ GET /api/designs/{design_id}/versions/{version_no}
 
 ## Test Plan
 
+Covered:
+
 - Fake backend success job reaches `succeeded` and creates expected artifacts.
-- Fake backend failure records `failed` and keeps previous version current.
-- `OPENVSP_ERROR_POLICY=fail` maps adapter errors to failed jobs.
-- Concurrent requests allocate distinct version numbers.
-- Frontend polling handles `queued`, `running`, `succeeded`, and `failed` states.
+- `/api/chat` emits `generation_started` with `job_id`, and the job is queryable through `/api/jobs/{job_id}`.
+- `/api/designs/{design_id}/generate` returns `202` and a pollable job.
+- `/api/designs/{design_id}/spec` returns `202` and a pollable job for the new version.
+- Fake backend failure records `failed` and keeps the previous version as the only usable listed version.
+- Frontend polling handles `succeeded` and `failed` in unit tests.
+
+Still useful:
+
+- `OPENVSP_ERROR_POLICY=fail` route-level regression test with an adapter error stack.
+- Concurrent requests allocate distinct version numbers under load.
+- Browser-level QA for the full chat `generation_started -> polling -> loadVersion` path.

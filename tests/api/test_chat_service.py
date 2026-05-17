@@ -4,7 +4,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
+from services.api.app.main import app
+import services.api.app.routers.chat as chat_router
+import services.api.app.routers.designs as designs_router
 from services.api.app.services.chat_service import (
     ChatService,
     ConversationState,
@@ -37,6 +41,55 @@ MINIMAL_FLAT_ARGS = {
     "tail_type": "conventional",
     "engine_count": 2,
 }
+
+
+class _AsyncChunks:
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    def __aiter__(self):
+        return self._iter()
+
+    async def _iter(self):
+        for chunk in self._chunks:
+            yield chunk
+
+
+class _GenerateDesignCompletions:
+    async def create(self, *, tools=None, **kwargs):
+        if tools:
+            return _AsyncChunks([
+                SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            delta=SimpleNamespace(
+                                content=None,
+                                tool_calls=[
+                                    SimpleNamespace(
+                                        index=0,
+                                        id="tc-generate-api",
+                                        function=SimpleNamespace(
+                                            name="generate_design",
+                                            arguments=json.dumps(MINIMAL_FLAT_ARGS),
+                                        ),
+                                    )
+                                ],
+                            ),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                )
+            ])
+        return _AsyncChunks([
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(content="设计已提交生成。"),
+                        finish_reason="stop",
+                    )
+                ]
+            )
+        ])
 
 
 def test_conversation_state_is_created():
@@ -416,6 +469,53 @@ def _service_with_spec(tmp_path: Path) -> ChatService:
 def _sse_payload(event: str) -> dict[str, object]:
     data_line = next(line for line in event.splitlines() if line.startswith("data: "))
     return json.loads(data_line.removeprefix("data: "))
+
+
+def _sse_events(text: str) -> list[str]:
+    return [block for block in text.split("\n\n") if block.strip()]
+
+
+def test_chat_route_generate_design_returns_background_job_id(tmp_path, monkeypatch):
+    runner = JobRunner(
+        store=VersionStore(root=tmp_path / "storage"),
+        backend=FakeCadBackend(),
+    )
+    svc = ChatService(storage_root=tmp_path / "conversations")
+    svc.set_job_runner(runner)
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=_GenerateDesignCompletions()))
+    monkeypatch.setattr(svc, "_get_client", lambda: fake_client)
+    monkeypatch.setattr(chat_router, "chat_service", svc)
+    monkeypatch.setattr(designs_router, "runner", runner)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/chat",
+            json={
+                "conversation_id": "chat-api-generate",
+                "message": "生成一架双发无人机",
+                "selected_refs": [],
+            },
+        )
+
+        assert response.status_code == 200
+        generation_events = [
+            event
+            for event in _sse_events(response.text)
+            if event.startswith("event: generation_started")
+        ]
+        assert len(generation_events) == 1
+        payload = _sse_payload(generation_events[0])
+        assert payload["design_id"] == "chat-api-generate"
+        assert payload["status"] == "queued"
+        assert payload["version_no"] == 1
+        assert payload["job_id"]
+
+        job_response = client.get(f"/api/jobs/{payload['job_id']}")
+        assert job_response.status_code == 200
+        job = job_response.json()
+        assert job["status"] == "succeeded"
+        assert job["progress"] == 100
+        assert job["version_no"] == 1
 
 
 @pytest.mark.anyio
