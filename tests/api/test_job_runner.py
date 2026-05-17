@@ -167,3 +167,16 @@ def test_failed_job_writes_failed_version_status(tmp_path: Path):
     data = json.loads(status_path.read_text())
     assert data["status"] == "failed"
     assert store.read_version_status("demo", 2) == "failed"
+
+
+def test_create_version_dir_writes_pending_status(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+
+    version_no, path = store.create_version_dir("demo")
+
+    status_path = path / "version_status.json"
+    assert status_path.exists()
+    data = json.loads(status_path.read_text())
+    assert data["status"] == "pending"
+    assert data["job_id"] is None
+    assert store.read_version_status("demo", version_no) == "pending"

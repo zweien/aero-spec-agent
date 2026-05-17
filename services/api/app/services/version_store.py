@@ -24,27 +24,25 @@ class VersionStore:
             raise ValueError("design_id must match ^[A-Za-z0-9_-]+$")
         return design_id
 
-    def next_version_no(self, design_id: str) -> int:
-        design_id = self._validate_design_id(design_id)
-        versions_root = self.root / "designs" / design_id / "versions"
-        if not versions_root.exists():
-            return 1
-        existing = [int(path.name) for path in versions_root.iterdir() if path.is_dir() and path.name.isdigit()]
-        return max(existing, default=0) + 1
-
     def create_version_dir(self, design_id: str) -> tuple[int, Path]:
         design_id = self._validate_design_id(design_id)
         versions_root = self.root / "designs" / design_id / "versions"
         with self._lock:
             versions_root.mkdir(parents=True, exist_ok=True)
-            version_no = self.next_version_no(design_id)
-            while True:
-                path = versions_root / str(version_no)
-                try:
-                    path.mkdir(exist_ok=False)
-                    return version_no, path
-                except FileExistsError:
-                    version_no += 1
+            existing = [
+                int(p.name) for p in versions_root.iterdir() if p.is_dir() and p.name.isdigit()
+            ]
+            version_no = max(existing, default=0) + 1
+            path = versions_root / str(version_no)
+            path.mkdir(exist_ok=False)
+            (path / "version_status.json").write_text(
+                json.dumps(
+                    {"status": "pending", "job_id": None, "updated_at": _utcnow_iso()},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+        return version_no, path
 
     def version_dir(self, design_id: str, version_no: int) -> Path:
         design_id = self._validate_design_id(design_id)
