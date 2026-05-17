@@ -533,6 +533,29 @@ textarea:focus {
   border-color: var(--success-border);
 }
 
+.tool-card-failed {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+}
+
+.tool-card-error-icon {
+  color: var(--error, #e55);
+  font-weight: bold;
+}
+
+.tool-card-diag-content {
+  margin: 6px 0 0;
+  padding: 8px;
+  background: var(--bg-surface);
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .tool-card-header {
   display: flex;
   align-items: center;

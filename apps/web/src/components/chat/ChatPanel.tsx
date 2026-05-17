@@ -230,7 +230,7 @@ export function ChatPanel({
   );
 
   const failLatestTool = useCallback(
-    (messageId: string, errorMsg: string) => {
+    (messageId: string, errorMsg: string, jobId?: string) => {
       setMessages((prev) =>
         prev.map((msg) => {
           if (msg.id !== messageId) return msg;
@@ -238,7 +238,11 @@ export function ChatPanel({
           for (let i = parts.length - 1; i >= 0; i--) {
             const part = parts[i];
             if (part.type === "tool" && part.state === "running") {
-              parts[i] = { ...part, state: "done" };
+              parts[i] = {
+                ...part,
+                state: "done",
+                output: jobId ? { job_id: jobId, error: errorMsg } : undefined,
+              };
               break;
             }
           }
@@ -320,7 +324,7 @@ export function ChatPanel({
                   })
                   .catch((exc) => {
                     const message = exc instanceof Error ? exc.message : "生成任务失败";
-                    failLatestTool(assistantId, message);
+                    failLatestTool(assistantId, message, jobId);
                   });
               }
             } else if (event.type === "generation_complete") {
@@ -336,7 +340,7 @@ export function ChatPanel({
                   })
                   .catch((exc) => {
                     const message = exc instanceof Error ? exc.message : "生成任务失败";
-                    failLatestTool(assistantId, message);
+                    failLatestTool(assistantId, message, jobId);
                   });
               } else {
                 completeLatestTool(assistantId, event.data as GenerationCompleteData);
@@ -508,18 +512,41 @@ export function ChatPanel({
 
 function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) {
   const [expanded, setExpanded] = useState(false);
+  const [diagExpanded, setDiagExpanded] = useState(false);
+  const [diagData, setDiagData] = useState<Record<string, unknown> | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
   const toolName = part.toolName;
   const label = TOOL_LABELS[toolName] ?? toolName;
   const isRunning = part.state === "running";
   const result = part.output as GenerationCompleteData | undefined;
+  const isFailed = !isRunning && result?.job_id && !result?.version_no;
+  const failedJobId = isFailed ? result!.job_id : undefined;
+
+  const fetchDiagnostics = useCallback(async () => {
+    if (!failedJobId || diagLoading) return;
+    setDiagLoading(true);
+    try {
+      const resp = await fetch(`${apiBaseUrl}/api/jobs/${failedJobId}/diagnostics`);
+      if (resp.ok) {
+        setDiagData(await resp.json());
+      }
+    } catch {
+      setDiagData(null);
+    } finally {
+      setDiagLoading(false);
+      setDiagExpanded(true);
+    }
+  }, [apiBaseUrl, failedJobId, diagLoading]);
 
   return (
     <div
-      className={`tool-card ${isRunning ? "tool-card-running" : "tool-card-done"}`}
+      className={`tool-card ${isRunning ? "tool-card-running" : isFailed ? "tool-card-failed" : "tool-card-done"}`}
     >
       <div className="tool-card-header">
         {isRunning ? (
           <span className="spinner" />
+        ) : isFailed ? (
+          <span className="tool-card-error-icon">&#10007;</span>
         ) : (
           <span className="tool-card-check">&#10003;</span>
         )}
@@ -546,6 +573,24 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
 
       {!isRunning && result?.message && (
         <div className="tool-card-message">{result.message}</div>
+      )}
+
+      {isFailed && (
+        <div className="tool-card-diagnostics">
+          <button
+            type="button"
+            className="tool-card-toggle"
+            onClick={diagExpanded ? () => setDiagExpanded(false) : fetchDiagnostics}
+            disabled={diagLoading}
+          >
+            {diagLoading ? "加载中..." : diagExpanded ? "▾ 收起诊断" : "▸ 查看诊断"}
+          </button>
+          {diagExpanded && diagData && (
+            <pre className="tool-card-diag-content">
+              {JSON.stringify(diagData, null, 2)}
+            </pre>
+          )}
+        </div>
       )}
 
       {!isRunning && result?.files && result.files.length > 0 && result.version_no && (
