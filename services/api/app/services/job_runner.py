@@ -99,17 +99,28 @@ class JobRunner:
         job.status = "running"
         job.progress = 10
         job.current_step = "writing_spec"
+        job.updated_at = _utcnow()
         self._save_job(job)
         try:
             self.store.write_spec(job.design_id, job.version_no, spec)
             job.current_step = "generating_cad"
             job.progress = 50
+            job.updated_at = _utcnow()
             self._save_job(job)
             result = generate_aircraft(spec=spec, output_dir=output_dir, backend=self.backend)
             job.status = success_status
             job.progress = 100
             job.current_step = success_status
             job.files = {key: str(path) for key, path in result.files.items()}
+            job.version_status = "succeeded"
+            job.updated_at = _utcnow()
+            if job.created_at:
+                from datetime import datetime as _dt, timezone as _tz
+                created = _dt.fromisoformat(job.created_at)
+                job.duration = (_dt.now(_tz.utc) - created).total_seconds()
+            self.store.write_version_status(
+                job.design_id, job.version_no, "succeeded", job_id=job.id
+            )
         except Exception as exc:
             logger.exception(
                 "Generation job failed for design_id=%s version_no=%s",
@@ -119,6 +130,15 @@ class JobRunner:
             job.status = "failed"
             job.current_step = "failed"
             job.error_message = str(exc)
+            job.version_status = "failed"
+            job.updated_at = _utcnow()
+            if job.created_at:
+                from datetime import datetime as _dt, timezone as _tz
+                created = _dt.fromisoformat(job.created_at)
+                job.duration = (_dt.now(_tz.utc) - created).total_seconds()
+            self.store.write_version_status(
+                job.design_id, job.version_no, "failed", job_id=job.id
+            )
         finally:
             self._save_job(job)
 

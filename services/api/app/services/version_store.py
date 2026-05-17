@@ -1,12 +1,17 @@
 import json
 import re
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.spec_io import dump_aircraft_spec
 
 _DESIGN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 class VersionStore:
@@ -61,6 +66,27 @@ class VersionStore:
             "files": files,
             "validation_report": validation,
         }
+
+    def write_version_status(
+        self, design_id: str, version_no: int, status: str, job_id: str | None = None
+    ) -> None:
+        design_id = self._validate_design_id(design_id)
+        path = self.version_dir(design_id, version_no) / "version_status.json"
+        path.write_text(
+            json.dumps(
+                {"status": status, "job_id": job_id, "updated_at": _utcnow_iso()},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    def read_version_status(self, design_id: str, version_no: int) -> str:
+        design_id = self._validate_design_id(design_id)
+        path = self.version_dir(design_id, version_no) / "version_status.json"
+        if not path.exists():
+            return "succeeded"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("status", "succeeded")
 
     def list_versions(self, design_id: str) -> list[dict[str, object]]:
         design_id = self._validate_design_id(design_id)

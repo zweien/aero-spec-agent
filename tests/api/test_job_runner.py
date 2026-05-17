@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -131,3 +132,38 @@ def test_failed_async_job_is_not_listed_as_usable_version(tmp_path: Path):
     assert failed is not None
     assert failed.status == "failed"
     assert store.list_versions("demo") == [{"version_no": 1}]
+
+
+def test_successful_job_writes_succeeded_version_status(tmp_path: Path):
+    store = VersionStore(root=tmp_path / "storage")
+    runner = JobRunner(store=store, backend=FakeCadBackend())
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+
+    job = runner.generate(design_id="demo", spec=spec)
+
+    status_path = tmp_path / "storage/designs/demo/versions/1/version_status.json"
+    assert status_path.exists()
+    data = json.loads(status_path.read_text())
+    assert data["status"] == "succeeded"
+    assert data["job_id"] == job.id
+    assert store.read_version_status("demo", 1) == "succeeded"
+
+
+def test_failed_job_writes_failed_version_status(tmp_path: Path):
+    class FailingBackend(FakeCadBackend):
+        def generate(self, spec, output_dir):
+            raise RuntimeError("cad failed")
+
+    store = VersionStore(root=tmp_path / "storage")
+    spec = load_aircraft_spec(Path("packages/aircraft-schema/examples/twin_engine_uav.yaml"))
+    JobRunner(store=store, backend=FakeCadBackend()).generate(design_id="demo", spec=spec)
+    runner = JobRunner(store=store, backend=FailingBackend())
+
+    job = runner.enqueue_generate(design_id="demo", spec=spec)
+    runner.run_queued_job(job.id, spec)
+
+    status_path = tmp_path / "storage/designs/demo/versions/2/version_status.json"
+    assert status_path.exists()
+    data = json.loads(status_path.read_text())
+    assert data["status"] == "failed"
+    assert store.read_version_status("demo", 2) == "failed"
