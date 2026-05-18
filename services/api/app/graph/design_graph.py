@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from langgraph.graph import END, StateGraph
+from langgraph.graph import END, START, StateGraph
 
 from services.api.app.graph.state import DesignGraphState
 from services.api.app.graph.nodes.load_context import load_context
@@ -25,10 +25,10 @@ def _route_by_intent(state: DesignGraphState) -> str:
         "generate_design": "generate_design",
         "modify_design": "modify_design",
         "modify_selected_part": "modify_selected_part",
-        "conversation": "synthesize_response",
-        "unknown": "synthesize_response",
+        "conversation": "save_state",
+        "unknown": "save_state",
     }
-    target = routing.get(intent, "synthesize_response")
+    target = routing.get(intent, "save_state")
     logger.debug("graph routing: intent=%s → node=%s", intent, target)
     return target
 
@@ -37,8 +37,8 @@ def build_design_graph() -> StateGraph:
     """Build the design orchestration graph.
 
     Flow:
-        load_context → classify_intent → {generate|modify|modify_selected_part}
-        → save_state → END
+        START → load_context → classify_intent
+        → {generate|modify|modify_selected_part} → save_state → END
 
     In shadow mode, only load_context and classify_intent execute meaningfully.
     Tool nodes return metadata for divergence comparison.
@@ -53,13 +53,13 @@ def build_design_graph() -> StateGraph:
     graph.add_node("modify_selected_part", modify_selected_part)
     graph.add_node("save_state", save_state)
 
-    # Entry
-    graph.set_entry_point("load_context")
+    # Entry: START → load_context
+    graph.add_edge(START, "load_context")
 
     # Linear: load_context → classify_intent
     graph.add_edge("load_context", "classify_intent")
 
-    # Conditional: classify_intent → tool node
+    # Conditional: classify_intent → tool node or save_state
     graph.add_conditional_edges(
         "classify_intent",
         _route_by_intent,
@@ -67,7 +67,7 @@ def build_design_graph() -> StateGraph:
             "generate_design": "generate_design",
             "modify_design": "modify_design",
             "modify_selected_part": "modify_selected_part",
-            "synthesize_response": "save_state",
+            "save_state": "save_state",
         },
     )
 
