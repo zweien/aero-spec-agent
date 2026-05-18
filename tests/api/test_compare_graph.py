@@ -124,10 +124,10 @@ def test_mixed_succeeded_and_not_found(job_runner, spec_dict):
 def test_aggregate_job_not_found(job_runner, spec_dict):
     """Manually invoke aggregate with a fake job_id."""
     from services.api.app.graph.compare_graph import (
-        make_aggregate_results_node, compare_metrics,
+        make_wait_all_variants_node, compare_metrics,
     )
 
-    aggregate = make_aggregate_results_node(job_runner)
+    aggregate = make_wait_all_variants_node(job_runner, timeout_seconds=1)
 
     # Simulate state after dispatch with a non-existent job_id
     state = {

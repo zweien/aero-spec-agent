@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
+from services.api.app.services.job_events import JobEvent, JobEventType, get_job_event_bus
 from services.api.app.services.version_store import VersionStore
 from services.workers.cad_worker.openvsp_generator.backend import CadBackend
 from services.workers.cad_worker.openvsp_generator.backend_factory import get_cad_backend
@@ -96,17 +97,34 @@ class JobRunner:
         output_dir,
         success_status: str,
     ) -> None:
+        bus = get_job_event_bus()
         job.status = "running"
         job.progress = 10
         job.current_step = "writing_spec"
         job.updated_at = _utcnow()
         self._save_job(job)
+        bus.publish(JobEvent(
+            type=JobEventType.STARTED,
+            job_id=job.id,
+            design_id=job.design_id,
+            version_no=job.version_no,
+            progress=job.progress,
+            current_step=job.current_step,
+        ))
         try:
             self.store.write_spec(job.design_id, job.version_no, spec)
             job.current_step = "generating_cad"
             job.progress = 50
             job.updated_at = _utcnow()
             self._save_job(job)
+            bus.publish(JobEvent(
+                type=JobEventType.PROGRESS,
+                job_id=job.id,
+                design_id=job.design_id,
+                version_no=job.version_no,
+                progress=job.progress,
+                current_step=job.current_step,
+            ))
             result = generate_aircraft(spec=spec, output_dir=output_dir, backend=self.backend)
             job.status = success_status
             job.progress = 100
@@ -127,6 +145,16 @@ class JobRunner:
                 files=job.files,
                 duration_ms=job.duration_ms,
             )
+            bus.publish(JobEvent(
+                type=JobEventType.COMPLETED,
+                job_id=job.id,
+                design_id=job.design_id,
+                version_no=job.version_no,
+                progress=100,
+                current_step="succeeded",
+                files=job.files,
+                duration_ms=job.duration_ms,
+            ))
         except Exception as exc:
             logger.exception(
                 "Generation job failed for design_id=%s version_no=%s",
@@ -151,6 +179,16 @@ class JobRunner:
                 error_message=job.error_message,
                 duration_ms=job.duration_ms,
             )
+            bus.publish(JobEvent(
+                type=JobEventType.FAILED,
+                job_id=job.id,
+                design_id=job.design_id,
+                version_no=job.version_no,
+                progress=job.progress,
+                current_step="failed",
+                error_message=job.error_message,
+                duration_ms=job.duration_ms,
+            ))
         finally:
             self._save_job(job)
 

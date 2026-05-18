@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from services.api.app.graph.design_graph import run_shadow_classification
 from services.api.app.graph.design_graph import classify_message_intent
 from services.api.app.graph.mode import get_graph_mode
-from services.api.app.graph.sse_adapter import convert_sse_events
+from services.api.app.graph.sse_adapter import convert_sse_events, sse_message_event
 from services.api.app.graph.tracing import get_tracing_config
 from services.api.app.services.chat_service import ChatService
 from services.api.app.services.shadow_logger import ShadowLogger
@@ -207,6 +207,171 @@ async def _chat_partial(req: ChatRequest, background_tasks: BackgroundTasks):
 async def chat_shadow(req: ChatRequest, background_tasks: BackgroundTasks):
     """Explicit shadow endpoint — always runs shadow regardless of CHAT_GRAPH_MODE."""
     return await _chat_shadow(req, background_tasks)
+
+
+@router.post("/chat/stream")
+async def chat_graph_stream(req: ChatRequest, background_tasks: BackgroundTasks):
+    """Graph-native streaming: full lifecycle observation via JobEventBus.
+
+    Uses observe_until_terminal=True with event_driven=True to stream
+    generation_started → generation_progress → generation_complete/failed
+    all from the graph, no frontend polling needed.
+    """
+    import asyncio
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
+    state = chat_service.get_or_create_state(req.conversation_id)
+    has_spec = state.current_spec is not None if hasattr(state, "current_spec") else False
+
+    intent = classify_message_intent(
+        req.message,
+        selected_refs=req.selected_refs or None,
+        has_current_spec=has_spec,
+    )
+
+    # Scope guard: generate without spec → legacy
+    if intent == "generate_design" and not has_spec:
+        return StreamingResponse(
+            chat_service.chat_stream(
+                conversation_id=req.conversation_id,
+                message=req.message,
+                selected_refs=req.selected_refs,
+                background_tasks=background_tasks,
+            ),
+            media_type="text/event-stream",
+        )
+
+    # Conversation intent → legacy
+    if intent in ("conversation", "unknown"):
+        return StreamingResponse(
+            chat_service.chat_stream(
+                conversation_id=req.conversation_id,
+                message=req.message,
+                selected_refs=req.selected_refs,
+                background_tasks=background_tasks,
+            ),
+            media_type="text/event-stream",
+        )
+
+    try:
+        from services.api.app.routers.designs import _get_job_runner
+        from services.api.app.graph.partial_graph import build_partial_design_graph
+        from services.api.app.services.job_events import (
+            JobEventType, get_job_event_bus,
+        )
+
+        job_runner = _get_job_runner()
+
+        # Build graph with event-driven full lifecycle
+        graph = build_partial_design_graph(
+            job_runner=job_runner,
+            observe_until_terminal=True,
+            event_driven=True,
+        )
+
+        tracing_config = get_tracing_config(
+            design_id=state.design_id if hasattr(state, "design_id") else "",
+            conversation_id=req.conversation_id,
+            graph_mode="partial",
+        )
+
+        input_state = {
+            "conversation_id": req.conversation_id,
+            "user_message": req.message,
+            "selected_refs": req.selected_refs or [],
+            "current_spec": state.current_spec.model_dump(mode="json") if has_spec else None,
+        }
+        if hasattr(state, "design_id") and state.design_id:
+            input_state["design_id"] = state.design_id
+
+        # Stream events from JobEventBus to SSE
+        async def _graph_stream():
+            bus = get_job_event_bus()
+            event_queue: asyncio.Queue = asyncio.Queue()
+
+            def _on_event(event):
+                try:
+                    event_queue.put_nowait(event)
+                except Exception:
+                    pass
+
+            bus.subscribe(_on_event)
+
+            # Run graph in thread pool to avoid blocking
+            import concurrent.futures
+            loop = asyncio.get_event_loop()
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = loop.run_in_executor(
+                    pool,
+                    lambda: graph.invoke(input_state, config=tracing_config or None),
+                )
+
+                # Stream events as they arrive
+                terminal_event_received = False
+                while not terminal_event_received:
+                    try:
+                        event = await asyncio.wait_for(event_queue.get(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        if future.done():
+                            break
+                        continue
+
+                    if event.type in (
+                        JobEventType.COMPLETED, JobEventType.FAILED,
+                    ):
+                        terminal_event_received = True
+
+                    # Convert to SSE and yield
+                    ev_dict = {
+                        "event_type": event.type.value,
+                        "job_id": event.job_id,
+                        "design_id": event.design_id,
+                        "version_no": event.version_no,
+                        "status": "succeeded" if event.type == JobEventType.COMPLETED else "failed",
+                        "progress": event.progress,
+                        "current_step": event.current_step,
+                        "duration_ms": event.duration_ms,
+                        "error_message": event.error_message,
+                        "created_at": event.timestamp,
+                        "updated_at": event.timestamp,
+                    }
+                    from services.api.app.graph.sse_adapter import convert_sse_events
+                    sse_lines = convert_sse_events([ev_dict])
+                    for line in sse_lines:
+                        yield line
+
+                # Wait for graph to finish
+                result = await future
+
+                # Yield final message
+                status = result.get("status", "")
+                intent_val = result.get("intent", "")
+                content = _partial_message_content(intent_val, status)
+                yield sse_message_event(
+                    content,
+                    intent=intent_val,
+                    job_id=result.get("job_id", ""),
+                    status=status,
+                )
+
+            bus.unsubscribe(_on_event)
+
+        return StreamingResponse(_graph_stream(), media_type="text/event-stream")
+
+    except Exception:
+        logger.exception("graph stream failed, falling back to legacy")
+        return StreamingResponse(
+            chat_service.chat_stream(
+                conversation_id=req.conversation_id,
+                message=req.message,
+                selected_refs=req.selected_refs,
+                background_tasks=background_tasks,
+            ),
+            media_type="text/event-stream",
+        )
 
 
 def _partial_message_content(intent: str, status: str) -> str:

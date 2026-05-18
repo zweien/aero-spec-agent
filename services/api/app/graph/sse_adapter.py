@@ -1,9 +1,11 @@
 """SSE adapter — convert state.sse_events to SSE text/event-stream format.
 
 Compatible with the frontend ChatPanel protocol:
-  event: generation_started  → {job_id, status, version_no, design_id, ...}
-  event: generation_complete → {job_id, status, version_no, design_id, ...}
-  event: generation_failed   → {job_id, status, version_no, error_message}
+  event: generation_started   → {job_id, status, version_no, design_id, ...}
+  event: generation_progress  → {job_id, status, progress, current_step, ...}
+  event: generation_complete  → {job_id, status, version_no, design_id, ...}
+  event: generation_failed    → {job_id, status, version_no, error_message}
+  event: message              → {content, intent, job_id, status}
 """
 
 from __future__ import annotations
@@ -32,12 +34,33 @@ def convert_sse_events(state_events: list[dict[str, Any]]) -> list[str]:
     return output
 
 
+def sse_message_event(content: str, **metadata) -> str:
+    """Create a message SSE event with content and metadata."""
+    data = {"content": content, **metadata}
+    return sse_event("message", data)
+
+
+def convert_job_event_to_sse(event_dict: dict[str, Any]) -> str:
+    """Convert a single JobEvent dict to SSE format.
+
+    Used for streaming progress events from JobEventBus.
+    """
+    event_type = _map_event_type(event_dict.get("type", "unknown"))
+    payload = _build_payload(event_dict)
+    return sse_event(event_type, payload)
+
+
 def _map_event_type(event_type: str) -> str:
     """Map internal event types to frontend SSE event names."""
     mapping = {
         "generation_started": "generation_started",
+        "generation_progress": "generation_progress",
         "generation_complete": "generation_complete",
         "generation_failed": "generation_failed",
+        "job_started": "generation_progress",
+        "job_progress": "generation_progress",
+        "job_completed": "generation_complete",
+        "job_failed": "generation_failed",
     }
     return mapping.get(event_type, event_type)
 
@@ -56,4 +79,8 @@ def _build_payload(ev: dict[str, Any]) -> dict[str, Any]:
         payload["error_message"] = ev["error_message"]
     if ev.get("duration_ms") is not None:
         payload["duration_ms"] = ev["duration_ms"]
+    if ev.get("progress") is not None:
+        payload["progress"] = ev["progress"]
+    if ev.get("current_step"):
+        payload["current_step"] = ev["current_step"]
     return payload
