@@ -5,8 +5,9 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
+import { resolveGenerationJob } from "@/lib/generationFlow";
 import { createChatSseParser } from "./chatSse";
-import { waitForGenerationJob } from "./jobPolling";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
 
 export type GenerationCompleteData = {
   job_id?: string;
@@ -314,7 +315,7 @@ export function ChatPanel({
               appendAssistantText(assistantId, "\n\n正在生成 CAD 模型...\n");
               const jobId = String(event.data.job_id ?? event.data.id ?? "");
               if (jobId) {
-                void waitForGenerationJob({ apiBaseUrl, jobId })
+                void resolveGenerationJob({ apiBaseUrl, jobId })
                   .then((job) => {
                     completeLatestTool(assistantId, {
                       ...(event.data as GenerationCompleteData),
@@ -330,7 +331,7 @@ export function ChatPanel({
             } else if (event.type === "generation_complete") {
               const jobId = String(event.data.job_id ?? event.data.id ?? "");
               if (jobId && event.data.status !== "succeeded") {
-                void waitForGenerationJob({ apiBaseUrl, jobId })
+                void resolveGenerationJob({ apiBaseUrl, jobId })
                   .then((job) => {
                     completeLatestTool(assistantId, {
                       ...(event.data as GenerationCompleteData),
@@ -512,31 +513,12 @@ export function ChatPanel({
 
 function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) {
   const [expanded, setExpanded] = useState(false);
-  const [diagExpanded, setDiagExpanded] = useState(false);
-  const [diagData, setDiagData] = useState<Record<string, unknown> | null>(null);
-  const [diagLoading, setDiagLoading] = useState(false);
   const toolName = part.toolName;
   const label = TOOL_LABELS[toolName] ?? toolName;
   const isRunning = part.state === "running";
   const result = part.output as GenerationCompleteData | undefined;
   const isFailed = !isRunning && result?.job_id && !result?.version_no;
   const failedJobId = isFailed ? result!.job_id : undefined;
-
-  const fetchDiagnostics = useCallback(async () => {
-    if (!failedJobId || diagLoading) return;
-    setDiagLoading(true);
-    try {
-      const resp = await fetch(`${apiBaseUrl}/api/jobs/${failedJobId}/diagnostics`);
-      if (resp.ok) {
-        setDiagData(await resp.json());
-      }
-    } catch {
-      setDiagData(null);
-    } finally {
-      setDiagLoading(false);
-      setDiagExpanded(true);
-    }
-  }, [apiBaseUrl, failedJobId, diagLoading]);
 
   return (
     <div
@@ -575,22 +557,8 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
         <div className="tool-card-message">{result.message}</div>
       )}
 
-      {isFailed && (
-        <div className="tool-card-diagnostics">
-          <button
-            type="button"
-            className="tool-card-toggle"
-            onClick={diagExpanded ? () => setDiagExpanded(false) : fetchDiagnostics}
-            disabled={diagLoading}
-          >
-            {diagLoading ? "加载中..." : diagExpanded ? "▾ 收起诊断" : "▸ 查看诊断"}
-          </button>
-          {diagExpanded && diagData && (
-            <pre className="tool-card-diag-content">
-              {JSON.stringify(diagData, null, 2)}
-            </pre>
-          )}
-        </div>
+      {isFailed && failedJobId && (
+        <DiagnosticsPanel apiBaseUrl={apiBaseUrl} jobId={failedJobId} />
       )}
 
       {!isRunning && result?.files && result.files.length > 0 && result.version_no && (

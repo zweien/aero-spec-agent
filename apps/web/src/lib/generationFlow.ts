@@ -9,20 +9,27 @@ export type GenerationFlowResult = {
   error_message?: string | null;
 };
 
+export type WaitForJobFn = (opts: {
+  apiBaseUrl: string;
+  jobId: string;
+}) => Promise<JobPollResult>;
+
 /**
  * Resolve a generation job by polling the backend.
  *
  * Throws immediately if jobId is empty.
- * Returns a rejected promise if the job fails (waitForGenerationJob throws).
+ * Returns a rejected promise if the job fails (waitForJob throws).
  */
 export async function resolveGenerationJob(opts: {
   apiBaseUrl: string;
   jobId: string;
+  waitForJob?: WaitForJobFn;
 }): Promise<JobPollResult> {
   if (!opts.jobId) {
     throw new Error("缺少 job_id，无法轮询生成任务");
   }
-  return waitForGenerationJob({
+  const poll = opts.waitForJob ?? waitForGenerationJob;
+  return poll({
     apiBaseUrl: opts.apiBaseUrl,
     jobId: opts.jobId,
   });
@@ -42,8 +49,9 @@ export async function pollJobToCompletion(opts: {
   version_no?: number;
   files?: Record<string, string>;
   error_message?: string | null;
+  waitForJob?: WaitForJobFn;
 }): Promise<GenerationFlowResult> {
-  const { apiBaseUrl, jobId, initialStatus, design_id, version_no, files, error_message } = opts;
+  const { apiBaseUrl, jobId, initialStatus, design_id, version_no, files, error_message, waitForJob } = opts;
 
   if (!jobId) {
     throw new Error("缺少 job_id，无法轮询生成任务");
@@ -59,7 +67,7 @@ export async function pollJobToCompletion(opts: {
     };
   }
 
-  const result = await resolveGenerationJob({ apiBaseUrl, jobId });
+  const result = await resolveGenerationJob({ apiBaseUrl, jobId, waitForJob });
   return {
     status: result.status,
     design_id: result.design_id,
