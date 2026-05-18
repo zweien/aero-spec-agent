@@ -1,23 +1,23 @@
-"""generate_design node — dispatch generation job for a new spec."""
+"""generate_design node — shadow-mode metadata for generation intent."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from services.api.app.graph.state import DesignGraphState
-
-if TYPE_CHECKING:
-    from services.api.app.services.job_runner import JobRunner
 
 
 def generate_design(state: DesignGraphState) -> dict:
-    """Prepare a generate_design tool call.
+    """Record would-call metadata for generate_design.
 
-    This node records the intent; actual job dispatch happens in ChatService.
-    In shadow mode, it only produces the classified tool name and args for
-    comparison with the old path.
+    In shadow mode, this node never dispatches real jobs.
+    It writes would_call_tool/would_call_args for divergence comparison,
+    and preserves tool_name/tool_args for backward compatibility.
     """
     return {
         "tool_name": "generate_design",
         "tool_args": {},
+        "would_call_tool": "generate_design",
+        "would_call_args": {
+            "design_id": state.get("design_id", ""),
+            "message": state.get("user_message", ""),
+        },
     }

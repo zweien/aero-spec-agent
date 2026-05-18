@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from services.api.app.graph.state import DesignGraphState
@@ -33,7 +34,9 @@ def _route_by_intent(state: DesignGraphState) -> str:
     return target
 
 
-def build_design_graph() -> StateGraph:
+def build_design_graph(
+    checkpointer: InMemorySaver | None = None,
+) -> StateGraph:
     """Build the design orchestration graph.
 
     Flow:
@@ -41,7 +44,11 @@ def build_design_graph() -> StateGraph:
         → {generate|modify|modify_selected_part} → save_state → END
 
     In shadow mode, only load_context and classify_intent execute meaningfully.
-    Tool nodes return metadata for divergence comparison.
+    Tool nodes return would_call_tool/would_call_args for divergence comparison.
+
+    Args:
+        checkpointer: Optional InMemorySaver for thread-based state persistence.
+            When provided, invoke with config={"configurable": {"thread_id": "..."}}.
     """
     graph = StateGraph(DesignGraphState)
 
@@ -79,7 +86,7 @@ def build_design_graph() -> StateGraph:
     # save_state → END
     graph.add_edge("save_state", END)
 
-    return graph
+    return graph.compile(checkpointer=checkpointer)
 
 
 def run_shadow_classification(
@@ -91,7 +98,7 @@ def run_shadow_classification(
 
     Returns the graph state after execution for divergence comparison.
     """
-    g = build_design_graph().compile()
+    g = build_design_graph()
     initial_state: DesignGraphState = {
         "conversation_id": "shadow",
         "user_message": message,
@@ -102,6 +109,8 @@ def run_shadow_classification(
     return {
         "intent": result.get("intent", "unknown"),
         "tool_name": result.get("tool_name"),
+        "would_call_tool": result.get("would_call_tool"),
+        "would_call_args": result.get("would_call_args"),
     }
 
 

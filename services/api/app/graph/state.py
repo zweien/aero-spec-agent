@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+import operator
+from typing import Any, Literal
+
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
+from typing_extensions import Annotated, TypedDict
 
 DesignIntent = Literal[
     "generate_design",
@@ -14,7 +19,12 @@ DesignIntent = Literal[
 
 
 class DesignGraphState(TypedDict, total=False):
-    """State flowing through the design graph nodes."""
+    """State flowing through the design graph nodes.
+
+    Uses Annotated reducers for accumulation fields:
+      - messages: add_messages reducer (dedup, ID-based update, shorthand support)
+      - graph_errors: operator.add reducer (append-only error accumulation)
+    """
 
     # Identity
     conversation_id: str
@@ -26,7 +36,7 @@ class DesignGraphState(TypedDict, total=False):
 
     # Context
     current_spec: dict[str, Any] | None
-    messages: list[dict[str, Any]]
+    messages: Annotated[list[AnyMessage], add_messages]
 
     # Intent classification
     intent: DesignIntent
@@ -37,6 +47,10 @@ class DesignGraphState(TypedDict, total=False):
     proposed_spec: dict[str, Any] | None
     patch_changes: list[dict[str, Any]]
 
+    # Shadow-mode metadata (written but never executed)
+    would_call_tool: str
+    would_call_args: dict[str, Any]
+
     # Generation
     generation_job: dict[str, Any] | None
     job_id: str
@@ -46,3 +60,6 @@ class DesignGraphState(TypedDict, total=False):
     # Response
     assistant_message: str
     error_message: str | None
+
+    # Error accumulation across nodes
+    graph_errors: Annotated[list[str], operator.add]

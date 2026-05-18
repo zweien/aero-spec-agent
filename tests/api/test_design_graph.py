@@ -7,8 +7,7 @@ from services.api.app.graph.state import DesignGraphState
 
 
 def test_build_design_graph_compiles():
-    graph = build_design_graph()
-    compiled = graph.compile()
+    compiled = build_design_graph()
     assert compiled is not None
 
 
