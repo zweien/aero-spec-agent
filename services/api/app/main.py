@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from services.api.app.routers.chat import router as chat_router
 from services.api.app.routers.chat import set_job_runner as set_chat_job_runner
+from services.api.app.routers.deep_design import router as deep_design_router
 from services.api.app.routers.design_controller import router as design_controller_router
 from services.api.app.routers.designs import router as designs_router
 from services.api.app.routers.designs import runner as designs_runner
@@ -28,6 +29,7 @@ app.add_middleware(
 app.include_router(designs_router)
 app.include_router(chat_router)
 app.include_router(design_controller_router)
+app.include_router(deep_design_router)
 
 set_chat_job_runner(designs_runner)
 

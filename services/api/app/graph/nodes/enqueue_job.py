@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from services.api.app.graph.observe import observe_node
 from services.api.app.graph.state import DesignGraphState
 
 if TYPE_CHECKING:
@@ -30,6 +31,7 @@ def _job_to_event(job: Any, event_type: str) -> dict[str, Any]:
 def make_enqueue_job_node(job_runner: JobRunner):
     """Factory: returns an enqueue_job node with JobRunner injected."""
 
+    @observe_node("enqueue_job")
     def enqueue_job(state: DesignGraphState) -> dict:
         spec_dict = state.get("aircraft_spec")
         design_id = state.get("design_id", "")

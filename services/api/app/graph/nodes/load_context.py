@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from services.api.app.graph.observe import observe_node
 from services.api.app.graph.state import DesignGraphState
 
 
+@observe_node("load_context")
 def load_context(state: DesignGraphState) -> dict:
     """Load conversation context into graph state.
 

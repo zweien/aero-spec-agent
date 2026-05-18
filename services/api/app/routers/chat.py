@@ -264,7 +264,6 @@ async def chat_graph_stream(req: ChatRequest, background_tasks: BackgroundTasks)
 
         job_runner = _get_job_runner()
 
-        # Build graph with event-driven full lifecycle
         graph = build_partial_design_graph(
             job_runner=job_runner,
             observe_until_terminal=True,
@@ -286,18 +285,10 @@ async def chat_graph_stream(req: ChatRequest, background_tasks: BackgroundTasks)
         if hasattr(state, "design_id") and state.design_id:
             input_state["design_id"] = state.design_id
 
-        # Stream events from JobEventBus to SSE
+        # Stream events from async JobEventBus to SSE
         async def _graph_stream():
             bus = get_job_event_bus()
-            event_queue: asyncio.Queue = asyncio.Queue()
-
-            def _on_event(event):
-                try:
-                    event_queue.put_nowait(event)
-                except Exception:
-                    pass
-
-            bus.subscribe(_on_event)
+            event_queue = bus.async_queue()
 
             # Run graph in thread pool to avoid blocking
             import concurrent.futures
@@ -309,41 +300,25 @@ async def chat_graph_stream(req: ChatRequest, background_tasks: BackgroundTasks)
                     lambda: graph.invoke(input_state, config=tracing_config or None),
                 )
 
-                # Stream events as they arrive
-                terminal_event_received = False
-                while not terminal_event_received:
+                # Stream events from async queue
+                while True:
+                    if future.done():
+                        # Drain remaining events
+                        while not event_queue.empty():
+                            event = event_queue.get_nowait()
+                            async for line in _event_to_sse(event):
+                                yield line
+                        break
+
                     try:
                         event = await asyncio.wait_for(event_queue.get(), timeout=0.5)
                     except asyncio.TimeoutError:
-                        if future.done():
-                            break
                         continue
 
-                    if event.type in (
-                        JobEventType.COMPLETED, JobEventType.FAILED,
-                    ):
-                        terminal_event_received = True
-
-                    # Convert to SSE and yield
-                    ev_dict = {
-                        "event_type": event.type.value,
-                        "job_id": event.job_id,
-                        "design_id": event.design_id,
-                        "version_no": event.version_no,
-                        "status": "succeeded" if event.type == JobEventType.COMPLETED else "failed",
-                        "progress": event.progress,
-                        "current_step": event.current_step,
-                        "duration_ms": event.duration_ms,
-                        "error_message": event.error_message,
-                        "created_at": event.timestamp,
-                        "updated_at": event.timestamp,
-                    }
-                    from services.api.app.graph.sse_adapter import convert_sse_events
-                    sse_lines = convert_sse_events([ev_dict])
-                    for line in sse_lines:
+                    async for line in _event_to_sse(event):
                         yield line
 
-                # Wait for graph to finish
+                # Wait for graph result
                 result = await future
 
                 # Yield final message
@@ -357,7 +332,7 @@ async def chat_graph_stream(req: ChatRequest, background_tasks: BackgroundTasks)
                     status=status,
                 )
 
-            bus.unsubscribe(_on_event)
+            bus.release_async_queue(event_queue)
 
         return StreamingResponse(_graph_stream(), media_type="text/event-stream")
 
@@ -381,3 +356,25 @@ def _partial_message_content(intent: str, status: str) -> str:
     if intent in ("generate_design", "modify_design", "modify_selected_part"):
         return "已提交生成任务，正在后台生成 CAD 模型。"
     return "正在处理您的请求。"
+
+
+async def _event_to_sse(event):
+    """Convert a JobEvent to SSE lines."""
+    from services.api.app.graph.sse_adapter import convert_sse_events
+    from services.api.app.services.job_events import JobEventType
+    ev_dict = {
+        "event_type": event.type.value,
+        "job_id": event.job_id,
+        "design_id": event.design_id,
+        "version_no": event.version_no,
+        "status": "succeeded" if event.type == JobEventType.COMPLETED else "failed",
+        "progress": event.progress,
+        "current_step": event.current_step,
+        "duration_ms": event.duration_ms,
+        "error_message": event.error_message,
+        "created_at": event.timestamp,
+        "updated_at": event.timestamp,
+    }
+    sse_lines = convert_sse_events([ev_dict])
+    for line in sse_lines:
+        yield line

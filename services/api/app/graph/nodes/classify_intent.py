@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from services.api.app.graph.observe import observe_node
 from services.api.app.graph.state import DesignGraphState, DesignIntent
 
 _GENERATE_KEYWORDS = ("生成", "设计", "创建", "新建", "做一架", "搞一架")
@@ -12,6 +13,7 @@ _MODIFY_PART_KEYWORDS = (
 )
 
 
+@observe_node("classify_intent")
 def classify_intent(state: DesignGraphState) -> dict:
     """Classify user intent from message content and context."""
     message = state.get("user_message", "")

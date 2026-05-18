@@ -81,6 +81,7 @@ def make_dispatch_variants_node(job_runner: Any):
                 "version_no": job.version_no,
                 "changes": variant.get("changes", []),
                 "status": "queued",
+                "thread_id": f"{design_id}_variant_{i}",
             })
 
         return {"variant_jobs": jobs, "status": "running"}
