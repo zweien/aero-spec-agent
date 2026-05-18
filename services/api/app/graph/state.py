@@ -63,3 +63,7 @@ class DesignGraphState(TypedDict, total=False):
 
     # Error accumulation across nodes
     graph_errors: Annotated[list[str], operator.add]
+
+    # Partial-mode fields (real job orchestration)
+    aircraft_spec: dict[str, Any] | None
+    sse_events: Annotated[list[dict[str, Any]], operator.add]
