@@ -12,7 +12,7 @@ export async function fetchJobDiagnostics(
   fetchFn: typeof fetch = fetch,
 ): Promise<JobDiagnostics | null> {
   try {
-    const resp = await fetchFn(`${apiBaseUrl}/api/jobs/${jobId}/diagnostics`);
+    const resp = await fetchFn(`${apiBaseUrl}/api/jobs/${encodeURIComponent(jobId)}/diagnostics`);
     if (resp.ok) {
       return (await resp.json()) as JobDiagnostics;
     }
