@@ -1,6 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
+from services.api.app.graph.mode import get_graph_mode
 from services.api.app.services.design_controller import DesignControllerService
 from services.api.app.services.version_store import VersionStore
 
@@ -35,7 +36,12 @@ async def compare_variants(req: CompareRequest, background_tasks: BackgroundTask
     """Dispatch multiple variant specs as parallel generation jobs."""
     runner = _get_runner()
     store = _get_store()
+    mode = get_graph_mode()
 
+    if mode in ("partial", "shadow"):
+        return await _compare_with_graph(req, runner, background_tasks)
+
+    # legacy path
     controller = _controller_service.compare_variants(
         design_id=req.design_id,
         base_spec=req.base_spec,
@@ -44,7 +50,6 @@ async def compare_variants(req: CompareRequest, background_tasks: BackgroundTask
         version_store=store,
     )
 
-    # Run all variant jobs in background
     for variant in controller.variants:
         from services.api.app.schemas.aircraft_spec import AircraftSpec
         patched = _patch_spec(req.base_spec, variant["changes"])
@@ -53,6 +58,72 @@ async def compare_variants(req: CompareRequest, background_tasks: BackgroundTask
 
     from dataclasses import asdict
     return asdict(controller)
+
+
+async def _compare_with_graph(req: CompareRequest, runner, background_tasks: BackgroundTasks):
+    """Use CompareGraph for variant dispatch, fall back to legacy on error."""
+    import logging
+    import uuid
+    from dataclasses import asdict
+    from datetime import datetime, timezone
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        from services.api.app.graph.compare_graph import build_compare_graph
+        from services.api.app.schemas.aircraft_spec import AircraftSpec
+
+        graph = build_compare_graph(job_runner=runner)
+        result = graph.invoke({
+            "design_id": req.design_id,
+            "base_spec": req.base_spec,
+            "variants": [v.model_dump() for v in req.variants],
+        })
+
+        if result.get("status") == "failed":
+            raise RuntimeError(result.get("error_message", "CompareGraph failed"))
+
+        # Run all dispatched jobs in background
+        variant_jobs = result.get("variant_jobs", [])
+        for vj in variant_jobs:
+            job = runner.get(vj["job_id"])
+            if job and job.status == "queued":
+                patched = _patch_spec(req.base_spec, vj.get("changes", []))
+                spec = AircraftSpec.model_validate(patched)
+                background_tasks.add_task(runner.run_queued_job, vj["job_id"], spec)
+
+        # Return response matching existing API contract (ControllerJob shape)
+        now = datetime.now(timezone.utc).isoformat()
+        controller_response = {
+            "id": uuid.uuid4().hex[:12],
+            "design_id": req.design_id,
+            "status": "running",
+            "variants": variant_jobs,
+            "results": [],
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        # Persist for later GET
+        _controller_service._save_from_dict(controller_response)
+        return controller_response
+
+    except Exception:
+        logger.exception("CompareGraph failed, falling back to legacy controller")
+        store = _get_store()
+        controller = _controller_service.compare_variants(
+            design_id=req.design_id,
+            base_spec=req.base_spec,
+            variants=[v.model_dump() for v in req.variants],
+            job_runner=runner,
+            version_store=store,
+        )
+        for variant in controller.variants:
+            from services.api.app.schemas.aircraft_spec import AircraftSpec
+            patched = _patch_spec(req.base_spec, variant["changes"])
+            spec = AircraftSpec.model_validate(patched)
+            background_tasks.add_task(runner.run_queued_job, variant["job_id"], spec)
+        return asdict(controller)
 
 
 @router.get("/{controller_job_id}")

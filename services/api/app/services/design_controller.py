@@ -140,6 +140,14 @@ class DesignControllerService:
             encoding="utf-8",
         )
 
+    def _save_from_dict(self, data: dict[str, Any]) -> None:
+        """Persist a controller job dict directly (used by CompareGraph path)."""
+        path = self._root / f"{data.get('id', 'unknown')}.json"
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
 
 def _set_nested(obj: dict, path: str, value: Any) -> None:
     keys = path.split(".")

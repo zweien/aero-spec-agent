@@ -24,6 +24,7 @@ from services.api.app.graph.nodes.classify_intent import classify_intent
 from services.api.app.graph.nodes.prepare_tool_args import prepare_tool_args
 from services.api.app.graph.nodes.enqueue_job import make_enqueue_job_node
 from services.api.app.graph.nodes.observe_job import make_observe_job_node
+from services.api.app.graph.nodes.skip_observe import skip_observe
 from services.api.app.graph.nodes.emit_sse import emit_sse
 from services.api.app.graph.nodes.save_state import save_state
 
@@ -43,6 +44,7 @@ def build_partial_design_graph(
     checkpointer: InMemorySaver | None = None,
     poll_interval: float = 0.3,
     max_poll_seconds: float = 120,
+    observe_until_terminal: bool = True,
 ) -> StateGraph:
     """Build the partial-mode design orchestration graph.
 
@@ -51,6 +53,9 @@ def build_partial_design_graph(
         checkpointer: Optional checkpointer for thread-based persistence.
         poll_interval: Seconds between job status polls.
         max_poll_seconds: Maximum time to wait for job completion.
+        observe_until_terminal: If True, observe_job polls until terminal.
+            If False, uses skip_observe (fire-and-forget for API mode).
+            API mode should use False to avoid blocking the request.
 
     Returns:
         Compiled StateGraph ready for invoke/astream_events.
@@ -62,9 +67,14 @@ def build_partial_design_graph(
     graph.add_node("classify_intent", classify_intent)
     graph.add_node("prepare_tool_args", prepare_tool_args)
     graph.add_node("enqueue_job", make_enqueue_job_node(job_runner))
-    graph.add_node("observe_job", make_observe_job_node(
-        job_runner, poll_interval=poll_interval, max_poll_seconds=max_poll_seconds,
-    ))
+
+    if observe_until_terminal:
+        graph.add_node("observe_job", make_observe_job_node(
+            job_runner, poll_interval=poll_interval, max_poll_seconds=max_poll_seconds,
+        ))
+    else:
+        graph.add_node("observe_job", skip_observe)
+
     graph.add_node("emit_sse", emit_sse)
     graph.add_node("save_state", save_state)
 
