@@ -22,6 +22,7 @@ from typing_extensions import Annotated, TypedDict
 
 from services.api.app.graph.compare_graph import build_compare_graph
 from services.api.app.graph.observe import observe_node
+from services.api.app.graph.deep_design_streaming import observe_node_sse
 
 logger = logging.getLogger(__name__)
 
@@ -136,10 +137,11 @@ def prepare_variants(state: DeepDesignState) -> dict:
     return {"variants": variants, "status": "running"}
 
 
-def make_run_compare_node(job_runner: Any, timeout_seconds: float = 120):
+def make_run_compare_node(job_runner: Any, timeout_seconds: float = 120, streaming: bool = False):
     """Factory: invoke CompareGraph subgraph with prepared variants."""
+    obs = observe_node_sse if streaming else observe_node
 
-    @observe_node("run_compare")
+    @obs("run_compare")
     def run_compare(state: DeepDesignState) -> dict:
         if state.get("status") == "failed":
             return {"results": [], "comparison": None}
@@ -352,6 +354,7 @@ def build_deep_design_graph(
     job_runner: Any,
     timeout_seconds: float = 120,
     enable_refinement: bool = False,
+    streaming: bool = False,
 ) -> StateGraph:
     """Build the DeepDesignGraph using CompareGraph as subgraph.
 
@@ -359,25 +362,40 @@ def build_deep_design_graph(
         job_runner: JobRunner instance.
         timeout_seconds: Max wait time for all variants.
         enable_refinement: If True, add refine_variants loop.
+        streaming: If True, emit graph_node SSE events via observe_node_sse.
 
     Returns:
         Compiled StateGraph.
     """
+    if streaming:
+        # Unwrap observe_node, re-wrap with observe_node_sse for SSE emission
+        _parse = observe_node_sse("parse_requirements")(parse_requirements.__wrapped__)
+        _prepare = observe_node_sse("prepare_variants")(prepare_variants.__wrapped__)
+        _report = observe_node_sse("synthesize_report")(synthesize_report.__wrapped__)
+    else:
+        _parse = parse_requirements
+        _prepare = prepare_variants
+        _report = synthesize_report
+
     graph = StateGraph(DeepDesignState)
 
-    graph.add_node("parse_requirements", parse_requirements)
-    graph.add_node("prepare_variants", prepare_variants)
+    graph.add_node("parse_requirements", _parse)
+    graph.add_node("prepare_variants", _prepare)
     graph.add_node("run_compare", make_run_compare_node(
-        job_runner, timeout_seconds=timeout_seconds,
+        job_runner, timeout_seconds=timeout_seconds, streaming=streaming,
     ))
-    graph.add_node("synthesize_report", synthesize_report)
+    graph.add_node("synthesize_report", _report)
 
     graph.add_edge(START, "parse_requirements")
     graph.add_edge("parse_requirements", "prepare_variants")
     graph.add_edge("prepare_variants", "run_compare")
 
     if enable_refinement:
-        graph.add_node("refine_variants", refine_variants)
+        if streaming:
+            _refine = observe_node_sse("refine_variants")(refine_variants.__wrapped__)
+        else:
+            _refine = refine_variants
+        graph.add_node("refine_variants", _refine)
         graph.add_edge("run_compare", "refine_variants")
         graph.add_conditional_edges(
             "refine_variants",
