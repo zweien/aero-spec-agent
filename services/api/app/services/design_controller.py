@@ -106,10 +106,17 @@ class DesignControllerService:
             job = job_runner.get(variant["job_id"])
             if job is None:
                 variant["status"] = "failed"
+                controller.results.append({
+                    "label": variant["label"],
+                    "version_no": variant.get("version_no", 0),
+                    "status": "failed",
+                    "error_message": "job not found",
+                })
                 continue
             variant["status"] = job.status
             if job.status not in ("succeeded", "failed"):
                 all_terminal = False
+                continue
             if job.status == "succeeded":
                 controller.results.append({
                     "label": variant["label"],
@@ -117,7 +124,7 @@ class DesignControllerService:
                     "status": "succeeded",
                     "files": job.files,
                 })
-            else:
+            elif job.status == "failed":
                 controller.results.append({
                     "label": variant["label"],
                     "version_no": job.version_no,

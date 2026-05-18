@@ -81,15 +81,42 @@ async def _chat_shadow(req: ChatRequest, background_tasks: BackgroundTasks):
 
 
 async def _chat_partial(req: ChatRequest, background_tasks: BackgroundTasks):
-    """Partial mode: run LangGraph partial graph, fallback to legacy on error."""
+    """Partial mode: run LangGraph partial graph, fallback to legacy on error.
+
+    Gray-release scope:
+      - current_spec=None + generate_design → fallback legacy (no spec to enqueue)
+      - selected_refs + current_spec → prefer partial
+      - modify_design + current_spec → prefer partial
+    """
     import logging
     logger = logging.getLogger(__name__)
+
+    state = chat_service.get_or_create_state(req.conversation_id)
+    has_spec = state.current_spec is not None if hasattr(state, "current_spec") else False
+
+    # Pre-classify to decide if partial graph should handle this request
+    intent = classify_message_intent(
+        req.message,
+        selected_refs=req.selected_refs or None,
+        has_current_spec=has_spec,
+    )
+
+    # Scope guard: generate without spec must go through legacy (needs LLM)
+    if intent == "generate_design" and not has_spec:
+        return StreamingResponse(
+            chat_service.chat_stream(
+                conversation_id=req.conversation_id,
+                message=req.message,
+                selected_refs=req.selected_refs,
+                background_tasks=background_tasks,
+            ),
+            media_type="text/event-stream",
+        )
 
     try:
         from services.api.app.routers.designs import _get_job_runner
 
         job_runner = _get_job_runner()
-        state = chat_service.get_or_create_state(req.conversation_id)
 
         from services.api.app.graph.partial_graph import build_partial_design_graph
         graph = build_partial_design_graph(
@@ -107,7 +134,7 @@ async def _chat_partial(req: ChatRequest, background_tasks: BackgroundTasks):
             "conversation_id": req.conversation_id,
             "user_message": req.message,
             "selected_refs": req.selected_refs or [],
-            "current_spec": state.current_spec if hasattr(state, "current_spec") else None,
+            "current_spec": state.current_spec.model_dump(mode="json") if has_spec else None,
         }
         if hasattr(state, "design_id") and state.design_id:
             input_state["design_id"] = state.design_id
@@ -124,12 +151,17 @@ async def _chat_partial(req: ChatRequest, background_tasks: BackgroundTasks):
             async def _partial_stream():
                 for line in sse_lines:
                     yield line
-                # Yield a final message event with the graph result
+                # Yield a final message event with content + metadata
                 import json
+                intent = result.get("intent", "unknown")
+                job_id = result.get("job_id", "")
+                status = result.get("status", "")
+                content = _partial_message_content(intent, status)
                 msg = json.dumps({
-                    "intent": result.get("intent", "unknown"),
-                    "job_id": result.get("job_id", ""),
-                    "status": result.get("status", ""),
+                    "content": content,
+                    "intent": intent,
+                    "job_id": job_id,
+                    "status": status,
                 })
                 yield f"event: message\ndata: {msg}\n\n"
 
@@ -175,3 +207,12 @@ async def _chat_partial(req: ChatRequest, background_tasks: BackgroundTasks):
 async def chat_shadow(req: ChatRequest, background_tasks: BackgroundTasks):
     """Explicit shadow endpoint — always runs shadow regardless of CHAT_GRAPH_MODE."""
     return await _chat_shadow(req, background_tasks)
+
+
+def _partial_message_content(intent: str, status: str) -> str:
+    """Generate user-facing message content for partial mode response."""
+    if status == "failed":
+        return "生成任务提交失败，正在重试。"
+    if intent in ("generate_design", "modify_design", "modify_selected_part"):
+        return "已提交生成任务，正在后台生成 CAD 模型。"
+    return "正在处理您的请求。"

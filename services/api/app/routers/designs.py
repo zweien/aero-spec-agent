@@ -19,6 +19,14 @@ router = APIRouter(prefix="/api", tags=["designs"])
 runner = JobRunner(store=VersionStore())
 
 
+def _get_job_runner() -> JobRunner:
+    return runner
+
+
+def _get_version_store() -> VersionStore:
+    return runner.store
+
+
 def _job_response(job) -> dict[str, object]:
     return job_to_response(job)
 
