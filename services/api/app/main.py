@@ -2,6 +2,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
 from services.api.app.routers.chat import router as chat_router
 from services.api.app.routers.chat import set_job_runner as set_chat_job_runner
@@ -37,3 +38,10 @@ set_chat_job_runner(designs_runner)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/metrics", response_class=PlainTextResponse)
+def metrics():
+    from services.api.app.graph.metrics import get_metrics_collector
+    collector = get_metrics_collector()
+    return collector.snapshot().to_prometheus()

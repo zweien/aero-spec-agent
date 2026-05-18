@@ -244,3 +244,100 @@ class TestNestedStateTransformation:
         for r in result["results"]:
             assert "label" in r
             assert "status" in r
+
+
+# ---------------------------------------------------------------------------
+# Variant failure isolation
+# ---------------------------------------------------------------------------
+
+
+class TestVariantFailureIsolation:
+    def test_one_invalid_spec_doesnt_crash_others(self, job_runner, spec_dict):
+        """One variant with bad spec doesn't prevent others from succeeding."""
+        graph = build_compare_graph(job_runner=job_runner, timeout_seconds=30)
+
+        result = graph.invoke({
+            "design_id": "partial-fail",
+            "base_spec": spec_dict,
+            "variants": [
+                {"label": "good", "changes": []},
+                {"label": "bad", "changes": [
+                    {"path": "wing.span.value", "value": "not_a_number"},
+                ]},
+            ],
+        })
+
+        # Overall graph should still complete (not crash)
+        assert result["status"] == "completed"
+        results = result["results"]
+        # At least the "good" variant should have a result
+        labels = {r["label"] for r in results}
+        assert "good" in labels
+
+    def test_all_variants_fail_still_completes(self, job_runner):
+        """All variants failing still returns completed status with comparison."""
+        graph = build_compare_graph(job_runner=job_runner, timeout_seconds=5)
+
+        result = graph.invoke({
+            "design_id": "all-fail",
+            "base_spec": {"invalid": True},
+            "variants": [
+                {"label": "v1", "changes": []},
+            ],
+        })
+
+        assert result["status"] == "completed"
+        assert result["comparison"]["failed"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# Refinement iteration limits
+# ---------------------------------------------------------------------------
+
+
+class TestRefinementIterationLimits:
+    def test_refine_respects_max_iterations(self, job_runner, spec_dict):
+        """refine_variants never exceeds max_iterations."""
+        graph = build_deep_design_graph(
+            job_runner=job_runner, timeout_seconds=30, enable_refinement=True,
+        )
+        result = graph.invoke({
+            "user_description": "设计无人机",
+            "design_id": "max-iter-test",
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2, "max_iterations": 2},
+        })
+
+        assert result["status"] == "completed"
+        assert result["iteration"] <= 2
+        assert len(result.get("refinement_history", [])) <= 2
+
+    def test_single_iteration_no_loop(self, job_runner, spec_dict):
+        """max_iterations=1 means no refinement loop at all."""
+        graph = build_deep_design_graph(
+            job_runner=job_runner, timeout_seconds=30, enable_refinement=True,
+        )
+        result = graph.invoke({
+            "user_description": "设计无人机",
+            "design_id": "single-iter",
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2, "max_iterations": 1},
+        })
+
+        assert result["status"] == "completed"
+        assert len(result.get("refinement_history", [])) <= 1
+
+    def test_refinement_disabled_single_pass(self, job_runner, spec_dict):
+        """enable_refinement=False means no refine_variants node."""
+        graph = build_deep_design_graph(
+            job_runner=job_runner, timeout_seconds=30, enable_refinement=False,
+        )
+        result = graph.invoke({
+            "user_description": "设计无人机",
+            "design_id": "no-refine",
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2},
+        })
+
+        assert result["status"] == "completed"
+        assert result.get("iteration", 0) == 0
