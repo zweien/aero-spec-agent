@@ -1,19 +1,15 @@
 from services.api.app.graph.design_graph import (
-    DESIGN_GRAPH_NODES,
-    DesignGraphState,
+    build_design_graph,
     classify_message_intent,
+    run_shadow_classification,
 )
+from services.api.app.graph.state import DesignGraphState
 
 
-def test_design_graph_declares_required_nodes():
-    assert DESIGN_GRAPH_NODES == (
-        "load_context",
-        "classify_intent",
-        "generate_design",
-        "modify_design",
-        "submit_generation",
-        "interpret_result",
-    )
+def test_build_design_graph_compiles():
+    graph = build_design_graph()
+    compiled = graph.compile()
+    assert compiled is not None
 
 
 def test_design_graph_state_keeps_selected_refs():
@@ -28,7 +24,7 @@ def test_design_graph_state_keeps_selected_refs():
 
 
 # ---------------------------------------------------------------------------
-# classify_message_intent
+# classify_message_intent (backward-compat)
 # ---------------------------------------------------------------------------
 
 def test_classify_no_spec_as_generate_design():
@@ -55,3 +51,31 @@ def test_classify_selected_ref_message_as_modify_selected_part():
         selected_refs=["part:right_engine"],
         has_current_spec=True,
     ) == "modify_selected_part"
+
+
+# ---------------------------------------------------------------------------
+# LangGraph shadow classification
+# ---------------------------------------------------------------------------
+
+def test_shadow_classification_generate():
+    result = run_shadow_classification("设计一架无人机", has_current_spec=False)
+    assert result["intent"] == "generate_design"
+    assert result["tool_name"] == "generate_design"
+
+
+def test_shadow_classification_modify():
+    result = run_shadow_classification(
+        "把翼展改成15米",
+        selected_refs=[],
+        has_current_spec=True,
+    )
+    assert result["intent"] == "modify_design"
+
+
+def test_shadow_classification_selected_part():
+    result = run_shadow_classification(
+        "加长2米",
+        selected_refs=["part:wing"],
+        has_current_spec=True,
+    )
+    assert result["intent"] == "modify_selected_part"

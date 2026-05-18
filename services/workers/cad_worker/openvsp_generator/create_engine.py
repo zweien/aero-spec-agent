@@ -57,6 +57,10 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             base_x = fuselage_length * 0.85
             base_y = 0.0
             base_z = fuselage_diameter * 0.2
+        elif engine_position == "rear_fuselage":
+            base_x = fuselage_length * 0.75
+            base_y = 0.0
+            base_z = fuselage_diameter * 0.5
         else:
             base_x = wing_x + root_chord * 0.25
             base_y = 0.0

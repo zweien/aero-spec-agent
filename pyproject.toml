@@ -9,6 +9,9 @@ dependencies = [
   "pyyaml>=6.0.2",
   "trimesh>=4.10.0",
   "openai>=1.30.0",
+  "langgraph>=0.2.0",
+  "langchain-core>=0.3.0",
+  "langchain-openai>=0.2.0",
 ]
 
 [project.optional-dependencies]
