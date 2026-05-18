@@ -78,45 +78,70 @@ def make_dispatch_variants_node(job_runner: Any):
     return dispatch_variants
 
 
-def make_aggregate_results_node(job_runner: Any):
-    """Factory: collect results from all variant jobs."""
+def make_aggregate_results_node(
+    job_runner: Any,
+    poll_interval: float = 0.3,
+    max_poll_seconds: float = 0,
+):
+    """Factory: collect results from all variant jobs.
+
+    Args:
+        job_runner: JobRunner instance.
+        poll_interval: Seconds between polls when waiting for terminal states.
+        max_poll_seconds: If > 0, poll until all jobs are terminal or timeout.
+            If 0 (default), do a single snapshot aggregation.
+    """
 
     def aggregate_results(state: CompareState) -> dict:
-        # If dispatch failed, propagate the failure
+        import time
+
         if state.get("status") == "failed":
             return {"results": [], "status": "failed"}
 
         variant_jobs = state.get("variant_jobs", [])
-        results = []
+        if not variant_jobs:
+            return {"results": [], "status": "completed"}
 
-        all_terminal = True
-        for vj in variant_jobs:
-            job = job_runner.get(vj["job_id"])
-            if job is None:
-                results.append({
-                    "label": vj["label"],
-                    "version_no": vj.get("version_no", 0),
-                    "status": "failed",
-                    "error_message": "job not found",
-                })
-            elif job.status in ("succeeded", "failed"):
-                entry = {
-                    "label": vj["label"],
-                    "version_no": vj.version_no,
-                    "status": job.status,
-                }
-                if job.status == "succeeded":
-                    entry["files"] = job.files
-                if job.error_message:
-                    entry["error_message"] = job.error_message
-                results.append(entry)
-            else:
-                all_terminal = False
-                results.append({
-                    "label": vj["label"],
-                    "version_no": vj.get("version_no", 0),
-                    "status": job.status if job else "unknown",
-                })
+        deadline = time.monotonic() + max_poll_seconds if max_poll_seconds > 0 else 0
+
+        while True:
+            results: list[dict[str, Any]] = []
+            all_terminal = True
+
+            for vj in variant_jobs:
+                job = job_runner.get(vj["job_id"])
+                label = vj.get("label", "unknown")
+                vno = vj.get("version_no", 0)
+
+                if job is None:
+                    results.append({
+                        "label": label,
+                        "version_no": vno,
+                        "status": "failed",
+                        "error_message": "job not found",
+                    })
+                elif job.status in ("succeeded", "failed"):
+                    entry: dict[str, Any] = {
+                        "label": label,
+                        "version_no": getattr(job, "version_no", vno),
+                        "status": job.status,
+                    }
+                    if job.status == "succeeded":
+                        entry["files"] = getattr(job, "files", {})
+                    if getattr(job, "error_message", None):
+                        entry["error_message"] = job.error_message
+                    results.append(entry)
+                else:
+                    all_terminal = False
+                    results.append({
+                        "label": label,
+                        "version_no": vno,
+                        "status": job.status,
+                    })
+
+            if all_terminal or max_poll_seconds <= 0 or time.monotonic() >= deadline:
+                break
+            time.sleep(poll_interval)
 
         terminal_status = "completed" if all_terminal else "running"
         return {"results": results, "status": terminal_status}
@@ -139,11 +164,17 @@ def compare_metrics(state: CompareState) -> dict:
     return {"comparison": comparison}
 
 
-def build_compare_graph(job_runner: Any) -> StateGraph:
+def build_compare_graph(
+    job_runner: Any,
+    poll_interval: float = 0.3,
+    max_poll_seconds: float = 0,
+) -> StateGraph:
     """Build the variant comparison graph.
 
     Args:
         job_runner: JobRunner instance for dispatching and observing jobs.
+        poll_interval: Seconds between polls when waiting for terminal states.
+        max_poll_seconds: If > 0, poll until all jobs are terminal or timeout.
 
     Returns:
         Compiled StateGraph.
@@ -151,7 +182,9 @@ def build_compare_graph(job_runner: Any) -> StateGraph:
     graph = StateGraph(CompareState)
 
     graph.add_node("dispatch_variants", make_dispatch_variants_node(job_runner))
-    graph.add_node("aggregate_results", make_aggregate_results_node(job_runner))
+    graph.add_node("aggregate_results", make_aggregate_results_node(
+        job_runner, poll_interval=poll_interval, max_poll_seconds=max_poll_seconds,
+    ))
     graph.add_node("compare_metrics", compare_metrics)
 
     graph.add_edge(START, "dispatch_variants")
