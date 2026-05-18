@@ -113,8 +113,28 @@ class JobRunner:
         ))
         try:
             self.store.write_spec(job.design_id, job.version_no, spec)
+
+            # Emit fine-grained CAD progress events
+            for step_name, step_progress in [
+                ("geometry_building", 25),
+                ("mesh_export", 40),
+                ("report_generating", 50),
+            ]:
+                job.current_step = step_name
+                job.progress = step_progress
+                job.updated_at = _utcnow()
+                self._save_job(job)
+                bus.publish(JobEvent(
+                    type=JobEventType.PROGRESS,
+                    job_id=job.id,
+                    design_id=job.design_id,
+                    version_no=job.version_no,
+                    progress=job.progress,
+                    current_step=job.current_step,
+                ))
+
             job.current_step = "generating_cad"
-            job.progress = 50
+            job.progress = 60
             job.updated_at = _utcnow()
             self._save_job(job)
             bus.publish(JobEvent(

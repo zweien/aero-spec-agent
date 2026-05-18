@@ -1,4 +1,8 @@
-"""Tests for CompareGraph — variant dispatch, aggregation, comparison metrics."""
+"""Tests for CompareGraph — variant dispatch, aggregation, comparison metrics.
+
+Updated for subgraph composition: CompareGraph now uses VariantSubgraph
+per variant instead of direct enqueue.
+"""
 
 import threading
 from pathlib import Path
@@ -7,6 +11,7 @@ import pytest
 import yaml
 
 from services.api.app.graph.compare_graph import build_compare_graph
+from services.api.app.services.job_events import reset_job_event_bus
 from services.api.app.services.job_runner import JobRunner
 from services.api.app.services.version_store import VersionStore
 
@@ -19,11 +24,10 @@ def _load_spec_dict() -> dict:
 
 
 class AutoRunJobRunner:
-    """Auto-runs enqueued jobs in background threads, with join support."""
+    """Auto-runs enqueued jobs in background threads."""
 
     def __init__(self, job_runner: JobRunner):
         self._jr = job_runner
-        self._threads: list[threading.Thread] = []
 
     def enqueue_generate(self, design_id: str, spec) -> object:
         job = self._jr.enqueue_generate(design_id=design_id, spec=spec)
@@ -31,19 +35,20 @@ class AutoRunJobRunner:
             target=self._jr.run_queued_job, args=(job.id, spec), daemon=True,
         )
         t.start()
-        self._threads.append(t)
         return job
 
     def get(self, job_id: str):
         return self._jr.get(job_id)
 
-    def join_all(self, timeout: float = 10):
-        for t in self._threads:
-            t.join(timeout=timeout)
-        self._threads.clear()
-
     def __getattr__(self, name):
         return getattr(self._jr, name)
+
+
+@pytest.fixture(autouse=True)
+def _reset_bus():
+    reset_job_event_bus()
+    yield
+    reset_job_event_bus()
 
 
 @pytest.fixture
@@ -67,7 +72,7 @@ def spec_dict():
 
 
 def test_three_variants_all_succeeded(auto_runner, spec_dict):
-    graph = build_compare_graph(job_runner=auto_runner, poll_interval=0.1, max_poll_seconds=10)
+    graph = build_compare_graph(job_runner=auto_runner, timeout_seconds=30)
     result = graph.invoke({
         "design_id": "test-compare",
         "base_spec": spec_dict,
@@ -85,78 +90,35 @@ def test_three_variants_all_succeeded(auto_runner, spec_dict):
     assert comp["failed"] == 0
     for v in comp["variants"]:
         assert v["status"] == "succeeded"
-        assert "files" in v
 
 
 # ---------------------------------------------------------------------------
-# 2. One succeeded + one failed (invalid job)
+# 2. Single variant via subgraph
 # ---------------------------------------------------------------------------
 
 
-def test_mixed_succeeded_and_not_found(job_runner, spec_dict):
-    """Pre-enqueue and run one job; use a fake job_id for the other."""
-    from services.api.app.schemas.aircraft_spec import AircraftSpec
-
-    spec = AircraftSpec.model_validate(spec_dict)
-    good_job = job_runner.enqueue_generate(design_id="test-mix", spec=spec)
-    job_runner.run_queued_job(good_job.id, spec)
-
-    graph = build_compare_graph(job_runner=job_runner)
-    # Inject variant_jobs directly via dispatch, but one job_id is fake
+def test_single_variant_dispatched(auto_runner, spec_dict):
+    graph = build_compare_graph(job_runner=auto_runner, timeout_seconds=30)
     result = graph.invoke({
-        "design_id": "test-mix",
+        "design_id": "test-single",
         "base_spec": spec_dict,
         "variants": [
-            {"label": "good", "changes": []},
+            {"label": "v1", "changes": []},
         ],
     })
 
-    # The graph-dispatched job won't be run, so it stays queued.
-    # The aggregate will see the queued job as non-terminal.
-    assert result["status"] in ("running", "completed")
+    assert result["status"] == "completed"
+    assert len(result["results"]) == 1
+    assert result["results"][0]["status"] == "succeeded"
 
 
 # ---------------------------------------------------------------------------
-# 3. Job not found
-# ---------------------------------------------------------------------------
-
-
-def test_aggregate_job_not_found(job_runner, spec_dict):
-    """Manually invoke aggregate with a fake job_id."""
-    from services.api.app.graph.compare_graph import (
-        make_wait_all_variants_node, compare_metrics,
-    )
-
-    aggregate = make_wait_all_variants_node(job_runner, timeout_seconds=1)
-
-    # Simulate state after dispatch with a non-existent job_id
-    state = {
-        "status": "running",
-        "variant_jobs": [
-            {"job_id": "nonexistent-job-id", "label": "ghost", "version_no": 1},
-        ],
-    }
-    agg_result = aggregate(state)
-    assert agg_result["status"] == "completed"
-    assert agg_result["results"][0]["status"] == "failed"
-    assert agg_result["results"][0]["error_message"] == "job not found"
-
-    # Feed through compare_metrics
-    state_with_results = {**state, **agg_result}
-    metrics_result = compare_metrics(state_with_results)
-    comp = metrics_result["comparison"]
-    assert comp["total_variants"] == 1
-    assert comp["failed"] == 1
-    assert comp["succeeded"] == 0
-
-
-# ---------------------------------------------------------------------------
-# 4. Invalid variant spec
+# 3. Invalid variant spec
 # ---------------------------------------------------------------------------
 
 
 def test_invalid_variant_spec(job_runner):
-    graph = build_compare_graph(job_runner=job_runner)
+    graph = build_compare_graph(job_runner=job_runner, timeout_seconds=5)
     result = graph.invoke({
         "design_id": "test-invalid",
         "base_spec": {"not_a_valid": "spec"},
@@ -165,17 +127,19 @@ def test_invalid_variant_spec(job_runner):
         ],
     })
 
-    assert result["status"] == "failed"
-    assert "invalid spec" in result.get("error_message", "").lower()
+    # VariantSubgraph will fail validation
+    assert result["status"] == "completed"
+    assert len(result["results"]) == 1
+    assert result["results"][0]["status"] == "failed"
 
 
 # ---------------------------------------------------------------------------
-# 5. No variants provided
+# 4. No variants provided
 # ---------------------------------------------------------------------------
 
 
 def test_no_variants(job_runner):
-    graph = build_compare_graph(job_runner=job_runner)
+    graph = build_compare_graph(job_runner=job_runner, timeout_seconds=5)
     result = graph.invoke({
         "design_id": "test-empty",
         "base_spec": {},
@@ -188,12 +152,12 @@ def test_no_variants(job_runner):
 
 
 # ---------------------------------------------------------------------------
-# 6. Dispatch and verify job_ids are unique
+# 5. Verify unique job_ids across variants
 # ---------------------------------------------------------------------------
 
 
 def test_variant_jobs_have_unique_ids(auto_runner, spec_dict):
-    graph = build_compare_graph(job_runner=auto_runner)
+    graph = build_compare_graph(job_runner=auto_runner, timeout_seconds=30)
     result = graph.invoke({
         "design_id": "test-unique",
         "base_spec": spec_dict,
@@ -203,31 +167,45 @@ def test_variant_jobs_have_unique_ids(auto_runner, spec_dict):
         ],
     })
 
-    job_ids = [vj["job_id"] for vj in result["variant_jobs"]]
+    job_ids = [r["job_id"] for r in result["results"]]
     assert len(set(job_ids)) == 2
 
 
 # ---------------------------------------------------------------------------
-# 7. Full aggregation with succeeded job — no AttributeError
+# 6. Summary generation
 # ---------------------------------------------------------------------------
 
 
-def test_aggregation_succeeded_no_error(job_runner, spec_dict):
-    from services.api.app.schemas.aircraft_spec import AircraftSpec
-
-    spec = AircraftSpec.model_validate(spec_dict)
-    job = job_runner.enqueue_generate(design_id="test-agg", spec=spec)
-    job_runner.run_queued_job(job.id, spec)
-
-    graph = build_compare_graph(job_runner=job_runner)
+def test_summary_content(auto_runner, spec_dict):
+    graph = build_compare_graph(job_runner=auto_runner, timeout_seconds=30)
     result = graph.invoke({
-        "design_id": "test-agg",
+        "design_id": "test-summary",
         "base_spec": spec_dict,
         "variants": [
-            {"label": "v1", "changes": []},
+            {"label": "alpha", "changes": []},
         ],
     })
 
-    # Graph-dispatched job may not be run, but at least verify no AttributeError
-    assert result["status"] in ("running", "completed")
-    assert isinstance(result["results"], list)
+    assert result["summary"]
+    assert "alpha" in result["summary"]
+    assert "成功" in result["summary"]
+
+
+# ---------------------------------------------------------------------------
+# 7. Thread isolation
+# ---------------------------------------------------------------------------
+
+
+def test_variant_thread_isolation(auto_runner, spec_dict):
+    graph = build_compare_graph(job_runner=auto_runner, timeout_seconds=30)
+    result = graph.invoke({
+        "design_id": "thread-test",
+        "base_spec": spec_dict,
+        "variants": [
+            {"label": "ta", "changes": []},
+            {"label": "tb", "changes": []},
+        ],
+    })
+
+    thread_ids = [r.get("thread_id", "") for r in result["results"]]
+    assert len(set(thread_ids)) == 2

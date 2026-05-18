@@ -333,5 +333,7 @@ class TestEventOrdering:
         runner.generate("order-test", spec)
 
         types = [e.type for e in events]
-        # Order: started → progress → completed
-        assert types == [JobEventType.STARTED, JobEventType.PROGRESS, JobEventType.COMPLETED]
+        # Order: started → (multiple progress) → completed
+        assert types[0] == JobEventType.STARTED
+        assert types[-1] == JobEventType.COMPLETED
+        assert JobEventType.PROGRESS in types

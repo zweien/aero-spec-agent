@@ -1,9 +1,8 @@
-"""Tests for DeepDesignGraph — multi-variant design exploration.
+"""Tests for DeepDesignGraph — multi-variant design exploration via subgraph composition.
 
 Validates:
   - parse_requirements extracts range/payload from natural language
-  - explore_variants dispatches N variant jobs
-  - compare_results collects outcomes via JobEventBus
+  - prepare_variants builds variant specs
   - synthesize_report generates comparison report
   - Full graph end-to-end with AutoRunJobRunner
   - POST /api/deep-design endpoint
@@ -13,7 +12,6 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -22,6 +20,8 @@ from services.api.app.graph.deep_design_graph import (
     DeepDesignState,
     build_deep_design_graph,
     parse_requirements,
+    prepare_variants,
+    refine_variants,
     synthesize_report,
 )
 from services.api.app.services.job_events import reset_job_event_bus
@@ -110,6 +110,48 @@ class TestParseRequirements:
 
 
 # ---------------------------------------------------------------------------
+# prepare_variants
+# ---------------------------------------------------------------------------
+
+
+class TestPrepareVariants:
+    def test_builds_correct_variant_count(self, spec_dict):
+        state: DeepDesignState = {
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2},
+        }
+        result = prepare_variants(state)
+        assert len(result["variants"]) == 2
+        assert result["status"] == "running"
+
+    def test_pads_to_variant_count(self, spec_dict):
+        state: DeepDesignState = {
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 5},
+        }
+        result = prepare_variants(state)
+        assert len(result["variants"]) == 5
+
+    def test_no_base_spec_fails(self):
+        state: DeepDesignState = {
+            "base_spec": None,
+            "constraints": {"variant_count": 2},
+        }
+        result = prepare_variants(state)
+        assert result["status"] == "failed"
+
+    def test_compact_variant_has_patched_spec(self, spec_dict):
+        state: DeepDesignState = {
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 1},
+        }
+        result = prepare_variants(state)
+        variant = result["variants"][0]
+        assert variant["label"] == "compact"
+        assert "patched_spec" in variant
+
+
+# ---------------------------------------------------------------------------
 # synthesize_report
 # ---------------------------------------------------------------------------
 
@@ -161,21 +203,21 @@ class TestDeepDesignGraphE2E:
         assert result["status"] == "completed"
         assert result["report"]
         assert result["comparison"] is not None
-        assert result["comparison"]["total"] == 2
+        assert result["comparison"]["total_variants"] == 2
         assert result["comparison"]["succeeded"] >= 1
 
-    def test_three_variants_default(self, job_runner, spec_dict):
+    def test_two_variants_explicit(self, job_runner, spec_dict):
         graph = build_deep_design_graph(job_runner=job_runner, timeout_seconds=30)
 
         result = graph.invoke({
             "user_description": "设计无人机",
-            "design_id": "deep-3v",
+            "design_id": "deep-2v",
             "base_spec": spec_dict,
-            "constraints": {},
+            "constraints": {"variant_count": 2},
         })
 
         assert result["status"] == "completed"
-        assert result["comparison"]["total"] == 3
+        assert result["comparison"]["total_variants"] == 2
 
     def test_no_base_spec_fails(self, job_runner):
         graph = build_deep_design_graph(job_runner=job_runner, timeout_seconds=5)
@@ -216,3 +258,117 @@ class TestDeepDesignEndpoint:
         assert data["status"] == "completed"
         assert data["report"]
         assert data["comparison"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Iterative refinement loop
+# ---------------------------------------------------------------------------
+
+
+class TestIterativeRefinement:
+    def test_refine_variants_records_history(self, spec_dict):
+        """refine_variants records iteration history."""
+        state: DeepDesignState = {
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2},
+            "iteration": 0,
+            "max_iterations": 3,
+            "results": [
+                {"label": "compact", "status": "failed"},
+                {"label": "extended", "status": "succeeded"},
+            ],
+            "comparison": {"total_variants": 2, "succeeded": 1},
+            "refinement_history": [],
+        }
+        result = refine_variants(state)
+        assert result["iteration"] == 1
+        assert len(result["refinement_history"]) == 1
+        assert result["refinement_history"][0]["succeeded"] == 1
+
+    def test_refine_stops_at_max_iterations(self, spec_dict):
+        """refine_variants stops when max_iterations reached."""
+        state: DeepDesignState = {
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2},
+            "iteration": 2,
+            "max_iterations": 3,
+            "results": [
+                {"label": "compact", "status": "failed"},
+            ],
+            "comparison": {"total_variants": 1, "succeeded": 0},
+            "refinement_history": [],
+        }
+        result = refine_variants(state)
+        assert result["iteration"] == 3
+        assert result["status"] == "completed"
+
+    def test_refine_stops_when_all_succeed(self, spec_dict):
+        """refine_variants stops when all variants succeeded."""
+        state: DeepDesignState = {
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2},
+            "iteration": 0,
+            "max_iterations": 5,
+            "results": [
+                {"label": "compact", "status": "succeeded"},
+                {"label": "extended", "status": "succeeded"},
+            ],
+            "comparison": {"total_variants": 2, "succeeded": 2},
+            "refinement_history": [],
+        }
+        result = refine_variants(state)
+        assert result["status"] == "completed"
+
+    def test_refine_produces_wider_variants(self, spec_dict):
+        """refine_variants produces variants with wider deltas."""
+        state: DeepDesignState = {
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2},
+            "iteration": 0,
+            "max_iterations": 3,
+            "results": [
+                {"label": "compact", "status": "failed"},
+            ],
+            "comparison": {"total_variants": 1, "succeeded": 0},
+            "refinement_history": [],
+        }
+        result = refine_variants(state)
+        assert result["status"] == "running"
+        assert result["variants"] is not None
+        assert len(result["variants"]) == 2
+
+    def test_graph_with_refinement_enabled(self, job_runner, spec_dict):
+        """Full graph with refinement loop runs multiple iterations."""
+        graph = build_deep_design_graph(
+            job_runner=job_runner,
+            timeout_seconds=30,
+            enable_refinement=True,
+        )
+        result = graph.invoke({
+            "user_description": "设计一架无人机",
+            "design_id": "refine-test",
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2, "max_iterations": 2},
+        })
+
+        assert result["status"] == "completed"
+        assert result["report"]
+        assert result["iteration"] >= 1
+        assert len(result["refinement_history"]) >= 1
+
+    def test_graph_without_refinement_single_pass(self, job_runner, spec_dict):
+        """Graph without refinement runs single pass (default)."""
+        graph = build_deep_design_graph(
+            job_runner=job_runner,
+            timeout_seconds=30,
+            enable_refinement=False,
+        )
+        result = graph.invoke({
+            "user_description": "设计一架无人机",
+            "design_id": "no-refine",
+            "base_spec": spec_dict,
+            "constraints": {"variant_count": 2},
+        })
+
+        assert result["status"] == "completed"
+        assert result["iteration"] == 0

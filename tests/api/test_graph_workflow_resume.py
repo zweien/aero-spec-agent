@@ -308,3 +308,116 @@ class TestEventStreamResume:
         assert events1[0].job_id != events2[0].job_id
 
         bus.release_async_queue(queue2)
+
+
+# ---------------------------------------------------------------------------
+# Server restart recovery
+# ---------------------------------------------------------------------------
+
+
+class TestServerRestartRecovery:
+    def test_restore_from_sqlite_and_run_new_workflow(self, job_runner, spec_dict):
+        """Simulate server restart: close DB, reopen, run new workflow on same thread."""
+        db_path = tempfile.mktemp(suffix=".sqlite")
+
+        # Session 1 — run a workflow
+        checkpointer1 = make_sqlite_checkpointer(db_path)
+        thread_id = "restart-thread-1"
+        config = {"configurable": {"thread_id": thread_id}}
+
+        graph1 = build_partial_design_graph(
+            job_runner=job_runner,
+            checkpointer=checkpointer1,
+            observe_until_terminal=True,
+            event_driven=True,
+        )
+        result1 = graph1.invoke({
+            "conversation_id": "restart-1",
+            "design_id": "test-design",
+            "user_message": "生成一架无人机",
+            "selected_refs": [],
+            "current_spec": spec_dict,
+        }, config=config)
+        assert result1["status"] == "succeeded"
+
+        # Close the DB connection (simulating server shutdown)
+        del checkpointer1
+        del graph1
+
+        # Session 2 — "restart" with same DB file
+        checkpointer2 = make_sqlite_checkpointer(db_path)
+
+        graph2 = build_partial_design_graph(
+            job_runner=job_runner,
+            checkpointer=checkpointer2,
+            observe_until_terminal=True,
+            event_driven=True,
+        )
+
+        # Verify checkpoint history survived restart
+        history = list(checkpointer2.list(config))
+        assert len(history) >= 1
+
+        # Run a new workflow on a different thread
+        result2 = graph2.invoke({
+            "conversation_id": "restart-2",
+            "design_id": "test-design",
+            "user_message": "生成一架无人机",
+            "selected_refs": [],
+            "current_spec": spec_dict,
+        }, config={"configurable": {"thread_id": "restart-thread-2"}})
+        assert result2["status"] == "succeeded"
+        assert result1["job_id"] != result2["job_id"]
+
+    def test_checkpointer_state_isolated_across_restarts(self, job_runner, spec_dict):
+        """Thread A's checkpoints from session 1 don't leak into thread B in session 2."""
+        db_path = tempfile.mktemp(suffix=".sqlite")
+
+        # Session 1: thread A
+        cp1 = make_sqlite_checkpointer(db_path)
+        graph1 = build_partial_design_graph(
+            job_runner=job_runner,
+            checkpointer=cp1,
+            observe_until_terminal=True,
+            event_driven=True,
+        )
+        graph1.invoke({
+            "conversation_id": "iso-a",
+            "design_id": "test-design",
+            "user_message": "生成一架无人机",
+            "selected_refs": [],
+            "current_spec": spec_dict,
+        }, config={"configurable": {"thread_id": "iso-a"}})
+
+        del cp1, graph1
+
+        # Session 2: thread B
+        cp2 = make_sqlite_checkpointer(db_path)
+        graph2 = build_partial_design_graph(
+            job_runner=job_runner,
+            checkpointer=cp2,
+            observe_until_terminal=True,
+            event_driven=True,
+        )
+
+        # Thread A history still exists
+        hist_a = list(cp2.list({"configurable": {"thread_id": "iso-a"}}))
+        assert len(hist_a) >= 1
+
+        # Thread B has no history yet
+        hist_b = list(cp2.list({"configurable": {"thread_id": "iso-b"}}))
+        assert len(hist_b) == 0
+
+        # Run on thread B
+        result_b = graph2.invoke({
+            "conversation_id": "iso-b",
+            "design_id": "test-design",
+            "user_message": "生成一架无人机",
+            "selected_refs": [],
+            "current_spec": spec_dict,
+        }, config={"configurable": {"thread_id": "iso-b"}})
+        assert result_b["status"] == "succeeded"
+
+        # Thread B now has history
+        hist_b_after = list(cp2.list({"configurable": {"thread_id": "iso-b"}}))
+        assert len(hist_b_after) >= 1

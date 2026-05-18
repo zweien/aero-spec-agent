@@ -1,31 +1,27 @@
-"""DeepDesignGraph — multi-variant design exploration prototype.
+"""DeepDesignGraph — multi-variant design exploration via subgraph composition.
 
-Phase 1 flow (no optimization loop):
-    START → parse_requirements → explore_variants → compare_results → synthesize_report → END
+Flow (single pass):
+    START → parse_requirements → prepare_variants → run_compare → synthesize_report → END
 
-parse_requirements extracts design constraints from natural language.
-explore_variants fans out N variant specs using CompareGraph dispatch.
-compare_results aggregates variant outcomes.
-synthesize_report generates a comparison report.
+Flow (iterative, max_iterations > 1):
+    START → parse_requirements → prepare_variants → run_compare → refine_variants
+          → prepare_variants → run_compare → ... → synthesize_report → END
+
+refine_variants decides whether to loop back or proceed to synthesize_report
+based on iteration count and results quality.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import threading
-import time
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import Annotated, TypedDict
 
+from services.api.app.graph.compare_graph import build_compare_graph
 from services.api.app.graph.observe import observe_node
-from services.api.app.services.job_events import (
-    JobEvent,
-    JobEventType,
-    get_job_event_bus,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +49,18 @@ class DeepDesignState(TypedDict, total=False):
     base_spec: dict[str, Any] | None
     design_id: str
 
-    # Variants
-    variant_strategies: list[dict[str, Any]]
-    variant_jobs: Annotated[list[dict[str, Any]], __import__("operator").add]
+    # Variants prepared for CompareGraph
+    variants: list[dict[str, Any]]
 
-    # Results
-    results: list[dict[str, Any]]
+    # Subgraph results
     comparison: dict[str, Any] | None
+    results: list[dict[str, Any]]
     report: str
+
+    # Iterative loop control
+    iteration: int
+    max_iterations: int
+    refinement_history: list[dict[str, Any]]
 
     # Status
     status: str
@@ -69,20 +69,15 @@ class DeepDesignState(TypedDict, total=False):
 
 @observe_node("parse_requirements")
 def parse_requirements(state: DeepDesignState) -> dict:
-    """Parse user description into structured requirements.
-
-    Phase 1 uses simple keyword extraction. Future phases will use LLM.
-    """
+    """Parse user description into structured requirements."""
     description = state.get("user_description", "")
     constraints = state.get("constraints", {})
 
-    # Extract basic requirements from description
     requirements: dict[str, Any] = {
         "description": description,
         "variant_count": constraints.get("variant_count", 3),
     }
 
-    # Parse range if mentioned
     import re
     range_match = re.search(r"(\d+)\s*km", description)
     if range_match:
@@ -92,143 +87,216 @@ def parse_requirements(state: DeepDesignState) -> dict:
     if payload_match:
         requirements["payload_kg"] = int(payload_match.group(1))
 
-    return {"requirements": requirements}
+    max_iterations = constraints.get("max_iterations", 1)
+    return {
+        "requirements": requirements,
+        "iteration": 0,
+        "max_iterations": max_iterations,
+        "refinement_history": [],
+    }
 
 
-def make_explore_variants_node(job_runner: Any):
-    """Factory: generate variant specs and dispatch as parallel jobs."""
+@observe_node("prepare_variants")
+def prepare_variants(state: DeepDesignState) -> dict:
+    """Build variant specs from base spec and default strategies."""
+    base_spec = state.get("base_spec")
+    constraints = state.get("constraints", {})
+    variant_count = constraints.get("variant_count", 3)
 
-    @observe_node("explore_variants")
-    def explore_variants(state: DeepDesignState) -> dict:
-        base_spec = state.get("base_spec")
-        design_id = state.get("design_id", "")
-        constraints = state.get("constraints", {})
-        variant_count = constraints.get("variant_count", 3)
+    if not base_spec:
+        return {
+            "status": "failed",
+            "error_message": "no base_spec provided for exploration",
+        }
 
-        if not base_spec:
-            return {
-                "status": "failed",
-                "error_message": "no base_spec provided for exploration",
-            }
+    strategies = DEFAULT_STRATEGIES[:variant_count]
+    while len(strategies) < variant_count:
+        strategies.append({
+            "label": f"variant_{len(strategies) + 1}",
+            "changes": [],
+        })
 
-        from services.api.app.schemas.aircraft_spec import AircraftSpec
-
-        # Use default strategies, capped to variant_count
-        strategies = DEFAULT_STRATEGIES[:variant_count]
-        if len(strategies) < variant_count:
-            # Pad with copies of standard
-            while len(strategies) < variant_count:
-                strategies.append({
-                    "label": f"variant_{len(strategies) + 1}",
-                    "changes": [],
-                })
-
-        jobs = []
-        for i, strategy in enumerate(strategies):
+    variants = []
+    for strategy in strategies:
+        changes = strategy.get("changes", [])
+        if any(c.get("op") == "relative" for c in changes):
             patched = json.loads(json.dumps(base_spec))
-
-            # Apply relative changes
-            for change in strategy.get("changes", []):
+            for change in changes:
                 if change.get("op") == "relative":
-                    path = change["path"]
-                    delta = change["value"]
-                    _apply_relative(patched, path, delta)
+                    _apply_relative(patched, change["path"], change["value"])
                 else:
                     _set_nested(patched, change["path"], change["value"])
+            variants.append({"label": strategy["label"], "changes": [
+                {"path": c["path"], "value": c["value"]}
+                for c in changes if c.get("op") != "relative"
+            ], "patched_spec": patched})
+        else:
+            variants.append({"label": strategy["label"], "changes": changes})
 
-            try:
-                spec = AircraftSpec.model_validate(patched)
-            except Exception as e:
-                logger.warning("variant %d spec invalid: %s", i, e)
-                continue
-
-            job = job_runner.enqueue_generate(design_id=design_id, spec=spec)
-            jobs.append({
-                "label": strategy.get("label", f"variant_{i + 1}"),
-                "job_id": job.id,
-                "version_no": job.version_no,
-                "changes": strategy.get("changes", []),
-                "status": "queued",
-            })
-
-        return {"variant_jobs": jobs, "status": "running"}
-
-    return explore_variants
+    return {"variants": variants, "status": "running"}
 
 
-def make_compare_results_node(
-    job_runner: Any,
-    timeout_seconds: float = 120,
-    poll_interval: float = 0.1,
-):
-    """Factory: wait for all variant jobs and compare results."""
+def make_run_compare_node(job_runner: Any, timeout_seconds: float = 120):
+    """Factory: invoke CompareGraph subgraph with prepared variants."""
 
-    @observe_node("compare_results")
-    def compare_results(state: DeepDesignState) -> dict:
+    @observe_node("run_compare")
+    def run_compare(state: DeepDesignState) -> dict:
         if state.get("status") == "failed":
             return {"results": [], "comparison": None}
 
-        variant_jobs = state.get("variant_jobs", [])
-        if not variant_jobs:
+        base_spec = state.get("base_spec")
+        design_id = state.get("design_id", "")
+        variants_raw = state.get("variants", [])
+
+        if not variants_raw:
             return {"results": [], "comparison": None}
 
-        # Event-driven collection
-        job_ids = {vj["job_id"] for vj in variant_jobs}
-        completed: dict[str, JobEvent] = {}
-        event_received = threading.Event()
+        compare_variants = []
+        for v in variants_raw:
+            if "patched_spec" in v:
+                compare_variants.append({
+                    "label": v["label"],
+                    "changes": [{"path": "__use_patched__", "value": v["patched_spec"]}],
+                })
+            else:
+                compare_variants.append(v)
 
-        def _on_event(event: JobEvent) -> None:
-            if event.job_id in job_ids and event.type in (
-                JobEventType.COMPLETED, JobEventType.FAILED,
-            ):
-                completed[event.job_id] = event
-                if len(completed) >= len(job_ids):
-                    event_received.set()
+        compare_graph = build_compare_graph(
+            job_runner=job_runner,
+            timeout_seconds=timeout_seconds,
+        )
 
-        bus = get_job_event_bus()
-        bus.subscribe(_on_event)
+        subgraph_input = {
+            "design_id": design_id,
+            "base_spec": base_spec,
+            "variants": compare_variants,
+        }
+
         try:
-            deadline = time.monotonic() + timeout_seconds
-            while not event_received.is_set() and time.monotonic() < deadline:
-                event_received.wait(poll_interval)
-
-            results: list[dict[str, Any]] = []
-            for vj in variant_jobs:
-                jid = vj["job_id"]
-                label = vj.get("label", "unknown")
-                vno = vj.get("version_no", 0)
-
-                ev = completed.get(jid)
-                if ev is not None:
-                    results.append({
-                        "label": label,
-                        "version_no": vno,
-                        "status": "succeeded" if ev.type == JobEventType.COMPLETED else "failed",
-                        "duration_ms": ev.duration_ms,
-                        "error_message": ev.error_message,
-                    })
-                else:
-                    job = job_runner.get(jid)
-                    status = job.status if job else "failed"
-                    results.append({
-                        "label": label,
-                        "version_no": vno,
-                        "status": status,
-                        "error_message": getattr(job, "error_message", None) if job else "not found",
-                    })
-
-            succeeded = sum(1 for r in results if r["status"] == "succeeded")
-            comparison = {
-                "total": len(results),
-                "succeeded": succeeded,
-                "failed": len(results) - succeeded,
-                "variants": results,
+            sub_result = compare_graph.invoke(subgraph_input)
+            return {
+                "results": sub_result.get("results", []),
+                "comparison": sub_result.get("comparison"),
+                "status": sub_result.get("status", "completed"),
             }
-            return {"results": results, "comparison": comparison}
-        finally:
-            bus.unsubscribe(_on_event)
+        except Exception as e:
+            logger.exception("CompareGraph subgraph failed")
+            return {
+                "results": [],
+                "comparison": None,
+                "status": "failed",
+                "error_message": f"compare subgraph error: {e}",
+            }
 
-    return compare_results
+    return run_compare
+
+
+@observe_node("refine_variants")
+def refine_variants(state: DeepDesignState) -> dict:
+    """Decide whether to iterate again or proceed to report.
+
+    Refinement strategy (Phase 1 — simple):
+      - If iteration >= max_iterations → stop
+      - If all variants succeeded → stop
+      - If some failed → widen delta for next iteration
+
+    This is NOT autonomous optimization. It's a bounded retry with
+    strategy adjustment. Human review via max_iterations=1 to disable.
+    """
+    iteration = state.get("iteration", 0)
+    max_iterations = state.get("max_iterations", 1)
+    results = state.get("results", [])
+    comparison = state.get("comparison")
+
+    # Record this iteration's results
+    history = list(state.get("refinement_history", []))
+    history.append({
+        "iteration": iteration,
+        "total": comparison.get("total_variants", 0) if comparison else 0,
+        "succeeded": comparison.get("succeeded", 0) if comparison else 0,
+    })
+
+    # Check stopping conditions
+    should_stop = False
+    if iteration + 1 >= max_iterations:
+        should_stop = True
+        logger.info("refine_variants: max_iterations=%d reached", max_iterations)
+    elif all(r.get("status") == "succeeded" for r in results):
+        should_stop = True
+        logger.info("refine_variants: all variants succeeded, stopping")
+
+    if should_stop:
+        return {
+            "iteration": iteration + 1,
+            "refinement_history": history,
+            "status": "completed",
+        }
+
+    # Prepare refined variants: widen the delta for failed variants
+    base_spec = state.get("base_spec")
+    constraints = state.get("constraints", {})
+    variant_count = constraints.get("variant_count", 3)
+
+    # Increase delta by 50% for next iteration
+    delta_multiplier = 1.5
+    refined_strategies = []
+    for strategy in DEFAULT_STRATEGIES[:variant_count]:
+        refined_changes = []
+        for change in strategy.get("changes", []):
+            if change.get("op") == "relative":
+                refined_changes.append({
+                    "path": change["path"],
+                    "value": change["value"] * delta_multiplier,
+                    "op": "relative",
+                })
+            else:
+                refined_changes.append(change)
+        refined_strategies.append({"label": strategy["label"], "changes": refined_changes})
+
+    # Pad if needed
+    while len(refined_strategies) < variant_count:
+        refined_strategies.append({
+            "label": f"variant_{len(refined_strategies) + 1}",
+            "changes": [],
+        })
+
+    # Build variants from refined strategies
+    variants = []
+    for strategy in refined_strategies:
+        changes = strategy.get("changes", [])
+        if any(c.get("op") == "relative" for c in changes):
+            patched = json.loads(json.dumps(base_spec))
+            for change in changes:
+                if change.get("op") == "relative":
+                    _apply_relative(patched, change["path"], change["value"])
+                else:
+                    _set_nested(patched, change["path"], change["value"])
+            variants.append({"label": strategy["label"], "changes": [
+                {"path": c["path"], "value": c["value"]}
+                for c in changes if c.get("op") != "relative"
+            ], "patched_spec": patched})
+        else:
+            variants.append({"label": strategy["label"], "changes": changes})
+
+    return {
+        "iteration": iteration + 1,
+        "refinement_history": history,
+        "variants": variants,
+        "status": "running",
+    }
+
+
+def _should_refine(state: DeepDesignState) -> str:
+    """Conditional edge: decide whether to refine or synthesize report."""
+    iteration = state.get("iteration", 0)
+    max_iterations = state.get("max_iterations", 1)
+    results = state.get("results", [])
+
+    # If we just came from run_compare and iteration < max_iterations and not all succeeded
+    if iteration < max_iterations and not all(r.get("status") == "succeeded" for r in results):
+        return "prepare_variants"
+
+    return "synthesize_report"
 
 
 @observe_node("synthesize_report")
@@ -236,12 +304,13 @@ def synthesize_report(state: DeepDesignState) -> dict:
     """Generate a design exploration report."""
     requirements = state.get("requirements", {})
     comparison = state.get("comparison")
+    history = state.get("refinement_history", [])
 
     if not comparison:
         return {"report": "探索未完成，无法生成报告。", "status": "failed"}
 
     desc = requirements.get("description", "未指定")
-    total = comparison.get("total", 0)
+    total = comparison.get("total", 0) or comparison.get("total_variants", 0)
     succeeded = comparison.get("succeeded", 0)
 
     lines = [
@@ -250,10 +319,18 @@ def synthesize_report(state: DeepDesignState) -> dict:
         f"**需求描述：** {desc}",
         f"",
         f"共探索 {total} 个变体，其中 {succeeded} 个成功。",
+    ]
+
+    if history:
+        lines.append(f"迭代次数：{len(history)}")
+        for h in history:
+            lines.append(f"  第 {h['iteration'] + 1} 轮：{h['succeeded']}/{h['total']} 成功")
+
+    lines.extend([
         f"",
         f"| 变体 | 状态 | 耗时 |",
         f"|------|------|------|",
-    ]
+    ])
 
     for v in comparison.get("variants", []):
         label = v.get("label", "?")
@@ -262,7 +339,6 @@ def synthesize_report(state: DeepDesignState) -> dict:
         dur_str = f"{duration:.0f}ms" if duration else "-"
         lines.append(f"| {label} | {status} | {dur_str} |")
 
-    # Recommend fastest successful variant
     successful = [v for v in comparison.get("variants", []) if v.get("status") == "succeeded"]
     if successful:
         best = min(successful, key=lambda v: v.get("duration_ms", float("inf")))
@@ -275,12 +351,14 @@ def synthesize_report(state: DeepDesignState) -> dict:
 def build_deep_design_graph(
     job_runner: Any,
     timeout_seconds: float = 120,
+    enable_refinement: bool = False,
 ) -> StateGraph:
-    """Build the DeepDesignGraph for multi-variant exploration.
+    """Build the DeepDesignGraph using CompareGraph as subgraph.
 
     Args:
         job_runner: JobRunner instance.
         timeout_seconds: Max wait time for all variants.
+        enable_refinement: If True, add refine_variants loop.
 
     Returns:
         Compiled StateGraph.
@@ -288,16 +366,30 @@ def build_deep_design_graph(
     graph = StateGraph(DeepDesignState)
 
     graph.add_node("parse_requirements", parse_requirements)
-    graph.add_node("explore_variants", make_explore_variants_node(job_runner))
-    graph.add_node("compare_results", make_compare_results_node(
+    graph.add_node("prepare_variants", prepare_variants)
+    graph.add_node("run_compare", make_run_compare_node(
         job_runner, timeout_seconds=timeout_seconds,
     ))
     graph.add_node("synthesize_report", synthesize_report)
 
     graph.add_edge(START, "parse_requirements")
-    graph.add_edge("parse_requirements", "explore_variants")
-    graph.add_edge("explore_variants", "compare_results")
-    graph.add_edge("compare_results", "synthesize_report")
+    graph.add_edge("parse_requirements", "prepare_variants")
+    graph.add_edge("prepare_variants", "run_compare")
+
+    if enable_refinement:
+        graph.add_node("refine_variants", refine_variants)
+        graph.add_edge("run_compare", "refine_variants")
+        graph.add_conditional_edges(
+            "refine_variants",
+            _should_refine,
+            {
+                "prepare_variants": "prepare_variants",
+                "synthesize_report": "synthesize_report",
+            },
+        )
+    else:
+        graph.add_edge("run_compare", "synthesize_report")
+
     graph.add_edge("synthesize_report", END)
 
     return graph.compile()
@@ -326,7 +418,6 @@ def _apply_relative(d: dict, path: str, delta: float) -> None:
 
     last_key = keys[-1]
     if last_key in current and isinstance(current[last_key], dict):
-        # Scalar field: {value: X, ...}
         if "value" in current[last_key]:
             current[last_key]["value"] = current[last_key]["value"] + delta
     elif last_key in current:

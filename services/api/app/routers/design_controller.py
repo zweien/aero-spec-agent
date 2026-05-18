@@ -61,17 +61,15 @@ async def compare_variants(req: CompareRequest, background_tasks: BackgroundTask
 
 
 async def _compare_with_graph(req: CompareRequest, runner, background_tasks: BackgroundTasks):
-    """Use CompareGraph for variant dispatch, fall back to legacy on error."""
+    """Use CompareGraph (with VariantSubgraph) for variant dispatch and completion."""
     import logging
     import uuid
-    from dataclasses import asdict
     from datetime import datetime, timezone
 
     logger = logging.getLogger(__name__)
 
     try:
         from services.api.app.graph.compare_graph import build_compare_graph
-        from services.api.app.schemas.aircraft_spec import AircraftSpec
 
         graph = build_compare_graph(job_runner=runner)
         result = graph.invoke({
@@ -83,29 +81,30 @@ async def _compare_with_graph(req: CompareRequest, runner, background_tasks: Bac
         if result.get("status") == "failed":
             raise RuntimeError(result.get("error_message", "CompareGraph failed"))
 
-        # Run all dispatched jobs in background
-        variant_jobs = result.get("variant_jobs", [])
-        for vj in variant_jobs:
-            job = runner.get(vj["job_id"])
-            if job and job.status == "queued":
-                patched = _patch_spec(req.base_spec, vj.get("changes", []))
-                spec = AircraftSpec.model_validate(patched)
-                background_tasks.add_task(runner.run_queued_job, vj["job_id"], spec)
-
-        # Return response matching existing API contract (ControllerJob shape)
+        # CompareGraph now completes all variants via VariantSubgraph
         now = datetime.now(timezone.utc).isoformat()
+        graph_status = result.get("status", "completed")
+        variant_results = result.get("results", [])
+
         controller_response = {
             "id": uuid.uuid4().hex[:12],
             "design_id": req.design_id,
-            "status": "running",
-            "variants": variant_jobs,
-            "results": [],
+            "status": graph_status,
+            "variants": variant_results,
+            "results": variant_results,
             "created_at": now,
             "updated_at": now,
         }
 
-        # Persist for later GET
-        _controller_service._save_from_dict(controller_response)
+        if result.get("summary"):
+            controller_response["summary"] = result["summary"]
+
+        # Persist for later GET (exclude extra fields not in ControllerJob)
+        persist_data = {
+            k: v for k, v in controller_response.items()
+            if k in ("id", "design_id", "status", "variants", "results", "created_at", "updated_at")
+        }
+        _controller_service._save_from_dict(persist_data)
         return controller_response
 
     except Exception:
@@ -123,16 +122,13 @@ async def _compare_with_graph(req: CompareRequest, runner, background_tasks: Bac
             patched = _patch_spec(req.base_spec, variant["changes"])
             spec = AircraftSpec.model_validate(patched)
             background_tasks.add_task(runner.run_queued_job, variant["job_id"], spec)
+        from dataclasses import asdict
         return asdict(controller)
 
 
 @router.get("/{controller_job_id}")
 async def get_controller_job(controller_job_id: str):
-    """Get controller job status using graph-native aggregation.
-
-    For jobs created via CompareGraph, re-runs the aggregation graph.
-    For legacy jobs, uses DesignControllerService.aggregate().
-    """
+    """Get controller job status."""
     from dataclasses import asdict
 
     runner = _get_runner()
@@ -140,73 +136,15 @@ async def get_controller_job(controller_job_id: str):
     if controller is None:
         raise HTTPException(status_code=404, detail="controller job not found")
 
-    mode = get_graph_mode()
+    # If results are already populated (from graph-completed CompareGraph), return as-is
+    if hasattr(controller, "results") and controller.results:
+        return asdict(controller)
 
-    # Use graph-native aggregation for CompareGraph-created jobs
-    if mode in ("partial", "shadow") and _is_compare_graph_job(controller):
-        result = await _aggregate_with_graph(controller, runner)
-        return result
-
-    # Legacy aggregation
+    # Legacy aggregation for incomplete jobs
     aggregated = _controller_service.aggregate(controller_job_id, runner)
     if aggregated is None:
         raise HTTPException(status_code=404, detail="controller job not found")
     return asdict(aggregated)
-
-
-def _is_compare_graph_job(controller) -> bool:
-    """Check if a ControllerJob was created via CompareGraph."""
-    # CompareGraph jobs have variant_jobs with job_id/version_no/changes
-    variants = controller.variants if hasattr(controller, "variants") else []
-    if not variants:
-        return False
-    # CompareGraph jobs are saved via _save_from_dict (have dict-like variant structure)
-    return all("job_id" in v and "changes" in v for v in variants)
-
-
-async def _aggregate_with_graph(controller, runner) -> dict:
-    """Run CompareGraph aggregation subgraph for variant result collection."""
-    import json
-    from dataclasses import asdict
-
-    try:
-        from services.api.app.graph.compare_graph import build_compare_graph
-
-        # Build a lightweight aggregation-only graph
-        graph = build_compare_graph(
-            job_runner=runner,
-            timeout_seconds=2,
-        )
-
-        # Invoke just the aggregation portion by providing pre-dispatched state
-        result = graph.invoke({
-            "design_id": controller.design_id,
-            "base_spec": {},
-            "variants": [],
-            "variant_jobs": [v if isinstance(v, dict) else v for v in controller.variants],
-            "status": "running",
-        })
-
-        # Merge results back into controller
-        controller_dict = asdict(controller)
-        controller_dict["results"] = result.get("results", [])
-        controller_dict["status"] = result.get("status", controller_dict["status"])
-
-        if result.get("summary"):
-            controller_dict["summary"] = result["summary"]
-
-        # Persist updated state
-        _controller_service._save_from_dict(controller_dict)
-        return controller_dict
-
-    except Exception:
-        # Fallback to legacy aggregation
-        import logging
-        logging.getLogger(__name__).exception(
-            "graph-native aggregation failed, falling back to legacy"
-        )
-        aggregated = _controller_service.aggregate(controller.id, runner)
-        return asdict(aggregated) if aggregated else asdict(controller)
 
 
 def _patch_spec(base: dict, changes: list[dict]) -> dict:

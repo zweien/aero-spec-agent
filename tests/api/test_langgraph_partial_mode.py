@@ -309,8 +309,8 @@ def test_tracing_config_enabled():
 # ---------------------------------------------------------------------------
 
 
-def test_compare_graph_dispatches_variants(job_runner, spec_dict):
-    graph = build_compare_graph(job_runner=job_runner)
+def test_compare_graph_dispatches_variants(auto_runner, spec_dict):
+    graph = build_compare_graph(job_runner=auto_runner, timeout_seconds=30)
     result = graph.invoke({
         "design_id": "test-compare",
         "base_spec": spec_dict,
@@ -320,11 +320,12 @@ def test_compare_graph_dispatches_variants(job_runner, spec_dict):
         ],
     })
 
-    assert result["status"] == "running"
-    assert len(result["variant_jobs"]) == 2
-    assert result["variant_jobs"][0]["label"] == "v1"
-    assert result["variant_jobs"][0]["job_id"]
-    assert result["variant_jobs"][0]["status"] == "queued"
+    # CompareGraph now completes via VariantSubgraph composition
+    assert result["status"] == "completed"
+    assert len(result["results"]) == 2
+    assert result["results"][0]["label"] == "v1"
+    assert result["results"][0]["job_id"]
+    assert result["results"][0]["status"] in ("succeeded", "failed")
 
 
 # ---------------------------------------------------------------------------
@@ -332,8 +333,8 @@ def test_compare_graph_dispatches_variants(job_runner, spec_dict):
 # ---------------------------------------------------------------------------
 
 
-def test_compare_graph_no_variants(job_runner):
-    graph = build_compare_graph(job_runner=job_runner)
+def test_compare_graph_no_variants(auto_runner):
+    graph = build_compare_graph(job_runner=auto_runner, timeout_seconds=5)
     result = graph.invoke({
         "design_id": "test-compare",
         "base_spec": {},
@@ -349,14 +350,8 @@ def test_compare_graph_no_variants(job_runner):
 # ---------------------------------------------------------------------------
 
 
-def test_compare_graph_aggregate(job_runner, spec_dict):
-    from services.api.app.schemas.aircraft_spec import AircraftSpec
-
-    spec = AircraftSpec.model_validate(spec_dict)
-    job1 = job_runner.enqueue_generate(design_id="test-compare", spec=spec)
-    job_runner.run_queued_job(job1.id, spec)
-
-    graph = build_compare_graph(job_runner=job_runner)
+def test_compare_graph_aggregate(auto_runner, spec_dict):
+    graph = build_compare_graph(job_runner=auto_runner, timeout_seconds=30)
     result = graph.invoke({
         "design_id": "test-compare",
         "base_spec": spec_dict,
@@ -365,6 +360,6 @@ def test_compare_graph_aggregate(job_runner, spec_dict):
         ],
     })
 
-    assert result["status"] in ("running", "completed")
+    assert result["status"] == "completed"
     comparison = result.get("comparison", {})
     assert comparison.get("total_variants") == 1
