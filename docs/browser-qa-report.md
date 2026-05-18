@@ -91,15 +91,44 @@
 
 None.
 
-## Manual Browser Verification Needed
+## Manual Browser Verification
 
-The following require manual browser interaction (cannot be verified via API alone):
+以下项目需要人工在浏览器中操作验证。请按 docs/demo-script.md 中的步骤逐一执行。
 
-- [ ] Chat SSE stream: send natural language message, verify tool card spinner → done transition
-- [ ] CAD viewer: verify 3D model loads and renders after generation
-- [ ] ParameterPanel: verify values populate and can be modified
-- [ ] Selected-part click in CAD viewer
-- [ ] DiagnosticsPanel: click "查看诊断" on failed tool card
-- [ ] "诊断信息暂不可用" display when diagnostics returns null
-- [ ] Console errors during normal operation
-- [ ] Network tab: polling stops after succeeded/failed
+### Chat & Generation
+
+- [ ] 打开 http://localhost:3900，发送"设计一架翼展12米的无人机"
+- [ ] SSE 流正确显示：assistant 文本 → tool card spinner → ✓ done with version number
+- [ ] 生成完成后 CAD viewer 加载 3D 模型
+- [ ] ParameterPanel 自动填充 spec 参数值
+- [ ] VersionPanel 显示新版本
+
+### Parameter Modification
+
+- [ ] 修改 ParameterPanel 中的数值参数
+- [ ] 点击 Apply，观察 tool card 完成状态
+- [ ] CAD viewer 更新为新版本
+
+### Selected Part
+
+- [ ] 在 CAD viewer 中点击部件（如 fuselage 或 wing）
+- [ ] 发送"加长2米"，确认修改仅影响选中部件
+
+### Failed Diagnostics
+
+- [ ] 触发一个失败的生成（或用不存在的设计 ID）
+- [ ] Tool card 显示 ✗ 图标和红色边框
+- [ ] 点击"▸ 查看诊断" → JSON 展开
+- [ ] 点击"▾ 收起诊断" → 折叠
+- [ ] 若 fetch 返回 null → 显示"诊断信息暂不可用"
+
+### Console & Network
+
+- [ ] DevTools Console 无未捕获异常
+- [ ] Network tab 中 polling 请求在 succeeded/failed 后停止
+- [ ] 无重复轮询或无限循环
+
+### Version History
+
+- [ ] 多次生成后版本列表只显示成功版本
+- [ ] 点击历史版本可切换 CAD viewer 和参数面板
