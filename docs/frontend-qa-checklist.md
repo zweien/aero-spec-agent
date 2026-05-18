@@ -53,6 +53,8 @@
 - [ ] If generation_log or validation_report missing → shown as null
 - [ ] Click "▾ 收起诊断" collapses the section
 - [ ] Diagnostics fetch returns null on network error (no crash)
+- [ ] When diagnostics data is null (404/network error) → "诊断信息暂不可用" displayed
+- [ ] jobId is URL-encoded in diagnostics fetch request
 
 ## 7. Version list filtering
 

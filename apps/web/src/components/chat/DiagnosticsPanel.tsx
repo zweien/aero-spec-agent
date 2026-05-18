@@ -45,6 +45,9 @@ export function DiagnosticsPanel({ apiBaseUrl, jobId }: DiagnosticsPanelProps) {
           {JSON.stringify(data, null, 2)}
         </pre>
       )}
+      {expanded && !loading && !data && (
+        <div className="tool-card-diag-unavailable">诊断信息暂不可用</div>
+      )}
     </div>
   );
 }
