@@ -450,60 +450,70 @@ export function ChatPanel({
             </p>
           </div>
         )}
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`chat-bubble chat-bubble-${msg.role}`}
-          >
-            <div className="chat-avatar">
-              {msg.role === "user"
-                ? "你"
-                : msg.role === "system"
-                  ? "系"
-                  : msg.role === "error"
-                    ? "!"
-                    : "AI"}
-            </div>
-            <div className="chat-bubble-body">
-              {(msg.parts ?? []).map((part, i) => {
-                if (part.type === "text") {
-                  const isLastTextPart =
-                    i ===
-                    (msg.parts ?? []).findLastIndex(
-                      (p) => p.type === "text",
+        {messages.map((msg) => {
+          const hasToolPart = msg.parts.some((p) => p.type === "tool");
+          const showPreliminaryTimeline = isStreaming && msg.role === "assistant" && !hasToolPart;
+
+          return (
+            <div
+              key={msg.id}
+              className={`chat-bubble chat-bubble-${msg.role}`}
+            >
+              <div className="chat-avatar">
+                {msg.role === "user"
+                  ? "你"
+                  : msg.role === "system"
+                    ? "系"
+                    : msg.role === "error"
+                      ? "!"
+                      : "AI"}
+              </div>
+              <div className="chat-bubble-body">
+                {(msg.parts ?? []).map((part, i) => {
+                  if (part.type === "text") {
+                    const isLastTextPart =
+                      i ===
+                      (msg.parts ?? []).findLastIndex(
+                        (p) => p.type === "text",
+                      );
+                    return part.text ? (
+                      <span key={i}>
+                        <Markdown remarkPlugins={[remarkGfm]}>
+                          {part.text}
+                        </Markdown>
+                        {isStreaming &&
+                          msg.role === "assistant" &&
+                          isLastTextPart &&
+                          status === "streaming" && (
+                            <span className="streaming-cursor" />
+                        )}
+                      </span>
+                    ) : isStreaming && msg.role === "assistant" && isLastTextPart ? (
+                      <span key={i} className="ai-thinking">
+                        <span className="spinner" /> AI 思考中...
+                      </span>
+                    ) : null;
+                  }
+                  if (part.type === "tool") {
+                    return (
+                      <ToolCard
+                        key={i}
+                        part={part}
+                        apiBaseUrl={apiBaseUrl}
+                      />
                     );
-                  return part.text ? (
-                    <span key={i}>
-                      <Markdown remarkPlugins={[remarkGfm]}>
-                        {part.text}
-                      </Markdown>
-                      {isStreaming &&
-                        msg.role === "assistant" &&
-                        isLastTextPart &&
-                        status === "streaming" && (
-                          <span className="streaming-cursor" />
-                      )}
-                    </span>
-                  ) : isStreaming && msg.role === "assistant" && isLastTextPart ? (
-                    <span key={i} className="ai-thinking">
-                      <span className="spinner" /> AI 思考中...
-                    </span>
-                  ) : null;
-                }
-                if (part.type === "tool") {
-                  return (
-                    <ToolCard
-                      key={i}
-                      part={part}
-                      apiBaseUrl={apiBaseUrl}
-                    />
-                  );
-                }
-                return null;
-              })}
+                  }
+                  return null;
+                })}
+                {showPreliminaryTimeline && (
+                  <WorkflowTimeline
+                    stages={[{ step: "writing_spec", progress: 10, status: "running", timestamp: "" }]}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {selectedRefs.length > 0 && (
         <div className="selected-ref-bar" aria-label="当前选中对象">
