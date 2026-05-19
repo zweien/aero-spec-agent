@@ -15,7 +15,6 @@ import type { AircraftSpecData } from "@/components/parameter-panel/ParameterPan
 import { SettingsPanel } from "@/components/settings-panel/SettingsPanel";
 import { VersionPanel } from "@/components/version-panel/VersionPanel";
 import { DeepDesignPanel } from "@/components/graph/DeepDesignPanel";
-import { GraphExecutionPanel } from "@/components/graph/GraphExecutionPanel";
 import { useDeepDesignStream } from "@/components/graph/useDeepDesignStream";
 
 type VersionResponse = {
@@ -98,7 +97,7 @@ export default function Home() {
   const [compareVersions, setCompareVersions] = useState<[number, number] | null>(null);
   const [compareData, setCompareData] = useState<[VersionResponse, VersionResponse] | null>(null);
   const [selectedRefs, setSelectedRefs] = useState<string[]>([]);
-  const [rightTab, setRightTab] = useState<"parameters" | "deep-design" | "runtime">("parameters");
+  const [rightTab, setRightTab] = useState<"parameters" | "deep-design">("parameters");
   const deepDesignStream = useDeepDesignStream();
 
   const chatSystemMessageRef = useRef<((text: string) => void) | null>(null);
@@ -306,10 +305,6 @@ export default function Home() {
     setSelectedRefs([]);
   }, []);
 
-  const handleDeepDesignStart = useCallback(() => {
-    setRightTab("runtime");
-  }, []);
-
   const handleDeepDesignComplete = useCallback(() => {
     setRightTab("deep-design");
     if (designId) void fetchVersionList(designId);
@@ -398,18 +393,6 @@ export default function Home() {
                 onClick={() => setRightTab("deep-design")}
               >
                 深度设计
-                {deepDesignStream.status === "running" && (
-                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", marginLeft: 4, verticalAlign: "middle", animation: "pulse 1.5s infinite" }} />
-                )}
-              </button>
-              <button
-                className={`right-panel-tab ${rightTab === "runtime" ? "active" : ""}`}
-                onClick={() => setRightTab("runtime")}
-              >
-                运行监控
-                {deepDesignStream.status === "running" && (
-                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", marginLeft: 4, verticalAlign: "middle", animation: "pulse 1.5s infinite" }} />
-                )}
               </button>
             </div>
             <div className="right-panel-content">
@@ -427,15 +410,10 @@ export default function Home() {
                   apiBaseUrl={API_BASE_URL}
                   defaultSpec={specData ?? undefined}
                   stream={deepDesignStream}
-                  onStart={handleDeepDesignStart}
                   onComplete={handleDeepDesignComplete}
-                />
-              )}
-              {rightTab === "runtime" && (
-                <GraphExecutionPanel
-                  nodes={deepDesignStream.nodes}
-                  variants={deepDesignStream.variants}
-                  events={deepDesignStream.events}
+                  designId={designId}
+                  onLoadVersion={loadVersion}
+                  onSwitchToParameters={() => setRightTab("parameters")}
                 />
               )}
             </div>
