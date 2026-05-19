@@ -1,7 +1,8 @@
 # Post-Merge Validation Report
 
 **Branch:** master
-**Commit:** b18ab10 (docs: update README with new screenshots and tech stack badges)
+**Commit:** 1d4d63a (docs: OpenVSP validation passed — both single and twin engine cases)
+**Base commit:** b18ab10 (docs: update README with new screenshots and tech stack badges)
 **Merge commit:** 49d4e80 (Merge feat/deep-design-workspace-integration)
 **Date:** 2026-05-19
 **Validator:** automated + manual
@@ -61,7 +62,7 @@ CAD_BACKEND=fake .venv/bin/python -m pytest tests/ -q
 **Result:** 411 passed, 1 skipped, 0 failed
 
 ```
-411 passed, 1 skipped in 63.81s
+411 passed, 1 skipped in 62.98s
 ```
 
 Notable test files:

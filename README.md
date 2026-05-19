@@ -169,6 +169,23 @@ npm run dev
 
 Open http://localhost:3900 and start describing your aircraft.
 
+> **New to the project?** Use `CAD_BACKEND=fake` — it generates deterministic placeholder artifacts instantly, no OpenVSP installation required. Ideal for user testing and feature exploration. See [User Beta Test Plan](docs/user-beta-test-plan.md) for structured test cases.
+
+### 4. Try Deep Design (Demo Flow)
+
+Once the server is running:
+
+1. Type a design request in the chat panel (e.g. "设计一架翼展10米、单发、上单翼的长航时无人机")
+2. Wait for the initial design to generate and the 3D model to appear
+3. Click the **深度设计** tab in the right panel
+4. Describe what to explore, choose depth (快速 / 标准 / 深度), optionally check strategy tags
+5. Click **开始探索** — watch the Chinese-labeled timeline progress
+6. Review variant cards showing span, range, L/D ratio, wing loading
+7. Accept the AI-recommended variant or pick any variant → it becomes the current design
+8. Export the exploration report as Markdown
+
+> **Disclaimer:** Deep Design results are for concept exploration only — not engineering design decisions.
+
 ### With Real OpenVSP
 
 If you have [OpenVSP 3.50.2](http://openvsp.org/) with Python bindings installed:

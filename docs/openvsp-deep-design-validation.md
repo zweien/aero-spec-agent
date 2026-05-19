@@ -16,6 +16,13 @@
 | OpenVSP version | 3.50.2 (package metadata) |
 | System dependency | `libcminpack1` — installed |
 
+## OpenVSP Integration Test
+
+```bash
+CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/test_openvsp_integration.py -q
+# 1 passed in 0.97s
+```
+
 ## Validation Results
 
 ### Case 1: Single-engine long-endurance UAV
@@ -64,13 +71,6 @@
 | Artifact files | 7 | 7 | 5+ | Yes |
 | Generation failure | 0 | 0 | < 10% | Yes |
 | Deadlock count | 0 | 0 | 0 | Yes |
-
-## OpenVSP Integration Test
-
-```bash
-CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/test_openvsp_integration.py -q
-# 1 passed in 0.97s
-```
 
 ## Conclusion
 
