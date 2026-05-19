@@ -39,45 +39,32 @@ function circleIcon(state: StepState): string {
 }
 
 function inferStepStates(stages: WorkflowStage[]): Array<{ step: string; state: StepState }> {
-  const result: Array<{ step: string; state: StepState }> = [];
-  const seen = new Map<string, StepState>();
+  // Find the highest pipeline step index we've seen — all steps before it are completed
+  let highWaterMark = -1;
+  let hasSucceeded = false;
 
   for (const s of stages) {
     if (s.step === "succeeded") {
-      seen.set("generating_cad", "completed");
+      hasSucceeded = true;
       continue;
     }
-    if (s.step === "failed") {
-      seen.set(s.step, "failed");
-      continue;
+    const idx = ALL_STEPS.indexOf(s.step);
+    if (idx >= 0 && idx > highWaterMark) {
+      highWaterMark = idx;
     }
-    seen.set(s.step, s.status === "succeeded" ? "completed" : "running");
   }
 
-  const terminalStep = stages[stages.length - 1]?.step;
-  const terminalStatus = stages[stages.length - 1]?.status;
-
-  for (const step of ALL_STEPS) {
-    if (seen.has(step)) {
-      const state = seen.get(step)!;
-      result.push({ step, state });
-    } else if (step === terminalStep && terminalStatus === "failed") {
-      result.push({ step, state: "failed" });
+  const result: Array<{ step: string; state: StepState }> = [];
+  for (let i = 0; i < ALL_STEPS.length; i++) {
+    let state: StepState;
+    if (hasSucceeded || i < highWaterMark) {
+      state = "completed";
+    } else if (i === highWaterMark) {
+      state = "running";
     } else {
-      result.push({ step, state: "pending" });
+      state = "pending";
     }
-  }
-
-  // Mark last seen non-terminal step as running
-  let lastSeenIdx = -1;
-  for (let i = result.length - 1; i >= 0; i--) {
-    if (result[i].state !== "pending") {
-      lastSeenIdx = i;
-      break;
-    }
-  }
-  if (lastSeenIdx >= 0 && result[lastSeenIdx].state === "running") {
-    // Already running, nothing to do
+    result.push({ step: ALL_STEPS[i], state });
   }
 
   return result;
