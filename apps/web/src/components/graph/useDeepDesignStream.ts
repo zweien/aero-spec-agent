@@ -49,6 +49,7 @@ export type DeepDesignStreamState = {
   events: StreamEvent[];
   status: "idle" | "running" | "completed" | "failed";
   report: string;
+  ddDesignId: string | null;
 };
 
 const INITIAL_STATE: DeepDesignStreamState = {
@@ -57,6 +58,7 @@ const INITIAL_STATE: DeepDesignStreamState = {
   events: [],
   status: "idle",
   report: "",
+  ddDesignId: null,
 };
 
 function toTimestamp(): string {
@@ -69,6 +71,11 @@ function applyEvent(
 ): DeepDesignStreamState {
   const { event: eventType, data } = sse;
   const next: DeepDesignStreamState = { ...prev, status: "running" };
+
+  // Capture design_id from any event that carries it
+  if (data.design_id && typeof data.design_id === "string" && !next.ddDesignId) {
+    next.ddDesignId = data.design_id as string;
+  }
 
   // --- graph_node events ---
   if (eventType === "graph_node") {

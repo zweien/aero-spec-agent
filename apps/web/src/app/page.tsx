@@ -160,6 +160,7 @@ export default function Home() {
       if (!resp.ok) return;
 
       const version = (await resp.json()) as VersionResponse;
+      setDesignId(dId);
       setCurrentVersionNo(versionNo);
       setPreviewSpec(
         (version.validation_report?.spec_echo ?? null) as AircraftPreviewSpec | null,
@@ -186,8 +187,9 @@ export default function Home() {
       setPreviewSource(source);
       setCompareVersions(null);
       setCompareData(null);
+      void fetchVersionList(dId);
     },
-    [],
+    [fetchVersionList],
   );
 
   const handleGenerationComplete = useCallback(

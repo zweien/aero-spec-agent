@@ -158,7 +158,7 @@ export function DeepDesignPanel({
 
     onStart?.();
     void stream.start(apiBaseUrl, {
-      design_id: `dd-${Date.now()}`,
+      design_id: designId ?? `dd-${Date.now()}`,
       description: fullDescription,
       base_spec: baseSpec,
       constraints: { variant_count: variantCount },
@@ -195,6 +195,7 @@ export function DeepDesignPanel({
   const succeededVariants = stream.variants.filter((v) => v.status === "succeeded");
   const currentStageLabel = getCurrentStageLabel(stream.nodes);
   const runningVariantCount = stream.variants.filter((v) => v.status === "succeeded").length;
+  const variantDesignId = stream.ddDesignId ?? designId;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -411,7 +412,7 @@ export function DeepDesignPanel({
       {stream.status === "completed" && (
         <>
           {/* Recommended variant */}
-          {succeededVariants.length > 0 && designId && (
+          {succeededVariants.length > 0 && variantDesignId && (
             <RecommendedVariantCard
               report={stream.report}
               variants={succeededVariants.map((v) => ({
@@ -419,7 +420,7 @@ export function DeepDesignPanel({
                 status: v.status,
                 versionNo: v.versionNo ?? 0,
               }))}
-              designId={designId}
+              designId={variantDesignId}
               apiBaseUrl={apiBaseUrl}
               onLoadVersion={onLoadVersion}
               onSwitchToParameters={onSwitchToParameters}
@@ -433,7 +434,7 @@ export function DeepDesignPanel({
               label={v.label}
               status={v.status}
               versionNo={v.versionNo ?? 0}
-              designId={designId ?? ""}
+              designId={variantDesignId ?? ""}
               apiBaseUrl={apiBaseUrl}
               onLoadVersion={onLoadVersion}
               onSwitchToParameters={onSwitchToParameters}
