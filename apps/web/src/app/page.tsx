@@ -315,6 +315,15 @@ export default function Home() {
     if (designId) void fetchVersionList(designId);
   }, [designId, fetchVersionList]);
 
+  // Auto-switch back to deep-design tab when stream completes
+  const prevDDStatusRef = useRef(deepDesignStream.status);
+  useEffect(() => {
+    if (prevDDStatusRef.current === "running" && deepDesignStream.status === "completed") {
+      handleDeepDesignComplete();
+    }
+    prevDDStatusRef.current = deepDesignStream.status;
+  }, [deepDesignStream.status, handleDeepDesignComplete]);
+
   const handleCompare = useCallback(
     async (v1: number, v2: number) => {
       if (!designId) return;
