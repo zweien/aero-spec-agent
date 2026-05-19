@@ -192,10 +192,68 @@ textarea:focus {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  flex-direction: row;
+  gap: 0;
   height: 100%;
   padding-left: 4px;
+}
+
+.workspace-cad {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.right-panel {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border-default);
+  background: var(--bg-panel);
+  min-height: 0;
+}
+
+.right-panel-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.right-panel-tab {
+  flex: 1;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 10px 0;
+  min-height: 38px;
+  position: relative;
+}
+
+.right-panel-tab:hover:not(.active) {
+  background: var(--bg-hover);
+}
+
+.right-panel-tab.active {
+  color: var(--accent);
+  background: transparent;
+}
+
+.right-panel-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.right-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  min-height: 0;
 }
 
 /* --- Bottom Panel --- */
@@ -947,7 +1005,7 @@ textarea:focus {
   flex-direction: column;
   gap: 6px;
   overflow-y: auto;
-  max-height: 280px;
+  max-height: none;
   flex-shrink: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
@@ -1207,6 +1265,11 @@ textarea:focus {
 .apply-changes-applying {
   cursor: wait;
   filter: saturate(0.8);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 /* =============================================
