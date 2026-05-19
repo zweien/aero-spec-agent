@@ -2,7 +2,6 @@
 
 import React, { type JSX, useEffect, useState } from "react";
 
-import { GraphExecutionPanel } from "./GraphExecutionPanel";
 import type { useDeepDesignStream } from "./useDeepDesignStream";
 
 // ---------------------------------------------------------------------------
