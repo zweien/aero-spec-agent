@@ -1,9 +1,9 @@
 "use client";
 
-import React, { type JSX, useState } from "react";
+import React, { type JSX, useEffect, useState } from "react";
 
 import { GraphExecutionPanel } from "./GraphExecutionPanel";
-import { useDeepDesignStream } from "./useDeepDesignStream";
+import type { useDeepDesignStream } from "./useDeepDesignStream";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -12,20 +12,43 @@ import { useDeepDesignStream } from "./useDeepDesignStream";
 export type DeepDesignPanelProps = {
   apiBaseUrl: string;
   defaultSpec?: Record<string, unknown>;
+  stream: ReturnType<typeof useDeepDesignStream>;
+  onComplete?: () => void;
+  onStart?: () => void;
 };
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function DeepDesignPanel({ apiBaseUrl, defaultSpec }: DeepDesignPanelProps): JSX.Element {
+export function DeepDesignPanel({
+  apiBaseUrl,
+  defaultSpec,
+  stream,
+  onComplete,
+  onStart,
+}: DeepDesignPanelProps): JSX.Element {
   const [description, setDescription] = useState("");
-  const [variantCount, setVariantCount] = useState(2);
+  const [variantCount, setVariantCount] = useState(3);
   const [specJson, setSpecJson] = useState(
     defaultSpec ? JSON.stringify(defaultSpec, null, 2) : "",
   );
 
-  const stream = useDeepDesignStream();
+  // Sync defaultSpec changes into textarea
+  useEffect(() => {
+    if (defaultSpec) {
+      setSpecJson(JSON.stringify(defaultSpec, null, 2));
+    }
+  }, [defaultSpec]);
+
+  // Fire onComplete when stream transitions to completed
+  const prevStatusRef = React.useRef(stream.status);
+  useEffect(() => {
+    if (prevStatusRef.current === "running" && stream.status === "completed") {
+      onComplete?.();
+    }
+    prevStatusRef.current = stream.status;
+  }, [stream.status, onComplete]);
 
   const handleSubmit = () => {
     if (!description.trim()) return;
@@ -37,6 +60,7 @@ export function DeepDesignPanel({ apiBaseUrl, defaultSpec }: DeepDesignPanelProp
       baseSpec = {};
     }
 
+    onStart?.();
     void stream.start(apiBaseUrl, {
       design_id: `dd-${Date.now()}`,
       description: description.trim(),
@@ -46,21 +70,46 @@ export function DeepDesignPanel({ apiBaseUrl, defaultSpec }: DeepDesignPanelProp
   };
 
   const isRunning = stream.status === "running";
+  const hasNoSpec = !defaultSpec && !specJson.trim();
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Input form */}
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold text-gray-700">
-          Deep Design Exploration
-        </h3>
+    <div className="flex flex-col gap-3">
+      {/* No spec notice */}
+      {hasNoSpec && (
+        <div style={{
+          padding: "12px",
+          background: "var(--warning-bg)",
+          border: "1px solid var(--warning)",
+          borderRadius: "var(--radius-sm)",
+          color: "var(--warning)",
+          fontSize: "12px",
+        }}>
+          请先通过对话生成或加载一个基础设计，或手动输入 JSON。
+        </div>
+      )}
 
-        <div className="mb-3">
-          <label className="mb-1 block text-xs font-medium text-gray-500">
-            Description
+      {/* Input form */}
+      <div style={{
+        padding: "12px",
+        background: "var(--bg-elevated)",
+        borderRadius: "var(--radius)",
+        border: "1px solid var(--border-default)",
+      }}>
+        <div style={{ marginBottom: "10px" }}>
+          <label style={{ display: "block", fontSize: "12px", fontWeight: 500, color: "var(--text-dim)", marginBottom: "4px" }}>
+            设计需求描述
           </label>
           <textarea
-            className="w-full rounded border border-gray-300 p-2 text-sm"
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--border-strong)",
+              background: "var(--bg-base)",
+              color: "var(--text)",
+              fontSize: "13px",
+              resize: "vertical",
+            }}
             rows={2}
             placeholder="e.g. 设计一架 300km 航程的长航时无人机"
             value={description}
@@ -69,29 +118,47 @@ export function DeepDesignPanel({ apiBaseUrl, defaultSpec }: DeepDesignPanelProp
           />
         </div>
 
-        <div className="mb-3 flex gap-4">
-          <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
-              Variants
+        <div style={{ display: "flex", gap: "12px", marginBottom: "10px" }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: "block", fontSize: "12px", fontWeight: 500, color: "var(--text-dim)", marginBottom: "4px" }}>
+              变体数量
             </label>
             <input
               type="number"
-              className="w-full rounded border border-gray-300 p-2 text-sm"
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--border-strong)",
+                background: "var(--bg-base)",
+                color: "var(--text)",
+                fontSize: "13px",
+              }}
               min={1}
               max={5}
               value={variantCount}
-              onChange={(e) => setVariantCount(Number(e.target.value) || 2)}
+              onChange={(e) => setVariantCount(Number(e.target.value) || 3)}
               disabled={isRunning}
             />
           </div>
         </div>
 
-        <div className="mb-3">
-          <label className="mb-1 block text-xs font-medium text-gray-500">
-            Base Spec (JSON, optional)
+        <div style={{ marginBottom: "10px" }}>
+          <label style={{ display: "block", fontSize: "12px", fontWeight: 500, color: "var(--text-dim)", marginBottom: "4px" }}>
+            Base Spec (JSON)
           </label>
           <textarea
-            className="w-full rounded border border-gray-300 p-2 font-mono text-xs"
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--border-strong)",
+              background: "var(--bg-base)",
+              color: "var(--text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px",
+              resize: "vertical",
+            }}
             rows={4}
             placeholder="{}"
             value={specJson}
@@ -100,41 +167,44 @@ export function DeepDesignPanel({ apiBaseUrl, defaultSpec }: DeepDesignPanelProp
           />
         </div>
 
-        <div className="flex gap-2">
+        <div style={{ display: "flex", gap: "8px" }}>
           <button
-            className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:bg-gray-400"
             onClick={handleSubmit}
             disabled={isRunning || !description.trim()}
           >
-            {isRunning ? "Running..." : "Start Exploration"}
+            {isRunning ? "运行中..." : "开始探索"}
           </button>
           {isRunning && (
             <button
-              className="rounded bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300"
+              style={{ background: "var(--bg-surface)", color: "var(--text-dim)" }}
               onClick={stream.stop}
             >
-              Cancel
+              取消
             </button>
           )}
         </div>
       </div>
 
-      {/* Execution panel */}
-      {(stream.nodes.length > 0 || stream.variants.length > 0 || stream.events.length > 0) && (
-        <GraphExecutionPanel
-          nodes={stream.nodes}
-          variants={stream.variants}
-          events={stream.events}
-        />
-      )}
-
       {/* Report */}
       {stream.report && (
-        <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <h3 className="mb-2 text-sm font-semibold text-gray-700">Report</h3>
-          <div className="prose prose-sm max-w-none">
-            <pre className="whitespace-pre-wrap text-xs text-gray-700">{stream.report}</pre>
-          </div>
+        <div style={{
+          padding: "12px",
+          background: "var(--bg-elevated)",
+          borderRadius: "var(--radius)",
+          border: "1px solid var(--border-default)",
+        }}>
+          <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", marginBottom: "8px" }}>
+            设计探索报告
+          </h4>
+          <pre style={{
+            whiteSpace: "pre-wrap",
+            fontSize: "11px",
+            color: "var(--text-dim)",
+            margin: 0,
+            lineHeight: 1.6,
+          }}>
+            {stream.report}
+          </pre>
         </div>
       )}
     </div>
