@@ -70,11 +70,11 @@ export function VariantSummaryCard({
 
   const statusLabel =
     status === "succeeded"
-      ? "succeeded"
+      ? "✓ 已完成"
       : status === "failed"
-        ? "failed"
+        ? "✕ 失败"
         : status === "running"
-          ? "running"
+          ? "⟳ 生成中"
           : status;
 
   return (
@@ -95,7 +95,7 @@ export function VariantSummaryCard({
           marginBottom: 8,
         }}
       >
-        <VariantThumbnail label={label} />
+        <VariantThumbnail label={label} status={status as "succeeded" | "failed" | "running" | "queued"} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{

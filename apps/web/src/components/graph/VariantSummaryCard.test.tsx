@@ -35,7 +35,7 @@ test("VariantSummaryCard renders status", () => {
       onSwitchToParameters={noopFn}
     />,
   );
-  assert.ok(html.includes("failed"));
+  assert.ok(html.includes("✕ 失败"));
 });
 
 test("VariantSummaryCard renders set as current button", () => {

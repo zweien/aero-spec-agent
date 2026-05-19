@@ -105,8 +105,19 @@ export function DeepDesignPanel({
   const [specJson, setSpecJson] = useState(
     defaultSpec ? JSON.stringify(defaultSpec, null, 2) : "",
   );
-  const [showRuntimeDetails, setShowRuntimeDetails] = useState(false);
+  const [showRuntimeDetails, setShowRuntimeDetails] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("dd-show-runtime-details") === "true";
+  });
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const toggleRuntimeDetails = () => {
+    setShowRuntimeDetails((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("dd-show-runtime-details", String(next)); } catch {}
+      return next;
+    });
+  };
 
   // Sync defaultSpec changes into textarea
   useEffect(() => {
@@ -359,7 +370,7 @@ export function DeepDesignPanel({
           {/* Collapsible runtime details */}
           <div style={{ borderTop: "1px solid var(--border-default)", paddingTop: "8px" }}>
             <button
-              onClick={() => setShowRuntimeDetails(!showRuntimeDetails)}
+              onClick={toggleRuntimeDetails}
               style={{
                 fontSize: "11px",
                 color: "var(--text-muted)",

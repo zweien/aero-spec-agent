@@ -3,9 +3,18 @@ import React, { type JSX } from "react";
 
 export type VariantThumbnailProps = {
   label?: string;
+  status?: "succeeded" | "failed" | "running" | "queued";
 };
 
-export function VariantThumbnail({ label }: VariantThumbnailProps): JSX.Element {
+const STATUS_OVERLAY: Record<string, { icon: string; color: string; bg: string }> = {
+  succeeded: { icon: "✓", color: "var(--success)", bg: "rgba(0,180,100,0.15)" },
+  failed: { icon: "✕", color: "var(--error)", bg: "rgba(220,50,50,0.15)" },
+  running: { icon: "⟳", color: "var(--accent)", bg: "rgba(100,120,255,0.12)" },
+};
+
+export function VariantThumbnail({ label, status }: VariantThumbnailProps): JSX.Element {
+  const overlay = status ? STATUS_OVERLAY[status] : null;
+
   return (
     <div
       style={{
@@ -73,6 +82,33 @@ export function VariantThumbnail({ label }: VariantThumbnailProps): JSX.Element 
         {/* Engine nacelle — right */}
         <ellipse cx="84" cy="42" rx="3" ry="2" fill="var(--text-muted)" opacity={0.4} />
       </svg>
+
+      {/* Status overlay */}
+      {overlay && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: overlay.bg,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 24,
+              color: overlay.color,
+              fontWeight: 700,
+              lineHeight: 1,
+              animation: status === "running" ? "pulse 1.5s ease-in-out infinite" : "none",
+            }}
+          >
+            {overlay.icon}
+          </span>
+        </div>
+      )}
+
       {label && (
         <span
           style={{
