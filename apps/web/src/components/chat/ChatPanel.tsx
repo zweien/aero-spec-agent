@@ -8,6 +8,12 @@ import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
 import { resolveGenerationJob } from "@/lib/generationFlow";
 import { createChatSseParser } from "./chatSse";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import {
+  streamJobEvents,
+  toJobPollResult,
+  type WorkflowStage,
+} from "./useJobEventStream";
+import { WorkflowTimeline } from "./WorkflowTimeline";
 
 export type GenerationCompleteData = {
   job_id?: string;
@@ -33,6 +39,7 @@ type ToolPart = {
   args?: Record<string, unknown>;
   output?: Record<string, unknown>;
   state: "running" | "done";
+  workflowStages?: WorkflowStage[];
 };
 
 type ChatMessage = {
@@ -209,6 +216,24 @@ export function ChatPanel({
     [],
   );
 
+  const appendWorkflowStage = useCallback((messageId: string, stage: WorkflowStage) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        const parts = [...msg.parts];
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const part = parts[i];
+          if (part.type === "tool" && part.state === "running") {
+            const stages = [...(part.workflowStages ?? []), stage];
+            parts[i] = { ...part, workflowStages: stages };
+            break;
+          }
+        }
+        return { ...msg, parts };
+      }),
+    );
+  }, []);
+
   const completeLatestTool = useCallback(
     (messageId: string, output: GenerationCompleteData) => {
       setMessages((prev) =>
@@ -312,20 +337,37 @@ export function ChatPanel({
               }
               appendToolCall(assistantId, String(event.data.name ?? ""), args);
             } else if (event.type === "generation_started") {
-              appendAssistantText(assistantId, "\n\n正在生成 CAD 模型...\n");
               const jobId = String(event.data.job_id ?? event.data.id ?? "");
               if (jobId) {
-                void resolveGenerationJob({ apiBaseUrl, jobId })
-                  .then((job) => {
+                const ctrl = new AbortController();
+                void streamJobEvents({
+                  apiBaseUrl,
+                  jobId,
+                  signal: ctrl.signal,
+                  onStage: (stage) => appendWorkflowStage(assistantId, stage),
+                })
+                  .then((result) => {
+                    const jobResult = toJobPollResult(result, jobId);
                     completeLatestTool(assistantId, {
                       ...(event.data as GenerationCompleteData),
-                      ...job,
-                      job_id: job.id,
+                      ...jobResult,
+                      job_id: jobId,
                     });
                   })
-                  .catch((exc) => {
-                    const message = exc instanceof Error ? exc.message : "生成任务失败";
-                    failLatestTool(assistantId, message, jobId);
+                  .catch(() => {
+                    // Fallback to polling if SSE stream fails
+                    void resolveGenerationJob({ apiBaseUrl, jobId })
+                      .then((job) => {
+                        completeLatestTool(assistantId, {
+                          ...(event.data as GenerationCompleteData),
+                          ...job,
+                          job_id: job.id,
+                        });
+                      })
+                      .catch((exc) => {
+                        const message = exc instanceof Error ? exc.message : "生成任务失败";
+                        failLatestTool(assistantId, message, jobId);
+                      });
                   });
               }
             } else if (event.type === "generation_complete") {
@@ -363,6 +405,7 @@ export function ChatPanel({
       appendAssistantText,
       appendMessage,
       appendToolCall,
+      appendWorkflowStage,
       completeLatestTool,
       failLatestTool,
       conversationId,
@@ -440,6 +483,10 @@ export function ChatPanel({
                         status === "streaming" && (
                           <span className="streaming-cursor" />
                       )}
+                    </span>
+                  ) : isStreaming && msg.role === "assistant" && isLastTextPart ? (
+                    <span key={i} className="ai-thinking">
+                      <span className="spinner" /> AI 思考中...
                     </span>
                   ) : null;
                 }
@@ -551,6 +598,10 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
         <div className="tool-card-args">
           <SpecSummary args={part.args} toolName={toolName} />
         </div>
+      )}
+
+      {part.workflowStages && part.workflowStages.length > 0 && (
+        <WorkflowTimeline stages={part.workflowStages} />
       )}
 
       {!isRunning && result?.message && (

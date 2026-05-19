@@ -1,14 +1,21 @@
+import asyncio
 import json
 import os
 from pathlib import Path
+from typing import AsyncIterator
 
 import yaml
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import ValidationError
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.schemas.job import job_to_response
+from services.api.app.services.job_events import (
+    TERMINAL_TYPES,
+    JobEventType,
+    get_job_event_bus,
+)
 from services.api.app.services.job_runner import JobRunner
 from services.api.app.services.spec_patch import apply_patch
 from services.api.app.services.version_store import VersionStore
@@ -56,6 +63,83 @@ def get_job(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     return _job_response(job)
+
+
+_SSE_EVENT_MAP = {
+    JobEventType.STARTED: "generation_started",
+    JobEventType.PROGRESS: "generation_progress",
+    JobEventType.COMPLETED: "generation_complete",
+    JobEventType.FAILED: "generation_failed",
+}
+
+
+def _sse_line(event_type: str, data: dict) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+async def _stream_job_events(job_id: str) -> AsyncIterator[str]:
+    bus = get_job_event_bus()
+    q = bus.async_queue()
+    try:
+        deadline = asyncio.get_event_loop().time() + 120
+        while asyncio.get_event_loop().time() < deadline:
+            try:
+                event = await asyncio.wait_for(q.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+                continue
+
+            if event.job_id != job_id:
+                continue
+
+            sse_type = _SSE_EVENT_MAP.get(event.type, event.type.value)
+            payload = {
+                "job_id": event.job_id,
+                "design_id": event.design_id,
+                "version_no": event.version_no,
+                "status": (
+                    "succeeded"
+                    if event.type == JobEventType.COMPLETED
+                    else "failed" if event.type == JobEventType.FAILED else "running"
+                ),
+                "progress": event.progress,
+                "current_step": event.current_step,
+                "timestamp": event.timestamp,
+            }
+            if event.error_message:
+                payload["error_message"] = event.error_message
+            if event.duration_ms is not None:
+                payload["duration_ms"] = event.duration_ms
+            if event.files:
+                payload["files"] = event.files
+
+            yield _sse_line(sse_type, payload)
+
+            if event.type in TERMINAL_TYPES:
+                return
+    finally:
+        bus.release_async_queue(q)
+
+
+@router.get("/jobs/{job_id}/stream")
+async def stream_job(job_id: str):
+    job = runner.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    if job.status in ("succeeded", "failed"):
+        evt_type = "generation_complete" if job.status == "succeeded" else "generation_failed"
+        data = _job_response(job)
+        data["status"] = job.status
+        return StreamingResponse(
+            iter([_sse_line(evt_type, data)]),
+            media_type="text/event-stream",
+        )
+
+    return StreamingResponse(
+        _stream_job_events(job_id),
+        media_type="text/event-stream",
+    )
 
 
 @router.get("/jobs/{job_id}/diagnostics")
