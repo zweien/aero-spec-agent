@@ -192,9 +192,33 @@ export function DeepDesignPanel({
           borderRadius: "var(--radius)",
           border: "1px solid var(--border-default)",
         }}>
-          <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", marginBottom: "8px" }}>
-            设计探索报告
-          </h4>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", margin: 0 }}>
+              设计探索报告
+            </h4>
+            <button
+              style={{
+                fontSize: "11px",
+                padding: "3px 8px",
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-sm)",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                const blob = new Blob([stream.report], { type: "text/markdown;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `deep-design-report-${new Date().toISOString().slice(0, 10)}.md`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              导出 .md
+            </button>
+          </div>
           <pre style={{
             whiteSpace: "pre-wrap",
             fontSize: "11px",
