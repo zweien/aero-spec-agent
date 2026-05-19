@@ -28,6 +28,7 @@ export type VariantResult = {
   durationMs?: number;
   jobId?: string;
   threadId?: string;
+  versionNo?: number;
 };
 
 export type StreamEvent = {

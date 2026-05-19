@@ -14,6 +14,8 @@ import { ParameterPanel } from "@/components/parameter-panel/ParameterPanel";
 import type { AircraftSpecData } from "@/components/parameter-panel/ParameterPanel";
 import { SettingsPanel } from "@/components/settings-panel/SettingsPanel";
 import { VersionPanel } from "@/components/version-panel/VersionPanel";
+import { DeepDesignPanel } from "@/components/graph/DeepDesignPanel";
+import { useDeepDesignStream } from "@/components/graph/useDeepDesignStream";
 
 type VersionResponse = {
   files: string[];
@@ -95,6 +97,8 @@ export default function Home() {
   const [compareVersions, setCompareVersions] = useState<[number, number] | null>(null);
   const [compareData, setCompareData] = useState<[VersionResponse, VersionResponse] | null>(null);
   const [selectedRefs, setSelectedRefs] = useState<string[]>([]);
+  const [rightTab, setRightTab] = useState<"parameters" | "deep-design">("parameters");
+  const deepDesignStream = useDeepDesignStream();
 
   const chatSystemMessageRef = useRef<((text: string) => void) | null>(null);
   const chatToolActionRef = useRef<((toolName: string, args: Record<string, unknown>) => import("@/components/chat/ChatPanel").ToolActionHandle) | null>(null);
@@ -156,6 +160,7 @@ export default function Home() {
       if (!resp.ok) return;
 
       const version = (await resp.json()) as VersionResponse;
+      setDesignId(dId);
       setCurrentVersionNo(versionNo);
       setPreviewSpec(
         (version.validation_report?.spec_echo ?? null) as AircraftPreviewSpec | null,
@@ -182,8 +187,9 @@ export default function Home() {
       setPreviewSource(source);
       setCompareVersions(null);
       setCompareData(null);
+      void fetchVersionList(dId);
     },
-    [],
+    [fetchVersionList],
   );
 
   const handleGenerationComplete = useCallback(
@@ -301,6 +307,20 @@ export default function Home() {
     setSelectedRefs([]);
   }, []);
 
+  const handleDeepDesignComplete = useCallback(() => {
+    setRightTab("deep-design");
+    if (designId) void fetchVersionList(designId);
+  }, [designId, fetchVersionList]);
+
+  // Auto-switch back to deep-design tab when stream completes
+  const prevDDStatusRef = useRef(deepDesignStream.status);
+  useEffect(() => {
+    if (prevDDStatusRef.current === "running" && deepDesignStream.status === "completed") {
+      handleDeepDesignComplete();
+    }
+    prevDDStatusRef.current = deepDesignStream.status;
+  }, [deepDesignStream.status, handleDeepDesignComplete]);
+
   const handleCompare = useCallback(
     async (v1: number, v2: number) => {
       if (!designId) return;
@@ -354,19 +374,52 @@ export default function Home() {
           onMouseDown={handleDragStart}
         />
         <div className="workspace">
-          <CadViewer
-            modelFormat={previewSource?.format}
-            modelUrl={previewSource?.url}
-            spec={previewSpec}
-            onSelectPart={handleSelectPart}
-          />
-          <ParameterPanel
-            spec={draftSpec}
-            onParameterChange={handleParameterChange}
-            onApplyChanges={handleApplyChanges}
-            pendingCount={pendingChanges.size}
-            isApplying={isApplyingChanges}
-          />
+          <div className="workspace-cad">
+            <CadViewer
+              modelFormat={previewSource?.format}
+              modelUrl={previewSource?.url}
+              spec={previewSpec}
+              onSelectPart={handleSelectPart}
+            />
+          </div>
+          <div className="right-panel">
+            <div className="right-panel-tabs">
+              <button
+                className={`right-panel-tab ${rightTab === "parameters" ? "active" : ""}`}
+                onClick={() => setRightTab("parameters")}
+              >
+                参数编辑
+              </button>
+              <button
+                className={`right-panel-tab ${rightTab === "deep-design" ? "active" : ""}`}
+                onClick={() => setRightTab("deep-design")}
+              >
+                深度设计
+              </button>
+            </div>
+            <div className="right-panel-content">
+              {rightTab === "parameters" && (
+                <ParameterPanel
+                  spec={draftSpec}
+                  onParameterChange={handleParameterChange}
+                  onApplyChanges={handleApplyChanges}
+                  pendingCount={pendingChanges.size}
+                  isApplying={isApplyingChanges}
+                />
+              )}
+              {rightTab === "deep-design" && (
+                <DeepDesignPanel
+                  apiBaseUrl={API_BASE_URL}
+                  defaultSpec={specData ?? undefined}
+                  stream={deepDesignStream}
+                  onComplete={handleDeepDesignComplete}
+                  designId={designId}
+                  onLoadVersion={loadVersion}
+                  onSwitchToParameters={() => setRightTab("parameters")}
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
       <VersionPanel

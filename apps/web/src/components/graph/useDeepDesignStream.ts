@@ -24,11 +24,11 @@ export type DeepDesignSseEvent = {
 // ---------------------------------------------------------------------------
 
 const NODE_LABELS: Record<string, string> = {
-  parse_requirements: "Parse",
-  prepare_variants: "Prepare",
-  run_compare: "Compare",
-  refine_variants: "Refine",
-  synthesize_report: "Report",
+  parse_requirements: "解析设计目标",
+  prepare_variants: "生成候选方案",
+  run_compare: "分析方案差异",
+  refine_variants: "迭代优化",
+  synthesize_report: "生成设计建议",
 };
 
 const NODE_ORDER = [
@@ -49,6 +49,7 @@ export type DeepDesignStreamState = {
   events: StreamEvent[];
   status: "idle" | "running" | "completed" | "failed";
   report: string;
+  ddDesignId: string | null;
 };
 
 const INITIAL_STATE: DeepDesignStreamState = {
@@ -57,6 +58,7 @@ const INITIAL_STATE: DeepDesignStreamState = {
   events: [],
   status: "idle",
   report: "",
+  ddDesignId: null,
 };
 
 function toTimestamp(): string {
@@ -69,6 +71,11 @@ function applyEvent(
 ): DeepDesignStreamState {
   const { event: eventType, data } = sse;
   const next: DeepDesignStreamState = { ...prev, status: "running" };
+
+  // Capture design_id from any event that carries it
+  if (data.design_id && typeof data.design_id === "string" && !next.ddDesignId) {
+    next.ddDesignId = data.design_id as string;
+  }
 
   // --- graph_node events ---
   if (eventType === "graph_node") {
@@ -138,6 +145,7 @@ function applyEvent(
         if (eventType === "generation_complete") {
           existingVariant.status = "succeeded";
           existingVariant.durationMs = data.duration_ms as number | undefined;
+          if (data.version_no != null) existingVariant.versionNo = data.version_no as number;
         } else if (eventType === "generation_failed") {
           existingVariant.status = "failed";
         } else {
@@ -152,7 +160,7 @@ function applyEvent(
               : "running";
         next.variants = [
           ...next.variants,
-          { label, status: vStatus, jobId, durationMs: data.duration_ms as number | undefined },
+          { label, status: vStatus, jobId, durationMs: data.duration_ms as number | undefined, versionNo: data.version_no as number | undefined },
         ];
       }
     }
