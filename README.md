@@ -9,6 +9,10 @@ Describe an aircraft in plain language — get parametric CAD models, aerodynami
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-000?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Three.js](https://img.shields.io/badge/Three.js-r164-black?logo=three.js&logoColor=white)](https://threejs.org/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
+[![Pydantic](https://img.shields.io/badge/Pydantic-2.0+-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 [![OpenVSP](https://img.shields.io/badge/OpenVSP-3.50-1E88E5?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHRleHQgZmlsbD0id2hpdGUiIGZvbnQtc2l6ZT0iMTIiIHk9IjE2IiB4PSIyIj5WU1A8L3RleHQ+PC9zdmc+)](http://openvsp.org/)
 [![Tests](https://img.shields.io/badge/tests-443%20passing-brightgreen)]()
 
@@ -20,18 +24,9 @@ Describe an aircraft in plain language — get parametric CAD models, aerodynami
 
 ## Screenshots
 
-![AeroSpec Agent](docs/screenshots/openvsp-single-engine.png)
+![AeroSpec Agent — Design workbench with 3D preview and parameter editing](docs/images/aerospec-overview.png)
 
-<table>
-  <tr>
-    <td><img src="docs/screenshots/multi-turn-modification.png" alt="Multi-turn modification" /></td>
-    <td><img src="docs/screenshots/markdown-rendering.png" alt="Markdown rendering" /></td>
-  </tr>
-  <tr>
-    <td align="center">Multi-turn modification</td>
-    <td align="center">Design analysis in chat</td>
-  </tr>
-</table>
+![AeroSpec Agent — AI Deep Design exploration with variant comparison](docs/images/deep-design-exploration.png)
 
 ---
 
