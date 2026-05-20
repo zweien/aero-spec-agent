@@ -452,19 +452,29 @@ class FakeJobRunner:
         self._store = VersionStore(tmp_path)
         self.generated_specs = []
 
-    def generate(self, design_id: str, spec):
-        self.generated_specs.append(spec)
+    def create_job(self, design_id: str):
         version_no, _ = self._store.create_version_dir(design_id)
-        self._store.write_spec(design_id, version_no, spec)
         return JobRecord(
             id="fake-id",
             design_id=design_id,
             version_no=version_no,
-            status="ready",
-            progress=100,
-            current_step="ready",
-            files={"aircraft.vsp3": "fake"},
+            status="running",
+            progress=10,
+            current_step="writing_spec",
         )
+
+    def run_job_generation(self, job: JobRecord, spec):
+        self.generated_specs.append(spec)
+        self._store.write_spec(job.design_id, job.version_no, spec)
+        job.status = "ready"
+        job.progress = 100
+        job.current_step = "ready"
+        job.files = {"aircraft.vsp3": "fake"}
+
+    def generate(self, design_id: str, spec):
+        job = self.create_job(design_id)
+        self.run_job_generation(job, spec)
+        return job
 
 
 def _service_with_spec(tmp_path: Path) -> ChatService:

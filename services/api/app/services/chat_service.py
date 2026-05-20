@@ -483,8 +483,9 @@ class ChatService:
             result = _job_result(job)
             yield _sse_event("generation_started", result)
         else:
-            yield _sse_event("generation_started", {"design_id": state.design_id})
-            job = self._job_runner.generate(design_id=state.design_id, spec=spec)
+            job = self._job_runner.create_job(design_id=state.design_id)
+            yield _sse_event("generation_started", _job_result(job))
+            self._job_runner.run_job_generation(job, spec)
             state.current_spec = spec
             result = _job_result(job)
             yield _sse_event("generation_complete", result)
@@ -600,8 +601,9 @@ class ChatService:
             result = _job_result(job)
             yield _sse_event("generation_started", result)
         else:
-            yield _sse_event("generation_started", {"design_id": state.design_id})
-            job = self._job_runner.generate(design_id=state.design_id, spec=patched)
+            job = self._job_runner.create_job(design_id=state.design_id)
+            yield _sse_event("generation_started", _job_result(job))
+            self._job_runner.run_job_generation(job, patched)
             state.current_spec = patched
             result = _job_result(job)
             yield _sse_event("generation_complete", result)
@@ -674,8 +676,9 @@ class ChatService:
             result = _job_result(job, message=f"已基于选中对象 {part_ref} 完成修改。")
             yield _sse_event("generation_started", result)
         else:
-            yield _sse_event("generation_started", {"design_id": state.design_id})
-            job = self._job_runner.generate(design_id=state.design_id, spec=patched)
+            job = self._job_runner.create_job(design_id=state.design_id)
+            yield _sse_event("generation_started", _job_result(job))
+            self._job_runner.run_job_generation(job, patched)
             state.current_spec = patched
             result = _job_result(job, message=f"已基于选中对象 {part_ref} 完成修改。")
             yield _sse_event("generation_complete", result)

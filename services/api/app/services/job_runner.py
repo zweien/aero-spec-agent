@@ -48,10 +48,10 @@ class JobRunner:
         self.jobs: dict[str, JobRecord] = {}
         self._lock = threading.RLock()
 
-    def generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
+    def create_job(self, design_id: str) -> JobRecord:
         job_id = str(uuid4())
         now = _utcnow()
-        version_no, output_dir = self.store.create_version_dir(design_id)
+        version_no, _ = self.store.create_version_dir(design_id)
         job = JobRecord(
             id=job_id,
             design_id=design_id,
@@ -64,7 +64,15 @@ class JobRunner:
             version_status="pending",
         )
         self._remember(job)
+        return job
+
+    def run_job_generation(self, job: JobRecord, spec: AircraftSpec) -> None:
+        output_dir = self.store.version_dir(job.design_id, job.version_no)
         self._run_generation(job, spec, output_dir=output_dir, success_status="succeeded")
+
+    def generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
+        job = self.create_job(design_id)
+        self.run_job_generation(job, spec)
         return job
 
     def enqueue_generate(self, design_id: str, spec: AircraftSpec) -> JobRecord:
