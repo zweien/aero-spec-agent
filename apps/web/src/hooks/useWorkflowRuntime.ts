@@ -91,9 +91,9 @@ export function useWorkflowRuntime() {
       setState((prev) => {
         if (prev.status !== "running" || !startTimeRef.current) return prev;
         const elapsed = now - startTimeRef.current!;
-        // During preliminary phase (no real stages completed yet), simulate progress 0→45%
-        const progress = prev.progress < 46
-          ? Math.min(45, Math.round(elapsed / 100))
+        // During preliminary phase, simulate progress 0→40%
+        const progress = prev.progress < 41
+          ? Math.min(40, Math.round(elapsed / 100))
           : prev.progress;
         return { ...prev, elapsedTime: elapsed, progress };
       });
@@ -199,7 +199,7 @@ export function useWorkflowRuntime() {
       return {
         stages: updatedStages,
         currentStage: isFailed ? null : event.stage,
-        progress: event.progress ?? prev.progress,
+        progress: event.progress != null ? Math.max(event.progress, prev.progress) : prev.progress,
         elapsedTime: startTimeRef.current ? now - startTimeRef.current : 0,
         artifacts: updatedArtifacts,
         status: newStatus,
