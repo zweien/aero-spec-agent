@@ -4,7 +4,6 @@ import { type JSX, useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
 import { resolveGenerationJob } from "@/lib/generationFlow";
 import { TaskRuntimeCard } from "@/components/runtime/TaskRuntimeCard";
 import {
@@ -19,6 +18,9 @@ import {
   toJobPollResult,
   type WorkflowStage,
 } from "./useJobEventStream";
+import { AgentRunHeader } from "./AgentRunHeader";
+import { AgentRunActions } from "./AgentRunActions";
+import { AgentRunDetails } from "./AgentRunDetails";
 
 export type GenerationCompleteData = {
   job_id?: string;
@@ -70,7 +72,7 @@ type ChatPanelProps = {
   registerSystemMessage?: (fn: (text: string) => void) => void;
   registerToolAction?: (fn: (toolName: string, args: Record<string, unknown>) => ToolActionHandle) => void;
   selectedRefs?: string[];
-  onGenerationStage?: (stage: string | null, progress: number, isGenerating: boolean) => void;
+  onGenerationStage?: (stage: string | null, progress: number, isGenerating: boolean, extras?: { artifacts?: string[]; error?: string | null }) => void;
 };
 
 const PART_REF_LABELS: Record<string, string> = {
@@ -370,7 +372,7 @@ export function ChatPanel({
             } else if (event.type === "generation_started") {
               const jobId = String(event.data.job_id ?? event.data.id ?? "");
               runtime.transitionToRealStages();
-              onGenerationStage?.(getStageLabel(runtime.state.currentStage ?? "generating_cad"), runtime.state.progress, true);
+              onGenerationStage?.(getStageLabel(runtime.state.currentStage ?? "generating_cad"), runtime.state.progress, true, { artifacts: runtime.state.artifacts });
               if (jobId) {
                 const ctrl = new AbortController();
                 void streamJobEvents({
@@ -393,6 +395,7 @@ export function ChatPanel({
                       getStageLabel(runtime.state.currentStage ?? stage.step),
                       runtime.state.progress,
                       true,
+                      { artifacts: runtime.state.artifacts, error: runtime.state.error?.message },
                     );
                   },
                 })
@@ -427,7 +430,7 @@ export function ChatPanel({
                       .catch((exc) => {
                         const message = exc instanceof Error ? exc.message : "生成任务失败";
                         failLatestTool(assistantId, message, jobId);
-                        onGenerationStage?.(null, 0, false);
+                        onGenerationStage?.(null, 0, false, { error: message });
                       });
                   });
               }
@@ -448,7 +451,7 @@ export function ChatPanel({
                   .catch((exc) => {
                     const message = exc instanceof Error ? exc.message : "生成任务失败";
                     failLatestTool(assistantId, message, jobId);
-                    onGenerationStage?.(null, 0, false);
+                    onGenerationStage?.(null, 0, false, { error: message });
                   });
               } else {
                 completeLatestTool(assistantId, event.data as GenerationCompleteData);
@@ -539,42 +542,47 @@ export function ChatPanel({
                       : "AI"}
               </div>
               <div className="chat-bubble-body">
-                {(msg.parts ?? []).map((part, i) => {
-                  if (part.type === "text") {
-                    const isLastTextPart =
-                      i ===
-                      (msg.parts ?? []).findLastIndex(
-                        (p) => p.type === "text",
-                      );
-                    return part.text ? (
-                      <span key={i}>
-                        <Markdown remarkPlugins={[remarkGfm]}>
-                          {part.text}
-                        </Markdown>
-                        {isStreaming &&
-                          msg.role === "assistant" &&
-                          isLastTextPart &&
-                          status === "streaming" && (
-                            <span className="streaming-cursor" />
-                        )}
-                      </span>
-                    ) : isStreaming && msg.role === "assistant" && isLastTextPart ? (
-                      <span key={i} className="ai-thinking">
-                        <span className="spinner" /> AI 思考中...
-                      </span>
-                    ) : null;
-                  }
-                  if (part.type === "tool") {
-                    return (
-                      <ToolCard
-                        key={i}
-                        part={part}
-                        apiBaseUrl={apiBaseUrl}
-                      />
-                    );
-                  }
-                  return null;
-                })}
+                {/* --- Agent Run: Header (shows as soon as streaming starts) --- */}
+                {msg.role === "assistant" && (() => {
+                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
+                  const isRunning = toolPart?.state === "running";
+                  const result = toolPart?.output as GenerationCompleteData | undefined;
+                  const isFailed = Boolean(toolPart && !isRunning && result?.job_id && !result?.version_no);
+                  const isCompleted = Boolean(toolPart && !isRunning && !isFailed && result?.version_no);
+
+                  // Show header for preliminary timeline (no toolPart yet) or when toolPart exists
+                  const stages = toolPart?.runtimeStages ?? (showPreliminaryTimeline ? runtime.state.stages : []);
+                  const progress = toolPart?.runtimeProgress ?? (showPreliminaryTimeline ? runtime.state.progress : 0);
+                  const elapsedTime = toolPart?.runtimeElapsedTime ?? (showPreliminaryTimeline ? runtime.state.elapsedTime : 0);
+                  const currentStageLabel = (() => {
+                    const currentStage = runtime.state.currentStage;
+                    return currentStage ? getStageLabel(currentStage) : undefined;
+                  })();
+
+                  if (stages.length === 0 && !isRunning && !isCompleted && !isFailed && !showPreliminaryTimeline) return null;
+                  if (!toolPart && !showPreliminaryTimeline) return null;
+
+                  const headerStatus = isRunning || showPreliminaryTimeline
+                    ? "running" as const
+                    : isFailed
+                      ? "failed" as const
+                      : isCompleted
+                        ? "completed" as const
+                        : "idle" as const;
+
+                  if (headerStatus === "idle") return null;
+
+                  return (
+                    <AgentRunHeader
+                      status={headerStatus}
+                      currentStageLabel={currentStageLabel}
+                      progress={progress}
+                      elapsedTime={elapsedTime}
+                    />
+                  );
+                })()}
+
+                {/* --- TaskRuntimeCard: Timeline + Progress + Artifacts --- */}
                 {showPreliminaryTimeline && runtime.state.stages.length > 0 && (
                   <TaskRuntimeCard
                     label="生成设计"
@@ -586,7 +594,6 @@ export function ChatPanel({
                     artifacts={[]}
                   />
                 )}
-                {/* Runtime timeline at message level when ToolCard exists */}
                 {msg.role === "assistant" && hasToolPart && (() => {
                   const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
                   if (!toolPart) return null;
@@ -614,6 +621,86 @@ export function ChatPanel({
                     />
                   );
                 })()}
+
+                {/* --- Markdown: Design explanation --- */}
+                {(msg.parts ?? []).map((part, i) => {
+                  if (part.type === "text") {
+                    const isLastTextPart =
+                      i ===
+                      (msg.parts ?? []).findLastIndex(
+                        (p) => p.type === "text",
+                      );
+                    return part.text ? (
+                      <span key={i}>
+                        <Markdown remarkPlugins={[remarkGfm]}>
+                          {part.text}
+                        </Markdown>
+                        {isStreaming &&
+                          msg.role === "assistant" &&
+                          isLastTextPart &&
+                          status === "streaming" && (
+                            <span className="streaming-cursor" />
+                        )}
+                      </span>
+                    ) : isStreaming && msg.role === "assistant" && isLastTextPart ? (
+                      <span key={i} className="ai-thinking">
+                        <span className="spinner" /> AI 思考中...
+                      </span>
+                    ) : null;
+                  }
+                  if (part.type === "tool") {
+                    // ToolCard now only shows parameter toggle, runtime info handled by TaskRuntimeCard above
+                    return (
+                      <ToolCard
+                        key={i}
+                        part={part}
+                        apiBaseUrl={apiBaseUrl}
+                      />
+                    );
+                  }
+                  return null;
+                })}
+
+                {/* --- Agent Run: Post-completion actions --- */}
+                {msg.role === "assistant" && hasToolPart && (() => {
+                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
+                  if (!toolPart || toolPart.state === "running") return null;
+                  const result = toolPart.output as GenerationCompleteData | undefined;
+                  const isFailed = Boolean(result?.job_id && !result?.version_no);
+                  const actionStatus = isFailed ? "failed" as const : "completed" as const;
+                  return (
+                    <AgentRunActions
+                      status={actionStatus}
+                      designId={result?.design_id}
+                      versionNo={result?.version_no}
+                    />
+                  );
+                })()}
+
+                {/* --- Agent Run: Collapsible details --- */}
+                {msg.role === "assistant" && hasToolPart && (() => {
+                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
+                  if (!toolPart) return null;
+                  const result = toolPart.output as GenerationCompleteData | undefined;
+                  const stages = toolPart.runtimeStages ?? [];
+                  // Show details whenever toolPart exists (running or done)
+                  return (
+                    <AgentRunDetails
+                      jobId={result?.job_id}
+                      designId={result?.design_id}
+                      versionNo={result?.version_no}
+                      stages={stages}
+                      artifacts={(!toolPart || toolPart.state === "done") && result?.files ? result.files : []}
+                    />
+                  );
+                })()}
+                {/* Preliminary timeline details */}
+                {showPreliminaryTimeline && runtime.state.stages.length > 0 && (
+                  <AgentRunDetails
+                    stages={runtime.state.stages}
+                    artifacts={[]}
+                  />
+                )}
               </div>
             </div>
           );
@@ -717,21 +804,7 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
         <div className="tool-card-message">{result.message}</div>
       )}
 
-      {!isRunning && result?.files && result.files.length > 0 && result.version_no && (
-        <div className="tool-card-files">
-          {result.files.map((f: string) => (
-            <a
-              key={f}
-              className="tool-card-file"
-              href={buildVersionFileUrl(apiBaseUrl, result.design_id ?? "", result.version_no!, f)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {f}
-            </a>
-          ))}
-        </div>
-      )}
+      {/* File download links are now rendered by TaskRuntimeCard — avoid duplication */}
     </div>
   );
 }

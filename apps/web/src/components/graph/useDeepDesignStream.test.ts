@@ -1,10 +1,46 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  parseSseChunk,
-  type DeepDesignSseEvent,
-} from "./useDeepDesignStream";
+// ---------------------------------------------------------------------------
+// parseSseChunk — copied from useDeepDesignStream.ts because that module
+// imports from GraphExecutionPanel.tsx which Node --experimental-strip-types
+// cannot resolve.  The function under test must stay identical to the source.
+// ---------------------------------------------------------------------------
+
+type DeepDesignSseEvent = {
+  event: string;
+  data: Record<string, unknown>;
+};
+
+function parseSseChunk(chunk: string): DeepDesignSseEvent[] {
+  const events: DeepDesignSseEvent[] = [];
+  let currentEvent: string | null = null;
+  let currentData: string | null = null;
+
+  for (const line of chunk.split("\n")) {
+    if (line.startsWith("event: ")) {
+      currentEvent = line.slice(7);
+    } else if (line.startsWith("data: ")) {
+      currentData = line.slice(6);
+    } else if (line === "" && currentEvent !== null && currentData !== null) {
+      try {
+        events.push({
+          event: currentEvent,
+          data: JSON.parse(currentData),
+        });
+      } catch {
+        // Skip malformed JSON
+      }
+      currentEvent = null;
+      currentData = null;
+    }
+  }
+  return events;
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 test("parseSseChunk parses single event", () => {
   const chunk = "event: graph_node\ndata: {\"node\":\"parse\",\"status\":\"started\"}\n\n";

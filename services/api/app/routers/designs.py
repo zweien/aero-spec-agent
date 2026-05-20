@@ -144,17 +144,34 @@ async def stream_job(job_id: str):
         # don't miss the progress that happened before they subscribed.
         def _replay():
             for entry in getattr(job, "stage_history", []):
-                payload = {
-                    "job_id": job.id,
-                    "design_id": job.design_id,
-                    "version_no": job.version_no,
-                    "status": "running",
-                    "stage": entry.get("stage", ""),
-                    "label": entry.get("label", ""),
-                    "progress": entry.get("progress", 0),
-                    "timestamp": "",
-                }
-                yield _sse_line("workflow_stage", payload)
+                if entry.get("event_type") == "artifact_generated":
+                    payload = {
+                        "job_id": job.id,
+                        "design_id": job.design_id,
+                        "version_no": job.version_no,
+                        "status": "running",
+                        "artifact": entry.get("artifact", ""),
+                        "label": entry.get("label", ""),
+                        "path": entry.get("path", ""),
+                        "metadata": {
+                            "artifact_key": entry.get("artifact", ""),
+                            "artifact_path": entry.get("path", ""),
+                        },
+                        "timestamp": "",
+                    }
+                    yield _sse_line("artifact_generated", payload)
+                else:
+                    payload = {
+                        "job_id": job.id,
+                        "design_id": job.design_id,
+                        "version_no": job.version_no,
+                        "status": "running",
+                        "stage": entry.get("stage", ""),
+                        "label": entry.get("label", ""),
+                        "progress": entry.get("progress", 0),
+                        "timestamp": "",
+                    }
+                    yield _sse_line("workflow_stage", payload)
             yield _sse_line(evt_type, data)
 
         return StreamingResponse(

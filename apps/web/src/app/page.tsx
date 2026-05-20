@@ -101,6 +101,8 @@ export default function Home() {
   const [generationStage, setGenerationStage] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationArtifacts, setGenerationArtifacts] = useState<string[]>([]);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const deepDesignStream = useDeepDesignStream();
 
   const chatSystemMessageRef = useRef<((text: string) => void) | null>(null);
@@ -370,10 +372,12 @@ export default function Home() {
             registerSystemMessage={registerSystemMessage}
             registerToolAction={registerToolAction}
             selectedRefs={selectedRefs}
-            onGenerationStage={(stage, progress, generating) => {
+            onGenerationStage={(stage, progress, generating, extras) => {
               setGenerationStage(stage);
               setGenerationProgress(progress);
               setIsGenerating(generating);
+              setGenerationArtifacts(extras?.artifacts ?? []);
+              setGenerationError(extras?.error ?? null);
             }}
           />
         </div>
@@ -388,9 +392,13 @@ export default function Home() {
               modelUrl={previewSource?.url}
               spec={previewSpec}
               onSelectPart={handleSelectPart}
-              generationStage={generationStage}
-              generationProgress={generationProgress}
-              isGenerating={isGenerating}
+              runtimeStatus={{
+                status: isGenerating ? "running" : (generationError ? "failed" : "idle"),
+                currentStageLabel: generationStage ?? undefined,
+                progress: generationProgress,
+                artifacts: generationArtifacts,
+                error: generationError,
+              }}
             />
           </div>
           <div className="right-panel">

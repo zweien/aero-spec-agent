@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { getStepLabel } from "./useJobEventStream";
+import { getStepLabel } from "./useJobEventStream.ts";
 
 describe("useJobEventStream", () => {
   describe("getStepLabel", () => {

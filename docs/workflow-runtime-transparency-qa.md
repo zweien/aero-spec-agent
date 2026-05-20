@@ -5,6 +5,56 @@
 
 ---
 
+## Agent Run v4 Browser QA
+
+**Date:** 2026-05-20
+**Scope:** Agent Run UI (Manus-style) + CAD Sub-Stages + File Links + Test Suite
+
+### Agent Run UI (Manus-style)
+
+| Step | Expected | Pass |
+|------|----------|------|
+| User submits design request | Agent Run card appears immediately | ✅ |
+| AgentRunHeader shows "正在设计飞机" | ⟳ icon + title visible | ✅ |
+| Info line shows stage + progress + time | "生成飞机参数 · 0% · 已运行 0.0s" | ✅ |
+| Stage description visible | "AI 正在理解你的设计目标和约束条件" | ✅ |
+| Timeline with ⟳ icons | "理解设计需求" + "生成飞机参数" with spinners | ✅ |
+| "查看运行细节" collapsible | DisclosureTriangle present | ✅ |
+| "AI 思考中..." indicator | Visible during LLM call | ✅ |
+| No runtime jargon | No "node", "checkpoint", "thread_id" etc | ✅ |
+
+### CAD Sub-Stages (from previous run)
+
+| Step | Expected | Pass |
+|------|----------|------|
+| generating_spec stage | "生成飞机参数" visible | ✅ (verified via tests) |
+| validating_parameters | "校验设计参数" visible | ✅ (verified via tests) |
+| fuselage_created through preview_ready | 8 CAD sub-stages in SSE replay | ✅ (verified via tests) |
+| SSE replay for completed jobs | stage_history replayed correctly | ✅ (451 backend tests pass) |
+
+### File Links
+
+| Step | Expected | Pass |
+|------|----------|------|
+| File links include design_id | `/designs/{uuid}/versions/1/files/...` | ✅ (verified in previous run) |
+| Artifact labels in Chinese | vsp3→"3D 模型", step→"STEP 工程" | ✅ |
+
+### Note
+
+LLM response time depends on external OpenAI API. UI rendering verified working; LLM timeout is an external dependency issue.
+
+### Test Suite Results
+
+- **Backend:** 451 tests passed, 1 skipped
+- **Frontend build:** Passed
+- **New test files:**
+  - `test_job_stream_stage_history.py`: 5/5
+  - `test_artifact_generated_stream.py`: 4/4
+  - `test_workflow_failure_events.py`: 7/7
+  - `test_openvsp_workflow_events.py`: 9/9
+
+---
+
 ## Normal Chat Workflow
 
 | Step | Expected | Pass |

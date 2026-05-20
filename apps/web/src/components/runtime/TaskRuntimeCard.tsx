@@ -5,6 +5,7 @@ import type { WorkflowRuntimeStage } from "../../hooks/useWorkflowRuntime";
 import { getArtifactLabel } from "./taskRuntimeCardHtml";
 import { UnifiedWorkflowTimeline } from "./UnifiedWorkflowTimeline";
 import { WorkflowErrorCard } from "./WorkflowErrorCard";
+import { getStageDescription } from "../chat/stageDescriptions";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -78,6 +79,17 @@ export function TaskRuntimeCard(props: TaskRuntimeCardProps): JSX.Element {
           <span className="version-badge">v{versionNo}</span>
         )}
       </div>
+
+      {/* Current stage description when running */}
+      {isRunning && (() => {
+        const runningStage = stages.find((s) => s.status === "running");
+        if (!runningStage) return null;
+        return (
+          <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px", marginBottom: "4px" }}>
+            {getStageDescription(runningStage.stage)}
+          </div>
+        );
+      })()}
 
       {/* Timeline */}
       <div className="tool-card-body">

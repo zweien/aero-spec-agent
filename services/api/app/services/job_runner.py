@@ -8,6 +8,7 @@ from uuid import uuid4
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.job_events import JobEvent, JobEventType, get_job_event_bus
 from services.api.app.services.workflow_events import (
+    ARTIFACT_LABELS,
     CAD_STAGE_LABELS,
     publish_artifact_generated,
     publish_workflow_stage,
@@ -157,10 +158,17 @@ class JobRunner:
             job.current_step = success_status
             job.files = {key: str(path) for key, path in result.files.items()}
             for artifact_key, artifact_path in result.files.items():
+                label = ARTIFACT_LABELS.get(artifact_key, artifact_key)
                 publish_artifact_generated(
                     bus, job.id, job.design_id, job.version_no,
                     artifact_key, str(artifact_path),
                 )
+                stage_history.append({
+                    "event_type": "artifact_generated",
+                    "artifact": artifact_key,
+                    "label": label,
+                    "path": str(artifact_path),
+                })
             job.version_status = "succeeded"
             job.updated_at = _utcnow()
             if job.created_at:

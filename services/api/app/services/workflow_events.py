@@ -12,6 +12,16 @@ from typing import Any
 
 from services.api.app.services.job_events import JobEvent, JobEventBus, JobEventType
 
+# Human-readable labels for generated artifacts
+ARTIFACT_LABELS: dict[str, str] = {
+    "vsp3": "OpenVSP 模型",
+    "step": "STEP 工程文件",
+    "glb": "三维预览模型",
+    "obj": "OBJ 模型",
+    "generation_log": "生成日志",
+    "validation_report": "验证报告",
+}
+
 # Stage labels for CAD generation progress (moved from job_runner.py)
 CAD_STAGE_LABELS: dict[str, str] = {
     "fuselage_created": "正在生成机身",

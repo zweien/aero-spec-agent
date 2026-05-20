@@ -64,7 +64,7 @@ function formatElapsed(ms: number): string {
 // Convert GraphNode[] to WorkflowRuntimeStage[]
 // ---------------------------------------------------------------------------
 
-function nodesToStages(nodes: GraphNode[]): WorkflowRuntimeStage[] {
+export function nodesToStages(nodes: GraphNode[]): WorkflowRuntimeStage[] {
   return nodes.map((n) => ({
     stage: n.name,
     label: n.label,

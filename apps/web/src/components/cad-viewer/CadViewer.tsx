@@ -14,17 +14,29 @@ import {
   type AircraftPreviewSpec,
 } from "./previewGeometry";
 
+type CadViewerRuntimeStatus = {
+  status: "idle" | "running" | "completed" | "failed";
+  currentStageLabel?: string;
+  progress?: number;
+  artifacts?: string[];
+  error?: string | null;
+};
+
 type CadViewerProps = {
   modelFormat?: CadPreviewFormat;
   modelUrl?: string;
   onSelectPart?: (partRef: string | null) => void;
   spec?: AircraftPreviewSpec | null;
+  /** @deprecated Use runtimeStatus instead */
   generationStage?: string | null;
+  /** @deprecated Use runtimeStatus instead */
   generationProgress?: number;
+  /** @deprecated Use runtimeStatus instead */
   isGenerating?: boolean;
+  runtimeStatus?: CadViewerRuntimeStatus;
 };
 
-export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generationStage, generationProgress, isGenerating }: CadViewerProps) {
+export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generationStage, generationProgress, isGenerating, runtimeStatus }: CadViewerProps) {
   const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
   const [drawingsPct, setDrawingsPct] = useState(28);
   const [topPct, setTopPct] = useState(50);
@@ -67,6 +79,25 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
     document.body.style.cursor = "row-resize";
     document.body.style.userSelect = "none";
   }, []);
+
+  // Derive overlay props: prefer runtimeStatus, fall back to legacy props
+  const overlayVisible = runtimeStatus
+    ? runtimeStatus.status === "running" || (runtimeStatus.status === "failed" && !!runtimeStatus.error)
+    : (isGenerating ?? false);
+  const overlayStage = runtimeStatus
+    ? (runtimeStatus.currentStageLabel ?? null)
+    : (generationStage ?? null);
+  const overlayProgress = runtimeStatus
+    ? (runtimeStatus.progress ?? 0)
+    : (generationProgress ?? 0);
+  const overlayArtifacts = runtimeStatus
+    ? (runtimeStatus.artifacts ?? [])
+    : [];
+  const overlayError = runtimeStatus
+    ? (runtimeStatus.status === "failed" ? runtimeStatus.error : null)
+    : null;
+  // hasExistingModel: true if we have a real model loaded (url present) or spec-based preview
+  const hasExistingModel = !!(modelUrl || spec);
 
   return (
     <section className="panel viewer-panel">
@@ -178,9 +209,12 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
           <span>等待生成模型</span>
         )}
         <CADLoadingOverlay
-          currentStage={generationStage ?? null}
-          progress={generationProgress ?? 0}
-          visible={isGenerating ?? false}
+          currentStage={overlayStage}
+          progress={overlayProgress}
+          visible={overlayVisible}
+          artifacts={overlayArtifacts}
+          hasExistingModel={hasExistingModel}
+          error={overlayError}
         />
       </div>
     </section>
