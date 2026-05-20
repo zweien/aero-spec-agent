@@ -37,6 +37,7 @@ class JobRecord:
     updated_at: str = ""
     duration_ms: float | None = None
     version_status: str = "pending"
+    stage_history: list[dict] = field(default_factory=list)
 
 
 class JobRunner:
@@ -115,6 +116,15 @@ class JobRunner:
             progress=job.progress,
             current_step=job.current_step,
         ))
+
+        stage_history: list[dict] = []
+
+        def _record_stage(stage: str, label: str, progress: int) -> None:
+            entry = {"stage": stage, "label": label, "progress": progress}
+            stage_history.append(entry)
+            publish_workflow_stage(bus, job.id, job.design_id, job.version_no,
+                                  stage, label, progress=progress)
+
         try:
             self.store.write_spec(job.design_id, job.version_no, spec)
 
@@ -123,8 +133,7 @@ class JobRunner:
                 ("generating_spec", "生成飞机参数", 10),
                 ("validating_parameters", "校验设计参数", 20),
             ]:
-                publish_workflow_stage(bus, job.id, job.design_id, job.version_no,
-                                      ws_stage, ws_label, progress=ws_progress)
+                _record_stage(ws_stage, ws_label, ws_progress)
                 job.current_step = ws_stage
                 job.progress = ws_progress
                 job.updated_at = _utcnow()
@@ -132,14 +141,17 @@ class JobRunner:
 
             def _cad_progress(stage: str, progress: int) -> None:
                 label = CAD_STAGE_LABELS.get(stage, stage)
-                publish_workflow_stage(bus, job.id, job.design_id, job.version_no,
-                                      stage, label, progress=progress)
+                _record_stage(stage, label, progress)
                 job.current_step = stage
                 job.progress = progress
                 job.updated_at = _utcnow()
                 self._save_job(job)
 
             result = generate_aircraft(spec=spec, output_dir=output_dir, backend=self.backend, on_progress=_cad_progress)
+
+            # Store stage history before marking complete
+            job.stage_history = stage_history
+
             job.status = success_status
             job.progress = 100
             job.current_step = success_status
@@ -175,6 +187,9 @@ class JobRunner:
                 duration_ms=job.duration_ms,
             ))
         except Exception as exc:
+            # Store partial stage history even on failure
+            job.stage_history = stage_history
+
             logger.exception(
                 "Generation job failed for design_id=%s version_no=%s",
                 job.design_id,

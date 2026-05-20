@@ -401,9 +401,12 @@ export function ChatPanel({
                     if (result.finalStatus === "succeeded") {
                       runtime.markCompleted(jobResult.files);
                     }
+                    const eventData = event.data as GenerationCompleteData;
                     completeLatestTool(assistantId, {
-                      ...(event.data as GenerationCompleteData),
+                      ...eventData,
                       ...jobResult,
+                      // Preserve design_id from event.data if jobResult doesn't have it
+                      design_id: jobResult.design_id || eventData.design_id,
                       job_id: jobId,
                     });
                     onGenerationStage?.(null, 0, false);
@@ -412,9 +415,11 @@ export function ChatPanel({
                     // Fallback to polling if SSE stream fails
                     void resolveGenerationJob({ apiBaseUrl, jobId })
                       .then((job) => {
+                        const eventData = event.data as GenerationCompleteData;
                         completeLatestTool(assistantId, {
-                          ...(event.data as GenerationCompleteData),
+                          ...eventData,
                           ...job,
+                          design_id: job.design_id || eventData.design_id,
                           job_id: job.id,
                         });
                         onGenerationStage?.(null, 0, false);
@@ -431,9 +436,11 @@ export function ChatPanel({
               if (jobId && event.data.status !== "succeeded") {
                 void resolveGenerationJob({ apiBaseUrl, jobId })
                   .then((job) => {
+                    const eventData = event.data as GenerationCompleteData;
                     completeLatestTool(assistantId, {
-                      ...(event.data as GenerationCompleteData),
+                      ...eventData,
                       ...job,
+                      design_id: job.design_id || eventData.design_id,
                       job_id: job.id,
                     });
                     onGenerationStage?.(null, 0, false);

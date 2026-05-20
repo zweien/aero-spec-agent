@@ -61,3 +61,40 @@ export function failedMessage(state: TaskRuntimeState): string {
 export function formatProgress(progress: number): string {
   return `${Math.round(progress)}%`;
 }
+
+// ---------------------------------------------------------------------------
+// Artifact label mapping
+// ---------------------------------------------------------------------------
+
+const ARTIFACT_LABELS: Record<string, string> = {
+  vsp3: "3D 模型",
+  step: "STEP 工程",
+  glb: "3D 预览",
+  obj: "OBJ 模型",
+  report: "分析报告",
+};
+
+/** Returns a localized label for an artifact key. */
+export function getArtifactLabel(key: string): string {
+  return ARTIFACT_LABELS[key] ?? key;
+}
+
+// ---------------------------------------------------------------------------
+// Artifact HTML builder
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds an HTML string for the artifact section shown when the card is
+ * completed and artifacts are present.  This allows tests to verify the
+ * rendering logic without React.
+ */
+export function buildArtifactHtml(artifacts: string[]): string {
+  if (artifacts.length === 0) return "";
+
+  const header = `已生成 ${artifacts.length} 个文件`;
+  const badges = artifacts
+    .map((key) => `<span class="artifact-badge">${getArtifactLabel(key)}</span>`)
+    .join("");
+
+  return `<div class="tool-card-artifacts"><div class="artifact-header">${header}</div><div class="artifact-list">${badges}</div></div>`;
+}

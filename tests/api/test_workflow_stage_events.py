@@ -156,22 +156,25 @@ def test_sse_stream_includes_workflow_stage_events(client, runner):
     assert "text/event-stream" in resp.headers["content-type"]
 
     body = resp.text
-    # Completed jobs return a single generation_complete event with full payload,
-    # but the body should still carry stage/label if set on the job record.
-    # For a queued+run job the stream returns one event; verify the SSE format
-    # includes "workflow_stage" in the event body or the data contains stage info.
-    # Since completed jobs get a single SSE event, verify the payload structure.
-    data_lines = [
-        line for line in body.split("\n") if line.startswith("data:")
-    ]
-    assert len(data_lines) >= 1, "Expected at least one data line in SSE stream"
+    # Parse SSE events: completed jobs replay workflow_stage events then
+    # emit a single generation_complete event.
+    events: list[dict] = []
+    for line in body.split("\n"):
+        if line.startswith("event:"):
+            events.append({"type": line[6:].strip()})
+        elif line.startswith("data:") and events:
+            events[-1]["data"] = json.loads(line[5:].strip())
 
-    payload = json.loads(data_lines[0][5:].strip())
-    # The completed-job response is a single generation_complete event.
-    # Verify it contains the standard fields and the stage/label from the
-    # last workflow_stage that was processed before completion.
-    assert "progress" in payload
-    assert "current_step" in payload
+    event_types = [e["type"] for e in events]
+    assert "workflow_stage" in event_types
+    assert "generation_complete" in event_types
+
+    # Verify generation_complete has standard fields
+    gc_events = [e for e in events if e["type"] == "generation_complete"]
+    assert len(gc_events) == 1
+    gc_payload = gc_events[0]["data"]
+    assert "progress" in gc_payload
+    assert "current_step" in gc_payload
 
 
 def test_completed_job_still_has_stages_in_stream(client, runner):
@@ -212,3 +215,38 @@ def test_completed_job_still_has_stages_in_stream(client, runner):
     body = resp.text
     assert "generation_complete" in body
     assert "succeeded" in body
+
+
+def test_completed_job_stream_replays_workflow_stages(client, runner):
+    """A completed job's SSE stream should replay workflow_stage events."""
+    spec = _make_spec()
+    job = runner.enqueue_generate(design_id="test-ws-replay", spec=spec)
+    runner.run_queued_job(job.id, spec)
+
+    resp = client.get(f"/api/jobs/{job.id}/stream")
+    assert resp.status_code == 200
+
+    # Parse SSE events
+    events: list[dict] = []
+    for line in resp.text.split("\n"):
+        if line.startswith("event:"):
+            events.append({"type": line[6:].strip()})
+        elif line.startswith("data:") and events:
+            events[-1]["data"] = json.loads(line[5:].strip())
+
+    # Should have workflow_stage events + generation_complete
+    event_types = [e["type"] for e in events]
+    assert "workflow_stage" in event_types, f"Expected workflow_stage in {event_types}"
+    assert "generation_complete" in event_types, f"Expected generation_complete in {event_types}"
+
+    # workflow_stage events should come BEFORE generation_complete
+    ws_idx = event_types.index("workflow_stage")
+    gc_idx = event_types.index("generation_complete")
+    assert ws_idx < gc_idx
+
+    # Verify CAD sub-stages are replayed
+    ws_events = [e for e in events if e["type"] == "workflow_stage"]
+    ws_stages = [e["data"].get("stage") for e in ws_events]
+    assert "generating_spec" in ws_stages
+    assert "fuselage_created" in ws_stages
+    assert "preview_ready" in ws_stages

@@ -19,6 +19,7 @@ export type JobStreamResult = {
   finalStatus: "succeeded" | "failed" | "timeout";
   files?: Record<string, string>;
   version_no?: number;
+  design_id?: string;
   duration_ms?: number;
   error_message?: string;
 };
@@ -149,6 +150,7 @@ export async function streamJobEvents(opts: StreamOptions): Promise<JobStreamRes
             finalStatus: isFailed ? "failed" : "succeeded",
             files: last?.files,
             version_no: last?.version_no,
+            design_id: parsed.design_id ?? undefined,
             duration_ms: last?.duration_ms,
             error_message: last?.error_message,
           };
@@ -166,7 +168,7 @@ export function toJobPollResult(result: JobStreamResult, jobId: string): JobPoll
   const last = result.stages[result.stages.length - 1];
   return {
     id: jobId,
-    design_id: undefined,
+    design_id: result.design_id,
     version_no: result.version_no ?? last?.version_no,
     status: result.finalStatus === "succeeded" ? "succeeded" : "failed",
     progress: last?.progress,

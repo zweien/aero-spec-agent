@@ -2,6 +2,7 @@
 
 import React, { type JSX } from "react";
 import type { WorkflowRuntimeStage } from "../../hooks/useWorkflowRuntime";
+import { getArtifactLabel } from "./taskRuntimeCardHtml";
 import { UnifiedWorkflowTimeline } from "./UnifiedWorkflowTimeline";
 import { WorkflowErrorCard } from "./WorkflowErrorCard";
 
@@ -121,6 +122,18 @@ export function TaskRuntimeCard(props: TaskRuntimeCardProps): JSX.Element {
         )}
 
         {/* Artifact file list when completed */}
+        {isCompleted && artifacts.length > 0 && (
+          <div className="tool-card-artifacts">
+            <div className="artifact-header">已生成 {artifacts.length} 个文件</div>
+            <div className="artifact-list">
+              {artifacts.map((key) => (
+                <span key={key} className="artifact-badge">{getArtifactLabel(key)}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Download links for artifacts */}
         {isCompleted && artifacts.length > 0 && versionNo != null && apiBaseUrl && designId && (
           <div className="tool-card-files">
             {artifacts.map((f) => (

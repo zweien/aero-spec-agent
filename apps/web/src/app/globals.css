@@ -638,6 +638,36 @@ textarea:focus {
   font-weight: bold;
 }
 
+.tool-card-artifacts {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.artifact-header {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.artifact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.artifact-badge {
+  display: inline-block;
+  background: var(--accent-bg);
+  color: var(--accent-bright);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
 .tool-card-files {
   display: flex;
   flex-wrap: wrap;

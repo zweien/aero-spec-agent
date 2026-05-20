@@ -139,8 +139,26 @@ async def stream_job(job_id: str):
         evt_type = "generation_complete" if job.status == "succeeded" else "generation_failed"
         data = _job_response(job)
         data["status"] = job.status
+
+        # Replay recorded workflow_stage events so late-connecting clients
+        # don't miss the progress that happened before they subscribed.
+        def _replay():
+            for entry in getattr(job, "stage_history", []):
+                payload = {
+                    "job_id": job.id,
+                    "design_id": job.design_id,
+                    "version_no": job.version_no,
+                    "status": "running",
+                    "stage": entry.get("stage", ""),
+                    "label": entry.get("label", ""),
+                    "progress": entry.get("progress", 0),
+                    "timestamp": "",
+                }
+                yield _sse_line("workflow_stage", payload)
+            yield _sse_line(evt_type, data)
+
         return StreamingResponse(
-            iter([_sse_line(evt_type, data)]),
+            _replay(),
             media_type="text/event-stream",
         )
 
