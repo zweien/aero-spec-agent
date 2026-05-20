@@ -38,10 +38,12 @@ export type WorkflowStageEvent = {
 // --- Label Mapping ---
 
 const STAGE_LABELS: Record<string, string> = {
+  // Preliminary stages (LLM thinking phase)
   understanding_requirements: "理解设计需求",
   generating_spec: "生成飞机参数",
   validating_parameters: "校验设计参数",
   generating_cad: "生成 CAD 模型",
+  // CAD sub-stages
   fuselage_created: "生成机身",
   wing_created: "生成机翼",
   tail_created: "生成尾翼",
@@ -50,6 +52,13 @@ const STAGE_LABELS: Record<string, string> = {
   step_exported: "正在导出 STEP 文件",
   glb_exported: "导出 3D 模型",
   preview_ready: "三维预览准备就绪",
+  // Legacy step names (backward compat)
+  writing_spec: "生成飞机参数",
+  geometry_building: "构建几何模型",
+  mesh_export: "导出三维模型",
+  report_generating: "生成分析报告",
+  // Terminal
+  succeeded: "设计完成",
   completed: "设计完成",
   failed: "生成失败",
 };
@@ -107,18 +116,11 @@ export function useWorkflowRuntime() {
 
   const transitionToRealStages = useCallback(() => {
     setState((prev) => {
-      const now = Date.now();
-      const stages = prev.stages.map((s) => ({
-        ...s,
-        status: "completed" as StageStatus,
-        completedAt: s.completedAt ?? now,
-        durationMs: s.startedAt ? now - s.startedAt : null,
-      }));
+      // Clear preliminary stages — real stages will be added by applyEvent
       return {
         ...prev,
-        stages,
+        stages: [],
         currentStage: null,
-        elapsedTime: startTimeRef.current ? now - startTimeRef.current : 0,
       };
     });
   }, []);
