@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, Iterator
 
 import yaml
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
@@ -79,10 +79,50 @@ def _sse_line(event_type: str, data: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _replay_stage_history(job) -> Iterator[str]:
+    for entry in getattr(job, "stage_history", []):
+        if entry.get("event_type") == "artifact_generated":
+            payload = {
+                "job_id": job.id,
+                "design_id": job.design_id,
+                "version_no": job.version_no,
+                "status": entry.get("status", "running"),
+                "artifact": entry.get("artifact", ""),
+                "label": entry.get("label", ""),
+                "path": entry.get("path", ""),
+                "metadata": {
+                    "artifact_key": entry.get("artifact", ""),
+                    "artifact_path": entry.get("path", ""),
+                },
+                "timestamp": "",
+            }
+            yield _sse_line("artifact_generated", payload)
+        else:
+            payload = {
+                "job_id": job.id,
+                "design_id": job.design_id,
+                "version_no": job.version_no,
+                "status": entry.get("status", "running"),
+                "stage": entry.get("stage", ""),
+                "current_step": entry.get("stage", ""),
+                "label": entry.get("label", ""),
+                "progress": entry.get("progress", 0),
+                "timestamp": "",
+            }
+            if entry.get("error_message"):
+                payload["error_message"] = entry["error_message"]
+            yield _sse_line("workflow_stage", payload)
+
+
 async def _stream_job_events(job_id: str) -> AsyncIterator[str]:
     bus = get_job_event_bus()
     q = bus.async_queue()
     try:
+        job = runner.get(job_id)
+        if job is not None:
+            for line in _replay_stage_history(job):
+                yield line
+
         deadline = asyncio.get_event_loop().time() + 120
         while asyncio.get_event_loop().time() < deadline:
             try:
@@ -102,7 +142,7 @@ async def _stream_job_events(job_id: str) -> AsyncIterator[str]:
                 "status": (
                     "succeeded"
                     if event.type == JobEventType.COMPLETED
-                    else "failed" if event.type == JobEventType.FAILED else "running"
+                    else "failed" if event.type == JobEventType.FAILED or event.error_message else "running"
                 ),
                 "progress": event.progress,
                 "current_step": event.current_step,
@@ -140,38 +180,8 @@ async def stream_job(job_id: str):
         data = _job_response(job)
         data["status"] = job.status
 
-        # Replay recorded workflow_stage events so late-connecting clients
-        # don't miss the progress that happened before they subscribed.
         def _replay():
-            for entry in getattr(job, "stage_history", []):
-                if entry.get("event_type") == "artifact_generated":
-                    payload = {
-                        "job_id": job.id,
-                        "design_id": job.design_id,
-                        "version_no": job.version_no,
-                        "status": "running",
-                        "artifact": entry.get("artifact", ""),
-                        "label": entry.get("label", ""),
-                        "path": entry.get("path", ""),
-                        "metadata": {
-                            "artifact_key": entry.get("artifact", ""),
-                            "artifact_path": entry.get("path", ""),
-                        },
-                        "timestamp": "",
-                    }
-                    yield _sse_line("artifact_generated", payload)
-                else:
-                    payload = {
-                        "job_id": job.id,
-                        "design_id": job.design_id,
-                        "version_no": job.version_no,
-                        "status": "running",
-                        "stage": entry.get("stage", ""),
-                        "label": entry.get("label", ""),
-                        "progress": entry.get("progress", 0),
-                        "timestamp": "",
-                    }
-                    yield _sse_line("workflow_stage", payload)
+            yield from _replay_stage_history(job)
             yield _sse_line(evt_type, data)
 
         return StreamingResponse(

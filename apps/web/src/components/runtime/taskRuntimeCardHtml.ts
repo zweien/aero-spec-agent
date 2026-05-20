@@ -36,8 +36,14 @@ export function shouldShowProgressBar(state: TaskRuntimeState): boolean {
   return state.isRunning && state.progress > 0;
 }
 
-/** Returns true if artifact links should be shown. */
+/** Returns true if artifact badges should be shown. */
 export function shouldShowArtifacts(state: TaskRuntimeState): boolean {
+  const isCompleted = !state.isRunning && !state.isFailed;
+  return (state.isRunning || isCompleted) && state.artifacts.length > 0;
+}
+
+/** Returns true if artifact download links should be shown. */
+export function shouldShowArtifactLinks(state: TaskRuntimeState): boolean {
   const isCompleted = !state.isRunning && !state.isFailed;
   return isCompleted && state.artifacts.length > 0 && state.versionNo != null && !!state.apiBaseUrl && !!state.designId;
 }
@@ -84,9 +90,8 @@ export function getArtifactLabel(key: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Builds an HTML string for the artifact section shown when the card is
- * completed and artifacts are present.  This allows tests to verify the
- * rendering logic without React.
+ * Builds an HTML string for the artifact badge section shown when artifacts
+ * are present. This allows tests to verify the rendering logic without React.
  */
 export function buildArtifactHtml(artifacts: string[]): string {
   if (artifacts.length === 0) return "";

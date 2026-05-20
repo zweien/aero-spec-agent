@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -289,6 +289,7 @@ export function AircraftThreePreview({
   spec,
 }: AircraftThreePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [rendererError, setRendererError] = useState<string | null>(null);
   const model = useMemo(() => buildAircraftThreeModel(spec), [spec]);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -314,12 +315,19 @@ export function AircraftThreePreview({
 
     isActiveRef.current = true;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      canvas,
-      preserveDrawingBuffer: true,
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        canvas,
+        preserveDrawingBuffer: true,
+      });
+    } catch (error) {
+      isActiveRef.current = false;
+      setRendererError(error instanceof Error ? error.message : "WebGL renderer unavailable");
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     rendererRef.current = renderer;
 
@@ -414,6 +422,15 @@ export function AircraftThreePreview({
     };
   }, []);
 
+  useEffect(() => {
+    if (!rendererError) return;
+    if (modelFormat) {
+      onStatusChange?.({ format: modelFormat, state: "fallback" });
+      return;
+    }
+    onStatusChange?.({ state: "parameter" });
+  }, [rendererError, modelFormat, onStatusChange]);
+
   // Update wireframe / picking overlay when spec changes
   useEffect(() => {
     const scene = sceneRef.current;
@@ -500,5 +517,15 @@ export function AircraftThreePreview({
     );
   }, [modelUrl, modelFormat, onStatusChange]);
 
-  return <canvas ref={canvasRef} className="three-preview-canvas" aria-label="可旋转 3D 飞机预览" />;
+  return (
+    <>
+      <canvas ref={canvasRef} className="three-preview-canvas" aria-label="可旋转 3D 飞机预览" />
+      {rendererError ? (
+        <div className="three-preview-fallback" role="status" title={rendererError}>
+          <strong>无法初始化 3D 预览</strong>
+          <span>当前浏览器环境不支持 WebGL，CAD 生成状态仍可继续查看。</span>
+        </div>
+      ) : null}
+    </>
+  );
 }

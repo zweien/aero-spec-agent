@@ -6,6 +6,7 @@ import {
   headerIcon,
   shouldShowProgressBar,
   shouldShowArtifacts,
+  shouldShowArtifactLinks,
   buildArtifactUrl,
   failedStage,
   failedMessage,
@@ -31,8 +32,20 @@ test("TaskRuntimeCard renders running state with timeline", () => {
   assert.equal(headerIcon(state), "spinner");
   // Running with progress 0 should NOT show progress bar
   assert.equal(shouldShowProgressBar(state), false);
-  // Running should not show artifacts
+  // Running with no artifacts should not show artifact badges
   assert.equal(shouldShowArtifacts(state), false);
+});
+
+test("TaskRuntimeCard shows artifact badges while running", () => {
+  const state: TaskRuntimeState = {
+    isRunning: true,
+    isFailed: false,
+    progress: 70,
+    artifacts: ["step", "glb"],
+  };
+
+  assert.equal(shouldShowArtifacts(state), true);
+  assert.equal(shouldShowArtifactLinks(state), false);
 });
 
 test("TaskRuntimeCard renders completed state with artifacts list", () => {
@@ -49,6 +62,7 @@ test("TaskRuntimeCard renders completed state with artifacts list", () => {
   assert.equal(cardClassName(state), "tool-card tool-card-done");
   assert.equal(headerIcon(state), "✓");
   assert.equal(shouldShowArtifacts(state), true);
+  assert.equal(shouldShowArtifactLinks(state), true);
 
   // Artifact URLs are built correctly
   const url = buildArtifactUrl(state, "aircraft.glb");

@@ -1,6 +1,7 @@
 import type { JobPollResult } from "@/types/job";
 
 export type WorkflowStage = {
+  eventType?: string;
   step: string;
   progress: number;
   status: string;
@@ -11,6 +12,7 @@ export type WorkflowStage = {
   version_no?: number;
   stage?: string;
   label?: string;
+  artifact?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -102,6 +104,7 @@ export async function streamJobEvents(opts: StreamOptions): Promise<JobStreamRes
 
         if (evt.type === "workflow_stage") {
           const stage: WorkflowStage = {
+            eventType: evt.type,
             step: parsed.current_step ?? parsed.stage ?? "",
             progress: parsed.progress ?? 0,
             status: parsed.status ?? "running",
@@ -116,11 +119,15 @@ export async function streamJobEvents(opts: StreamOptions): Promise<JobStreamRes
         }
 
         if (evt.type === "artifact_generated") {
+          const artifactKey = parsed.artifact ?? parsed.metadata?.artifact_key ?? "";
           const stage: WorkflowStage = {
-            step: parsed.current_step ?? "",
+            eventType: evt.type,
+            step: parsed.current_step ?? `artifact_${artifactKey}`,
             progress: parsed.progress ?? 0,
             status: parsed.status ?? "running",
             timestamp: parsed.timestamp ?? "",
+            label: parsed.label ?? "",
+            artifact: artifactKey,
             metadata: parsed.metadata,
           };
           stages.push(stage);
@@ -128,7 +135,21 @@ export async function streamJobEvents(opts: StreamOptions): Promise<JobStreamRes
           continue; // Not terminal, continue processing
         }
 
+        if (TERMINAL_EVENTS.has(evt.type)) {
+          const isFailed = evt.type === "generation_failed";
+          return {
+            stages,
+            finalStatus: isFailed ? "failed" : "succeeded",
+            files: parsed.files,
+            version_no: parsed.version_no,
+            design_id: parsed.design_id ?? undefined,
+            duration_ms: parsed.duration_ms,
+            error_message: parsed.error_message,
+          };
+        }
+
         const stage: WorkflowStage = {
+          eventType: evt.type,
           step: parsed.current_step ?? "",
           progress: parsed.progress ?? 0,
           status: parsed.status ?? "running",
@@ -141,20 +162,6 @@ export async function streamJobEvents(opts: StreamOptions): Promise<JobStreamRes
 
         stages.push(stage);
         onStage?.(stage);
-
-        if (TERMINAL_EVENTS.has(evt.type)) {
-          const isFailed = evt.type === "generation_failed";
-          const last = stages[stages.length - 1];
-          return {
-            stages,
-            finalStatus: isFailed ? "failed" : "succeeded",
-            files: last?.files,
-            version_no: last?.version_no,
-            design_id: parsed.design_id ?? undefined,
-            duration_ms: last?.duration_ms,
-            error_message: last?.error_message,
-          };
-        }
       } catch {
         // Skip malformed JSON
       }

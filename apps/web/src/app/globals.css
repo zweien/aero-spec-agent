@@ -955,6 +955,29 @@ textarea:focus {
 
 .three-preview-frame .three-preview-canvas { display: block; }
 
+.three-preview-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: rgba(10, 14, 23, 0.88);
+  color: var(--text-default);
+  padding: 24px;
+  text-align: center;
+}
+
+.three-preview-fallback span {
+  max-width: 360px;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .preview-source-status {
   position: absolute;
   left: 10px;
@@ -1789,7 +1812,13 @@ textarea:focus {
   min-height: unset;
   transition: background 0.12s;
 }
-.agent-run-btn:hover { background: var(--bg-hover); }
+.agent-run-btn:hover:not(:disabled) { background: var(--bg-hover); }
+.agent-run-btn:disabled {
+  cursor: not-allowed;
+  color: var(--text-muted);
+  background: var(--bg-muted);
+  opacity: 0.65;
+}
 
 .agent-run-details {
   border-top: 1px solid var(--border);

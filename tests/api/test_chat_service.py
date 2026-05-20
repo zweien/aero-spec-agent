@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -519,15 +520,22 @@ def _generation_started_payload(response_text: str) -> dict[str, object]:
 
 
 def _assert_job_succeeded(client: TestClient, job_id: object, version_no: object) -> None:
-    job_response = client.get(f"/api/jobs/{job_id}")
-    assert job_response.status_code == 200
-    job = job_response.json()
+    job = None
+    for _ in range(20):
+        job_response = client.get(f"/api/jobs/{job_id}")
+        assert job_response.status_code == 200
+        job = job_response.json()
+        if job["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+    assert job is not None
     assert job["status"] == "succeeded"
     assert job["progress"] == 100
     assert job["version_no"] == version_no
 
 
 def test_chat_route_generate_design_returns_background_job_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHAT_GENERATION_MODE", "async")
     client, _ = _client_with_chat_service(
         tmp_path,
         monkeypatch,
@@ -547,13 +555,14 @@ def test_chat_route_generate_design_returns_background_job_id(tmp_path, monkeypa
         assert response.status_code == 200
         payload = _generation_started_payload(response.text)
         assert payload["design_id"] == "chat-api-generate"
-        assert payload["status"] == "queued"
+        assert payload["status"] == "running"
         assert payload["version_no"] == 1
         assert payload["job_id"]
         _assert_job_succeeded(client, payload["job_id"], payload["version_no"])
 
 
 def test_chat_route_modify_design_returns_background_job_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHAT_GENERATION_MODE", "async")
     client, svc = _client_with_chat_service(
         tmp_path,
         monkeypatch,
@@ -578,13 +587,14 @@ def test_chat_route_modify_design_returns_background_job_id(tmp_path, monkeypatc
         assert response.status_code == 200
         payload = _generation_started_payload(response.text)
         assert payload["design_id"] == "chat-api-modify"
-        assert payload["status"] == "queued"
+        assert payload["status"] == "running"
         assert payload["version_no"] == 1
         assert payload["job_id"]
         _assert_job_succeeded(client, payload["job_id"], payload["version_no"])
 
 
 def test_chat_route_modify_selected_part_returns_background_job_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHAT_GENERATION_MODE", "async")
     client, svc = _client_with_chat_service(
         tmp_path,
         monkeypatch,
@@ -614,7 +624,7 @@ def test_chat_route_modify_selected_part_returns_background_job_id(tmp_path, mon
         assert response.status_code == 200
         payload = _generation_started_payload(response.text)
         assert payload["design_id"] == "chat-api-selected"
-        assert payload["status"] == "queued"
+        assert payload["status"] == "running"
         assert payload["version_no"] == 1
         assert payload["job_id"]
         assert payload["message"] == "已基于选中对象 part:right_engine 完成修改。"

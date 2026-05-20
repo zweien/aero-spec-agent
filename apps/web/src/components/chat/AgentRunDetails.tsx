@@ -4,6 +4,7 @@ import { type JSX, useEffect, useRef, useState } from "react";
 import type { WorkflowRuntimeStage } from "@/hooks/useWorkflowRuntime";
 
 export type AgentRunDetailsProps = {
+  id?: string;
   jobId?: string;
   designId?: string;
   versionNo?: number;
@@ -23,6 +24,7 @@ function formatTimestamp(ts: number | null): string {
 }
 
 export function AgentRunDetails({
+  id,
   jobId,
   designId,
   versionNo,
@@ -60,7 +62,7 @@ export function AgentRunDetails({
   };
 
   return (
-    <details className="agent-run-details" ref={detailsRef} onToggle={handleToggle}>
+    <details id={id} className="agent-run-details" ref={detailsRef} onToggle={handleToggle}>
       <summary>查看运行细节</summary>
       <div className="detail-grid">
         {jobId && (

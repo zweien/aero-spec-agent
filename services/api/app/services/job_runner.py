@@ -127,9 +127,10 @@ class JobRunner:
         ))
 
         stage_history: list[dict] = []
+        job.stage_history = stage_history
 
         def _record_stage(stage: str, label: str, progress: int) -> None:
-            entry = {"stage": stage, "label": label, "progress": progress}
+            entry = {"stage": stage, "label": label, "progress": progress, "status": "running"}
             stage_history.append(entry)
             publish_workflow_stage(bus, job.id, job.design_id, job.version_no,
                                   stage, label, progress=progress)
@@ -204,6 +205,26 @@ class JobRunner:
             ))
         except Exception as exc:
             # Store partial stage history even on failure
+            failed_stage = job.current_step or "failed"
+            failed_label = CAD_STAGE_LABELS.get(failed_stage, failed_stage)
+            stage_history.append({
+                "stage": failed_stage,
+                "label": failed_label,
+                "progress": job.progress,
+                "status": "failed",
+                "error_message": str(exc),
+            })
+            bus.publish(JobEvent(
+                type=JobEventType.WORKFLOW_STAGE,
+                job_id=job.id,
+                design_id=job.design_id,
+                version_no=job.version_no,
+                stage=failed_stage,
+                label=failed_label,
+                progress=job.progress,
+                current_step=failed_stage,
+                error_message=str(exc),
+            ))
             job.stage_history = stage_history
 
             logger.exception(

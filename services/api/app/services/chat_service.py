@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from collections.abc import AsyncIterator
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,10 @@ from services.api.app.services.spec_io import dump_aircraft_spec
 from services.api.app.services.spec_patch import _set_nested
 
 logger = logging.getLogger(__name__)
+_CHAT_GENERATION_EXECUTOR = ThreadPoolExecutor(
+    max_workers=4,
+    thread_name_prefix="chat-generation",
+)
 
 # ---------------------------------------------------------------------------
 # Conversion helpers
@@ -205,6 +210,13 @@ def _sse_event(event_type: str, data: Any) -> str:
     return f"event: {event_type}\ndata: {payload}\n\n"
 
 
+def _chat_generation_mode() -> str:
+    mode = os.getenv("CHAT_GENERATION_MODE", "sync").strip().lower()
+    if mode == "async":
+        return "async"
+    return "sync"
+
+
 class ChatService:
     def __init__(self, storage_root: str | Path | None = None) -> None:
         self._conversations: dict[str, ConversationState] = {}
@@ -212,6 +224,7 @@ class ChatService:
         self._client: AsyncOpenAI | None = None
         self._job_runner = None
         self._storage_root = Path(storage_root) if storage_root else Path("storage")
+        self._background_generation_tasks: set[Future] = set()
 
     def _state_path(self, conversation_id: str) -> Path:
         return self._storage_root / "conversations" / conversation_id / "state.json"
@@ -237,6 +250,19 @@ class ChatService:
 
     def set_job_runner(self, runner: Any) -> None:
         self._job_runner = runner
+
+    def _schedule_job_generation(self, job: Any, spec: AircraftSpec) -> None:
+        future = _CHAT_GENERATION_EXECUTOR.submit(self._job_runner.run_job_generation, job, spec)
+        self._background_generation_tasks.add(future)
+
+        def _cleanup(done_task: Future) -> None:
+            self._background_generation_tasks.discard(done_task)
+            try:
+                done_task.result()
+            except Exception:
+                logger.exception("background chat generation task failed")
+
+        future.add_done_callback(_cleanup)
 
     def get_or_create_state(self, conversation_id: str) -> ConversationState:
         if conversation_id not in self._conversations:
@@ -476,12 +502,12 @@ class ChatService:
             })
             return
 
-        if background_tasks is not None and hasattr(self._job_runner, "enqueue_generate"):
-            job = self._job_runner.enqueue_generate(design_id=state.design_id, spec=spec)
-            background_tasks.add_task(self._job_runner.run_queued_job, job.id, spec)
+        if _chat_generation_mode() == "async":
+            job = self._job_runner.create_job(design_id=state.design_id)
             state.current_spec = spec
             result = _job_result(job)
             yield _sse_event("generation_started", result)
+            self._schedule_job_generation(job, spec)
         else:
             job = self._job_runner.create_job(design_id=state.design_id)
             yield _sse_event("generation_started", _job_result(job))
@@ -594,12 +620,12 @@ class ChatService:
             })
             return
 
-        if background_tasks is not None and hasattr(self._job_runner, "enqueue_generate"):
-            job = self._job_runner.enqueue_generate(design_id=state.design_id, spec=patched)
-            background_tasks.add_task(self._job_runner.run_queued_job, job.id, patched)
+        if _chat_generation_mode() == "async":
+            job = self._job_runner.create_job(design_id=state.design_id)
             state.current_spec = patched
             result = _job_result(job)
             yield _sse_event("generation_started", result)
+            self._schedule_job_generation(job, patched)
         else:
             job = self._job_runner.create_job(design_id=state.design_id)
             yield _sse_event("generation_started", _job_result(job))
@@ -669,12 +695,12 @@ class ChatService:
             })
             return
 
-        if background_tasks is not None and hasattr(self._job_runner, "enqueue_generate"):
-            job = self._job_runner.enqueue_generate(design_id=state.design_id, spec=patched)
-            background_tasks.add_task(self._job_runner.run_queued_job, job.id, patched)
+        if _chat_generation_mode() == "async":
+            job = self._job_runner.create_job(design_id=state.design_id)
             state.current_spec = patched
             result = _job_result(job, message=f"已基于选中对象 {part_ref} 完成修改。")
             yield _sse_event("generation_started", result)
+            self._schedule_job_generation(job, patched)
         else:
             job = self._job_runner.create_job(design_id=state.design_id)
             yield _sse_event("generation_started", _job_result(job))

@@ -53,6 +53,7 @@ class FakeCadBackend:
             metadata["vspaero_analysis"] = fake_vspaero_results(spec)
         # Emit CAD progress events for testing visibility
         step_delay = float(os.getenv("FAKE_CAD_STEP_DELAY_MS", "0")) / 1000.0
+        fail_stage = os.getenv("FAKE_CAD_FAIL_STAGE", "").strip()
         if on_progress:
             for stage, progress in [
                 ("fuselage_created", 62),
@@ -67,6 +68,8 @@ class FakeCadBackend:
                 if step_delay > 0:
                     time.sleep(step_delay)
                 on_progress(stage, progress)
+                if fail_stage == stage:
+                    raise RuntimeError(f"Fake CAD failure at stage: {stage}")
         return CadArtifacts(vsp3=vsp3, step=step, glb=glb, metadata=metadata)
 
 

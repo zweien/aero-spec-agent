@@ -133,8 +133,8 @@ export function TaskRuntimeCard(props: TaskRuntimeCardProps): JSX.Element {
           />
         )}
 
-        {/* Artifact file list when completed */}
-        {isCompleted && artifacts.length > 0 && (
+        {/* Artifact file list while running or completed */}
+        {(isRunning || isCompleted) && artifacts.length > 0 && (
           <div className="tool-card-artifacts">
             <div className="artifact-header">已生成 {artifacts.length} 个文件</div>
             <div className="artifact-list">

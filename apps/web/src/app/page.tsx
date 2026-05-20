@@ -8,7 +8,7 @@ import {
   type CadPreviewSource,
 } from "@/components/cad-viewer/cadPreviewSource";
 import type { AircraftPreviewSpec } from "@/components/cad-viewer/previewGeometry";
-import { ChatPanel } from "@/components/chat/ChatPanel";
+import { ChatPanel, type GenerationCompleteData } from "@/components/chat/ChatPanel";
 import { pollJobToCompletion } from "@/lib/generationFlow";
 import { ParameterPanel } from "@/components/parameter-panel/ParameterPanel";
 import type { AircraftSpecData } from "@/components/parameter-panel/ParameterPanel";
@@ -208,6 +208,37 @@ export default function Home() {
     [conversationId, loadVersion, fetchVersionList],
   );
 
+  const handleViewModel = useCallback(
+    (data: GenerationCompleteData) => {
+      const activeDesignId = data.design_id ?? designId;
+      if (activeDesignId && data.version_no) {
+        void loadVersion(activeDesignId, data.version_no);
+      }
+      document.querySelector(".workspace-cad")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    },
+    [designId, loadVersion],
+  );
+
+  const handleOpenDeepDesign = useCallback(
+    (data: GenerationCompleteData) => {
+      if (data.design_id) setDesignId(data.design_id);
+      setRightTab("deep-design");
+    },
+    [],
+  );
+
+  const handleExportReport = useCallback(
+    (data: GenerationCompleteData) => {
+      const activeDesignId = data.design_id ?? designId;
+      if (!activeDesignId || !data.version_no) return;
+      const url = `${API_BASE_URL}/api/designs/${encodeURIComponent(activeDesignId)}/versions/${data.version_no}/files/validation_report.json`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
+    [designId],
+  );
+
+  const handleShowRunDetails = useCallback((_data: GenerationCompleteData) => {}, []);
+
   const handleParameterChange = useCallback(
     (path: string, value: string | number) => {
       setDraftSpec((prev) => {
@@ -371,8 +402,12 @@ export default function Home() {
             onClearSelectedRefs={handleClearSelectedRefs}
             registerSystemMessage={registerSystemMessage}
             registerToolAction={registerToolAction}
-            selectedRefs={selectedRefs}
-            onGenerationStage={(stage, progress, generating, extras) => {
+	            selectedRefs={selectedRefs}
+	            onViewModel={handleViewModel}
+	            onDeepDesign={handleOpenDeepDesign}
+	            onExportReport={handleExportReport}
+	            onShowDetails={handleShowRunDetails}
+	            onGenerationStage={(stage, progress, generating, extras) => {
               setGenerationStage(stage);
               setGenerationProgress(progress);
               setIsGenerating(generating);

@@ -81,7 +81,7 @@ export function WorkflowErrorCard({
               cursor: "pointer",
             }}
           >
-            {showLogs ? "收起详情" : "查看详情"}
+            {showLogs ? "收起日志" : "查看日志"}
           </button>
         )}
       </div>

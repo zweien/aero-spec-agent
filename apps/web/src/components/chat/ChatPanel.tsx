@@ -4,7 +4,6 @@ import { type JSX, useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { resolveGenerationJob } from "@/lib/generationFlow";
 import { TaskRuntimeCard } from "@/components/runtime/TaskRuntimeCard";
 import {
   useWorkflowRuntime,
@@ -14,7 +13,6 @@ import {
 } from "@/hooks/useWorkflowRuntime";
 import {
   streamJobEvents,
-  toJobPollResult,
   type WorkflowStage,
 } from "./useJobEventStream";
 import { AgentRunHeader } from "./AgentRunHeader";
@@ -29,6 +27,8 @@ export type GenerationCompleteData = {
   design_id?: string;
   files?: string[];
   message?: string;
+  error?: string;
+  error_message?: string;
 };
 
 type ChatRole = "user" | "assistant" | "system" | "error";
@@ -49,6 +49,9 @@ type ToolPart = {
   runtimeStages?: WorkflowRuntimeStage[];
   runtimeProgress?: number;
   runtimeElapsedTime?: number;
+  runtimeStartedAt?: number;
+  runtimeArtifacts?: string[];
+  runtimeError?: string | null;
 };
 
 type ChatMessage = {
@@ -72,6 +75,10 @@ type ChatPanelProps = {
   registerToolAction?: (fn: (toolName: string, args: Record<string, unknown>) => ToolActionHandle) => void;
   selectedRefs?: string[];
   onGenerationStage?: (stage: string | null, progress: number, isGenerating: boolean, extras?: { artifacts?: string[]; error?: string | null }) => void;
+  onViewModel?: (data: GenerationCompleteData) => void;
+  onDeepDesign?: (data: GenerationCompleteData) => void;
+  onExportReport?: (data: GenerationCompleteData) => void;
+  onShowDetails?: (data: GenerationCompleteData) => void;
 };
 
 const PART_REF_LABELS: Record<string, string> = {
@@ -88,13 +95,32 @@ const TOOL_LABELS: Record<string, string> = {
   modify_selected_part: "修改选中部件",
 };
 
+function isFailedResult(result: GenerationCompleteData | undefined, isRunning: boolean): boolean {
+  return !isRunning && (
+    result?.status === "failed" ||
+    Boolean(result?.job_id && !result?.version_no && (result?.message || result?.error || result?.error_message))
+  );
+}
+
+function messagePlainText(message: ChatMessage | undefined): string {
+  if (!message) return "";
+  return message.parts
+    .filter((part): part is TextPart => part.type === "text")
+    .map((part) => part.text)
+    .join("")
+    .trim();
+}
+
 type StreamCallbacks = {
   appendAssistantText: (id: string, text: string) => void;
   appendToolCall: (id: string, toolName: string, args: Record<string, unknown>) => void;
   completeLatestTool: (id: string, output: GenerationCompleteData) => void;
-  failLatestTool: (id: string, errorMsg: string, jobId?: string) => void;
+  failLatestTool: (id: string, errorMsg: string, jobId?: string, output?: GenerationCompleteData) => void;
   runtimeApplyEvent: (event: WorkflowStageEvent) => void;
   runtimeTransitionToReal: () => void;
+  updateRuntimeEvent: (id: string, event: WorkflowStageEvent) => void;
+  updateRuntimeArtifacts: (id: string, artifacts: string[]) => void;
+  notifyGenerationStage: (stage: string | null, progress: number, isGenerating: boolean, extras?: { artifacts?: string[]; error?: string | null }) => void;
   apiBaseUrl: string;
 };
 
@@ -127,35 +153,86 @@ async function parseDataStream(
   }
 }
 
-function startJobStreaming(jobId: string, assistantId: string, cb: StreamCallbacks): void {
-  void streamJobEvents({
+async function startJobStreaming(jobId: string, assistantId: string, cb: StreamCallbacks): Promise<void> {
+  let artifacts: string[] = [];
+  let currentStageLabel: string | null = null;
+  let currentProgress = 0;
+
+  try {
+    const jobResult = await streamJobEvents({
     apiBaseUrl: cb.apiBaseUrl,
     jobId,
     onStage: (stage) => {
-      cb.runtimeApplyEvent({
-        stage: stage.step,
-        label: stage.label ?? getStageLabel(stage.step),
+      const artifactKey =
+        stage.artifact ??
+        (typeof stage.metadata?.artifact_key === "string" ? stage.metadata.artifact_key : undefined);
+
+      if (stage.eventType === "artifact_generated" && artifactKey) {
+        if (!artifacts.includes(artifactKey)) {
+          artifacts = [...artifacts, artifactKey];
+        }
+        cb.updateRuntimeArtifacts(assistantId, artifacts);
+        cb.notifyGenerationStage(currentStageLabel, currentProgress, true, { artifacts, error: null });
+        return;
+      }
+
+      const stageName = stage.step || stage.stage || "";
+      if (!stageName) return;
+
+      const runtimeEvent: WorkflowStageEvent = {
+        stage: stageName,
+        label: stage.label ?? getStageLabel(stageName),
         progress: stage.progress,
         status: stage.status,
         metadata: stage.metadata,
         error_message: stage.error_message,
+      };
+      currentStageLabel = runtimeEvent.label ?? getStageLabel(stageName);
+      currentProgress = stage.progress;
+      cb.runtimeApplyEvent(runtimeEvent);
+      cb.updateRuntimeEvent(assistantId, runtimeEvent);
+      cb.notifyGenerationStage(currentStageLabel, currentProgress, true, {
+        artifacts,
+        error: stage.error_message ?? null,
       });
     },
-  }).then((jobResult) => {
+  });
+
     if (jobResult.finalStatus === "succeeded") {
+      const finalArtifacts = jobResult.files ? Object.keys(jobResult.files) : artifacts;
+      cb.updateRuntimeArtifacts(assistantId, finalArtifacts);
+      cb.notifyGenerationStage(null, 100, false, { artifacts: finalArtifacts, error: null });
       cb.completeLatestTool(assistantId, {
         job_id: jobId,
         design_id: jobResult.design_id,
         version_no: jobResult.version_no,
         status: "succeeded",
-        files: jobResult.files ? Object.keys(jobResult.files) : undefined,
+        files: finalArtifacts,
       });
     } else {
-      cb.failLatestTool(assistantId, jobResult.error_message ?? "生成失败", jobId);
+      const errorMessage = jobResult.error_message ?? "生成失败";
+      cb.notifyGenerationStage(currentStageLabel, currentProgress, false, { artifacts, error: errorMessage });
+      cb.failLatestTool(assistantId, errorMessage, jobId, {
+        job_id: jobId,
+        design_id: jobResult.design_id,
+        version_no: jobResult.version_no,
+        status: "failed",
+        files: jobResult.files ? Object.keys(jobResult.files) : artifacts,
+        message: errorMessage,
+        error_message: errorMessage,
+      });
     }
-  }).catch((err) => {
-    cb.failLatestTool(assistantId, err instanceof Error ? err.message : "Job stream failed", jobId);
-  });
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Job stream failed";
+    cb.notifyGenerationStage(currentStageLabel, currentProgress, false, { artifacts, error: errorMessage });
+    cb.failLatestTool(assistantId, errorMessage, jobId, {
+      job_id: jobId,
+      status: "failed",
+      files: artifacts,
+      message: errorMessage,
+      error_message: errorMessage,
+    });
+  }
 }
 
 async function handleAiSdkStream(
@@ -164,6 +241,7 @@ async function handleAiSdkStream(
   assistantId: string,
   cb: StreamCallbacks,
 ): Promise<void> {
+  const jobStreams: Promise<void>[] = [];
   await parseDataStream(reader, decoder, (event) => {
     switch (event.type) {
       case "text-delta": {
@@ -182,7 +260,7 @@ async function handleAiSdkStream(
         const result = event.result as Record<string, unknown>;
         const jobId = result?.job_id as string | undefined;
         if (jobId && result?.status === "started") {
-          startJobStreaming(jobId, assistantId, cb);
+          jobStreams.push(startJobStreaming(jobId, assistantId, cb));
         } else if (result?.version_no || result?.status === "succeeded") {
           cb.completeLatestTool(assistantId, result as unknown as GenerationCompleteData);
         }
@@ -190,6 +268,7 @@ async function handleAiSdkStream(
       }
     }
   });
+  await Promise.all(jobStreams);
 }
 
 async function handleLegacyStream(
@@ -198,6 +277,7 @@ async function handleLegacyStream(
   assistantId: string,
   cb: StreamCallbacks,
 ): Promise<void> {
+  const jobStreams: Promise<void>[] = [];
   await parseDataStream(reader, decoder, (event) => {
     switch (event.type) {
       case "text-delta": {
@@ -215,7 +295,7 @@ async function handleLegacyStream(
       case "generation-started": {
         const jobId = event.job_id as string;
         if (jobId) {
-          startJobStreaming(jobId, assistantId, cb);
+          jobStreams.push(startJobStreaming(jobId, assistantId, cb));
         }
         break;
       }
@@ -228,6 +308,7 @@ async function handleLegacyStream(
       }
     }
   });
+  await Promise.all(jobStreams);
 }
 
 export function ChatPanel({
@@ -240,6 +321,10 @@ export function ChatPanel({
   registerToolAction,
   selectedRefs = [],
   onGenerationStage,
+  onViewModel,
+  onDeepDesign,
+  onExportReport,
+  onShowDetails,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -278,6 +363,7 @@ export function ChatPanel({
               toolName,
               args,
               state: "running" as const,
+              runtimeStartedAt: Date.now(),
             },
           ],
         },
@@ -308,7 +394,16 @@ export function ChatPanel({
               for (let i = parts.length - 1; i >= 0; i--) {
                 const part = parts[i];
                 if (part.type === "tool" && part.state === "running") {
-                  parts[i] = { ...part, state: "done" };
+                  parts[i] = {
+                    ...part,
+                    state: "done",
+                    output: {
+                      status: "failed",
+                      message: errorMsg,
+                      error: errorMsg,
+                      error_message: errorMsg,
+                    },
+                  };
                   break;
                 }
               }
@@ -360,6 +455,7 @@ export function ChatPanel({
                     toolName,
                     args,
                     state: "running",
+                    runtimeStartedAt: Date.now(),
                   },
                 ],
               }
@@ -388,17 +484,79 @@ export function ChatPanel({
     );
   }, []);
 
-  const appendRuntimeStage = useCallback((messageId: string, stages: WorkflowRuntimeStage[], progress: number, elapsedTime: number) => {
+  const updateRuntimeArtifacts = useCallback((messageId: string, artifacts: string[]) => {
     setMessages((prev) =>
       prev.map((msg) => {
         if (msg.id !== messageId) return msg;
         const parts = [...msg.parts];
         for (let i = parts.length - 1; i >= 0; i--) {
           const part = parts[i];
-          if (part.type === "tool" && part.state === "running") {
-            parts[i] = { ...part, runtimeStages: stages, runtimeProgress: progress, runtimeElapsedTime: elapsedTime };
+          if (part.type === "tool") {
+            parts[i] = { ...part, runtimeArtifacts: artifacts };
             break;
           }
+        }
+        return { ...msg, parts };
+      }),
+    );
+  }, []);
+
+  const updateRuntimeEvent = useCallback((messageId: string, event: WorkflowStageEvent) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        const parts = [...msg.parts];
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const part = parts[i];
+          if (part.type !== "tool") continue;
+
+          const now = Date.now();
+          const startedAt = part.runtimeStartedAt ?? now;
+          const existingStages = part.runtimeStages ?? [];
+          const stages = existingStages.map((stage) => {
+            if (stage.status !== "running") return stage;
+            return {
+              ...stage,
+              status: "completed" as const,
+              completedAt: now,
+              durationMs: stage.startedAt ? now - stage.startedAt : null,
+            };
+          });
+          const existingIdx = stages.findIndex((stage) => stage.stage === event.stage);
+          const status = event.error_message ? "failed" as const : "running" as const;
+          if (existingIdx >= 0) {
+            const existing = stages[existingIdx]!;
+            stages[existingIdx] = {
+              ...existing,
+              status,
+              startedAt: existing.startedAt ?? now,
+              completedAt: status === "failed" ? now : existing.completedAt,
+              durationMs: status === "failed" && existing.startedAt ? now - existing.startedAt : existing.durationMs,
+              metadata: event.metadata,
+            };
+          } else {
+            stages.push({
+              stage: event.stage,
+              label: event.label ?? getStageLabel(event.stage),
+              status,
+              startedAt: now,
+              completedAt: status === "failed" ? now : null,
+              durationMs: null,
+              metadata: event.metadata,
+            });
+          }
+
+          parts[i] = {
+            ...part,
+            runtimeStages: stages,
+            runtimeProgress: event.progress != null
+              ? Math.max(event.progress, part.runtimeProgress ?? 0)
+              : part.runtimeProgress,
+            runtimeElapsedTime: now - startedAt,
+            runtimeStartedAt: startedAt,
+            runtimeError: event.error_message ?? part.runtimeError,
+          };
+          break;
         }
         return { ...msg, parts };
       }),
@@ -414,7 +572,17 @@ export function ChatPanel({
           for (let i = parts.length - 1; i >= 0; i--) {
             const part = parts[i];
             if (part.type === "tool" && part.state === "running") {
-              parts[i] = { ...part, output, state: "done" };
+              const now = Date.now();
+              const runtimeStages = part.runtimeStages?.map((stage) => {
+                if (stage.status !== "running") return stage;
+                return {
+                  ...stage,
+                  status: "completed" as const,
+                  completedAt: now,
+                  durationMs: stage.startedAt ? now - stage.startedAt : null,
+                };
+              });
+              parts[i] = { ...part, output, runtimeStages, state: "done" };
               break;
             }
           }
@@ -427,7 +595,7 @@ export function ChatPanel({
   );
 
   const failLatestTool = useCallback(
-    (messageId: string, errorMsg: string, jobId?: string) => {
+    (messageId: string, errorMsg: string, jobId?: string, output?: GenerationCompleteData) => {
       setMessages((prev) =>
         prev.map((msg) => {
           if (msg.id !== messageId) return msg;
@@ -435,10 +603,32 @@ export function ChatPanel({
           for (let i = parts.length - 1; i >= 0; i--) {
             const part = parts[i];
             if (part.type === "tool" && part.state === "running") {
+              const now = Date.now();
+              const hasFailedStage = part.runtimeStages?.some((stage) => stage.status === "failed") ?? false;
+              const runtimeStages = hasFailedStage
+                ? part.runtimeStages
+                : part.runtimeStages?.map((stage) => {
+                    if (stage.status !== "running") return stage;
+                    return {
+                      ...stage,
+                      status: "failed" as const,
+                      completedAt: now,
+                      durationMs: stage.startedAt ? now - stage.startedAt : null,
+                    };
+                  });
               parts[i] = {
                 ...part,
                 state: "done",
-                output: jobId ? { job_id: jobId, error: errorMsg } : undefined,
+                runtimeStages,
+                runtimeError: errorMsg,
+                output: {
+                  ...output,
+                  job_id: jobId ?? output?.job_id,
+                  status: "failed",
+                  message: output?.message ?? errorMsg,
+                  error: output?.error ?? errorMsg,
+                  error_message: output?.error_message ?? errorMsg,
+                },
               };
               break;
             }
@@ -536,6 +726,9 @@ export function ChatPanel({
           failLatestTool,
           runtimeApplyEvent: runtime.applyEvent,
           runtimeTransitionToReal: runtime.transitionToRealStages,
+          updateRuntimeEvent,
+          updateRuntimeArtifacts,
+          notifyGenerationStage: onGenerationStage ?? (() => {}),
           apiBaseUrl,
         };
 
@@ -557,10 +750,12 @@ export function ChatPanel({
       appendAssistantText,
       appendMessage,
       appendToolCall,
-      completeLatestTool,
-      failLatestTool,
-      conversationId,
-      onGenerationStage,
+	      completeLatestTool,
+	      failLatestTool,
+	      updateRuntimeArtifacts,
+	      updateRuntimeEvent,
+	      conversationId,
+	      onGenerationStage,
       runtime,
       selectedRefs,
       status,
@@ -603,7 +798,7 @@ export function ChatPanel({
             </p>
           </div>
         )}
-        {messages.map((msg) => {
+	        {messages.map((msg, msgIndex) => {
           const hasToolPart = msg.parts.some((p) => p.type === "tool");
           const showPreliminaryTimeline = isStreaming && msg.role === "assistant" && !hasToolPart;
 
@@ -624,20 +819,24 @@ export function ChatPanel({
               <div className="chat-bubble-body">
                 {/* --- Agent Run: Header (shows as soon as streaming starts) --- */}
                 {msg.role === "assistant" && (() => {
-                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
-                  const isRunning = toolPart?.state === "running";
-                  const result = toolPart?.output as GenerationCompleteData | undefined;
-                  const isFailed = Boolean(toolPart && !isRunning && result?.job_id && !result?.version_no);
-                  const isCompleted = Boolean(toolPart && !isRunning && !isFailed && result?.version_no);
+	                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
+	                  const isRunning = toolPart?.state === "running";
+	                  const result = toolPart?.output as GenerationCompleteData | undefined;
+	                  const isFailed = Boolean(toolPart && isFailedResult(result, Boolean(isRunning)));
+	                  const isCompleted = Boolean(toolPart && !isRunning && !isFailed && result?.version_no);
 
                   // Show header for preliminary timeline (no toolPart yet) or when toolPart exists
                   const stages = toolPart?.runtimeStages ?? (showPreliminaryTimeline ? runtime.state.stages : []);
                   const progress = toolPart?.runtimeProgress ?? (showPreliminaryTimeline ? runtime.state.progress : 0);
                   const elapsedTime = toolPart?.runtimeElapsedTime ?? (showPreliminaryTimeline ? runtime.state.elapsedTime : 0);
-                  const currentStageLabel = (() => {
-                    const currentStage = runtime.state.currentStage;
-                    return currentStage ? getStageLabel(currentStage) : undefined;
-                  })();
+	                  const currentStageLabel = (() => {
+	                    if (toolPart) {
+	                      const runningStage = stages.find((stage) => stage.status === "running");
+	                      return runningStage?.label ?? stages[stages.length - 1]?.label;
+	                    }
+	                    const currentStage = runtime.state.currentStage;
+	                    return currentStage ? getStageLabel(currentStage) : undefined;
+	                  })();
 
                   if (stages.length === 0 && !isRunning && !isCompleted && !isFailed && !showPreliminaryTimeline) return null;
                   if (!toolPart && !showPreliminaryTimeline) return null;
@@ -675,31 +874,40 @@ export function ChatPanel({
                   />
                 )}
                 {msg.role === "assistant" && hasToolPart && (() => {
-                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
-                  if (!toolPart) return null;
-                  const isRunning = toolPart.state === "running";
-                  const result = toolPart.output as GenerationCompleteData | undefined;
-                  const isFailed = Boolean(!isRunning && result?.job_id && !result?.version_no);
-                  const stages = toolPart.runtimeStages ?? [];
-                  if (stages.length === 0 && !isRunning) return null;
-                  const label = TOOL_LABELS[toolPart.toolName] ?? toolPart.toolName;
-                  const failedRuntimeStage = stages.find((s) => s.status === "failed");
-                  return (
-                    <TaskRuntimeCard
+	                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
+	                  if (!toolPart) return null;
+	                  const isRunning = toolPart.state === "running";
+	                  const result = toolPart.output as GenerationCompleteData | undefined;
+	                  const isFailed = isFailedResult(result, isRunning);
+	                  const stages = toolPart.runtimeStages ?? [];
+	                  if (stages.length === 0 && !isRunning) return null;
+	                  const label = TOOL_LABELS[toolPart.toolName] ?? toolPart.toolName;
+	                  const failedRuntimeStage = stages.find((s) => s.status === "failed");
+	                  const artifacts = toolPart.runtimeArtifacts ?? ((!isRunning && result?.files) ? result.files : []);
+	                  const retryText = messagePlainText(
+	                    [...messages.slice(0, msgIndex)].reverse().find((candidate) => candidate.role === "user"),
+	                  );
+	                  const diagnosticsUrl = result?.job_id
+	                    ? `${apiBaseUrl}/api/jobs/${encodeURIComponent(result.job_id)}/diagnostics`
+	                    : "";
+	                  return (
+	                    <TaskRuntimeCard
                       label={label}
                       isRunning={isRunning}
                       isFailed={isFailed}
                       stages={stages}
                       progress={toolPart.runtimeProgress ?? 0}
                       elapsedTime={toolPart.runtimeElapsedTime ?? 0}
-                      artifacts={(!isRunning && result?.files) ? result.files : []}
-                      versionNo={result?.version_no}
-                      failedStageLabel={failedRuntimeStage?.label}
-                      errorMessage={isFailed ? (result?.message ?? "生成失败") : undefined}
-                      apiBaseUrl={apiBaseUrl}
-                      designId={result?.design_id}
-                    />
-                  );
+	                      artifacts={artifacts}
+	                      versionNo={result?.version_no}
+	                      failedStageLabel={failedRuntimeStage?.label}
+	                      errorMessage={isFailed ? (result?.error_message ?? result?.message ?? result?.error ?? "生成失败") : undefined}
+	                      apiBaseUrl={apiBaseUrl}
+	                      designId={result?.design_id}
+	                      onRetry={retryText ? () => void sendChatMessage(retryText) : undefined}
+	                      onViewDiagnostics={diagnosticsUrl ? () => window.open(diagnosticsUrl, "_blank", "noopener,noreferrer") : undefined}
+	                    />
+	                  );
                 })()}
 
                 {/* --- Markdown: Design explanation --- */}
@@ -743,35 +951,70 @@ export function ChatPanel({
 
                 {/* --- Agent Run: Post-completion actions --- */}
                 {msg.role === "assistant" && hasToolPart && (() => {
-                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
-                  if (!toolPart || toolPart.state === "running") return null;
-                  const result = toolPart.output as GenerationCompleteData | undefined;
-                  const isFailed = Boolean(result?.job_id && !result?.version_no);
-                  const actionStatus = isFailed ? "failed" as const : "completed" as const;
-                  return (
-                    <AgentRunActions
-                      status={actionStatus}
-                      designId={result?.design_id}
-                      versionNo={result?.version_no}
-                    />
-                  );
+	                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
+	                  if (!toolPart || toolPart.state === "running") return null;
+	                  const result = toolPart.output as GenerationCompleteData | undefined;
+	                  const isFailed = isFailedResult(result, false);
+	                  const actionStatus = isFailed ? "failed" as const : "completed" as const;
+	                  const detailsId = `agent-run-details-${msg.id}`;
+	                  const showDetails = () => {
+	                    const element = document.getElementById(detailsId) as HTMLDetailsElement | null;
+	                    if (element) {
+	                      element.open = true;
+	                      element.scrollIntoView({ block: "nearest", behavior: "smooth" });
+	                    }
+	                    if (result) onShowDetails?.(result);
+	                  };
+	                  const retryText = messagePlainText(
+	                    [...messages.slice(0, msgIndex)].reverse().find((candidate) => candidate.role === "user"),
+	                  );
+	                  const diagnosticsUrl = result?.job_id
+	                    ? `${apiBaseUrl}/api/jobs/${encodeURIComponent(result.job_id)}/diagnostics`
+	                    : "";
+	                  return (
+	                    <AgentRunActions
+	                      status={actionStatus}
+	                      designId={result?.design_id}
+	                      versionNo={result?.version_no}
+	                      onViewModel={
+	                        result?.design_id && result?.version_no && onViewModel
+	                          ? () => onViewModel(result)
+	                          : undefined
+	                      }
+	                      onDeepDesign={
+	                        result?.design_id && result?.version_no && onDeepDesign
+	                          ? () => onDeepDesign(result)
+	                          : undefined
+	                      }
+	                      onExportReport={
+	                        result?.design_id && result?.version_no && onExportReport
+	                          ? () => onExportReport(result)
+	                          : undefined
+	                      }
+	                      onShowDetails={showDetails}
+	                      onViewLogs={diagnosticsUrl ? () => window.open(diagnosticsUrl, "_blank", "noopener,noreferrer") : undefined}
+	                      onRetry={retryText ? () => void sendChatMessage(retryText) : undefined}
+	                    />
+	                  );
                 })()}
 
                 {/* --- Agent Run: Collapsible details --- */}
                 {msg.role === "assistant" && hasToolPart && (() => {
                   const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
                   if (!toolPart) return null;
-                  const result = toolPart.output as GenerationCompleteData | undefined;
-                  const stages = toolPart.runtimeStages ?? [];
-                  // Show details whenever toolPart exists (running or done)
-                  return (
-                    <AgentRunDetails
-                      jobId={result?.job_id}
-                      designId={result?.design_id}
-                      versionNo={result?.version_no}
-                      stages={stages}
-                      artifacts={(!toolPart || toolPart.state === "done") && result?.files ? result.files : []}
-                    />
+	                  const result = toolPart.output as GenerationCompleteData | undefined;
+	                  const stages = toolPart.runtimeStages ?? [];
+	                  const detailsId = `agent-run-details-${msg.id}`;
+	                  // Show details whenever toolPart exists (running or done)
+	                  return (
+	                    <AgentRunDetails
+	                      id={detailsId}
+	                      jobId={result?.job_id}
+	                      designId={result?.design_id}
+	                      versionNo={result?.version_no}
+	                      stages={stages}
+	                      artifacts={toolPart.runtimeArtifacts ?? (((!toolPart || toolPart.state === "done") && result?.files) ? result.files : [])}
+	                    />
                   );
                 })()}
                 {/* Preliminary timeline details */}

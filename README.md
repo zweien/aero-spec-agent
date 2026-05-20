@@ -152,6 +152,10 @@ OPENAI_MODEL=deepseek-chat                  # or gpt-4o, etc.
 API_HOST=0.0.0.0
 API_PORT=8900
 WEB_PORT=3900
+
+# Generation mode
+# sync is the default legacy path. Use async for real-time Agent Run browser QA.
+CHAT_GENERATION_MODE=sync
 ```
 
 ### 3. Run
@@ -170,6 +174,17 @@ npm run dev
 Open http://localhost:3900 and start describing your aircraft.
 
 > **New to the project?** Use `CAD_BACKEND=fake` — it generates deterministic placeholder artifacts instantly, no OpenVSP installation required. Ideal for user testing and feature exploration. See [User Beta Test Plan](docs/user-beta-test-plan.md) for structured test cases.
+
+For Manus-style real-time Agent Run testing, use the async chat path:
+
+```bash
+CAD_BACKEND=fake \
+FAKE_CAD_STEP_DELAY_MS=300 \
+CHAT_GENERATION_MODE=async \
+.venv/bin/python -m uvicorn services.api.app.main:app --host "$API_HOST" --port "$API_PORT"
+```
+
+The legacy `sync` path is still available as the default fallback, but it blocks the request handler while CAD generation runs and cannot stream CAD sub-stages to `/api/jobs/{id}/stream` in real time.
 
 ### 4. Try Deep Design (Demo Flow)
 
