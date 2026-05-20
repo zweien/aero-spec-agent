@@ -1014,6 +1014,7 @@ export function ChatPanel({
 	                      versionNo={result?.version_no}
 	                      stages={stages}
 	                      artifacts={toolPart.runtimeArtifacts ?? (((!toolPart || toolPart.state === "done") && result?.files) ? result.files : [])}
+	                      errorMessage={toolPart.runtimeError ?? (result?.status === "failed" ? result?.error_message ?? result?.error : undefined)}
 	                    />
                   );
                 })()}

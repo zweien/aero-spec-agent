@@ -38,13 +38,12 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 
 ```bash
 cd apps/web
-set -a && . ../../.env && set +a
 npm install
 npm run dev     # dev server on http://localhost:3900
 npm run build   # production build
 ```
 
-Next.js dev server 缓存可能导致 CSS/JS 404。修改 globals.css 等样式文件后若页面资源加载失败，需删除 `.next` 目录后重启：`rm -rf apps/web/.next`。
+`NEXT_PUBLIC_API_BASE_URL` 通过 `apps/web/.env.local` 自动加载，无需手动 source `.env`。Next.js dev server 缓存可能导致 CSS/JS 404 或 API 端口不匹配。修改 globals.css 等样式文件或 `.env.local` 后若页面异常，需删除 `.next` 目录后重启：`rm -rf apps/web/.next`。
 
 ## Architecture
 

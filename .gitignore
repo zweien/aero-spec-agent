@@ -10,5 +10,7 @@ dist/
 .gstack/
 .bak
 .env
+.env.*
+!.env.example
 *.egg-info/
 docs/screenshots/

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { type JSX, useState } from "react";
+import React, { type JSX } from "react";
 
 type WorkflowErrorCardProps = {
   failedStage: string;
@@ -22,7 +22,6 @@ export function WorkflowErrorCard({
   onRetry,
   onViewLogs,
 }: WorkflowErrorCardProps): JSX.Element {
-  const [showLogs, setShowLogs] = useState(false);
   const tips = suggestions ?? DEFAULT_SUGGESTIONS;
 
   return (
@@ -70,7 +69,7 @@ export function WorkflowErrorCard({
         )}
         {onViewLogs && (
           <button
-            onClick={() => setShowLogs(!showLogs)}
+            onClick={onViewLogs}
             style={{
               fontSize: "12px",
               padding: "4px 12px",
@@ -81,17 +80,10 @@ export function WorkflowErrorCard({
               cursor: "pointer",
             }}
           >
-            {showLogs ? "收起日志" : "查看日志"}
+            查看日志
           </button>
         )}
       </div>
-      {showLogs && onViewLogs && (
-        <div style={{ marginTop: "8px", marginLeft: "22px" }}>
-          <button onClick={onViewLogs} style={{ fontSize: "12px", color: "var(--accent)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-            打开诊断面板
-          </button>
-        </div>
-      )}
     </div>
   );
 }
