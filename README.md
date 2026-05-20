@@ -46,6 +46,10 @@ Go beyond a single design. The **Deep Design** panel uses a LangGraph pipeline t
 - Accept the AI-recommended variant or pick any variant — it becomes the current design instantly
 - Export the full exploration report as Markdown
 
+### Compare View
+
+After generating multiple variants, use **Compare View** to compare up to 5 designs side by side. Add versions from the version panel or Deep Design variants, then view a structured comparison table with metrics (wingspan, L/D, range, aspect ratio, risk level, defaulted parameters). Best values are highlighted, and trust indicators flag designs with many system-defaulted parameters.
+
 ### Interactive 3D Preview
 
 Three.js viewer with GLB/OBJ model loading and a parameter-driven wireframe fallback. Orbit, zoom, and click to select aircraft parts for targeted modifications.

@@ -16,6 +16,9 @@ import { SettingsPanel } from "@/components/settings-panel/SettingsPanel";
 import { VersionPanel } from "@/components/version-panel/VersionPanel";
 import { DeepDesignPanel } from "@/components/graph/DeepDesignPanel";
 import { useDeepDesignStream } from "@/components/graph/useDeepDesignStream";
+import { CompareDrawer } from "@/components/compare/CompareDrawer";
+import { useCompareItems, extractCompareMetrics } from "@/components/compare";
+import type { CompareItem } from "@/components/compare/types";
 
 type VersionResponse = {
   files: string[];
@@ -104,6 +107,8 @@ export default function Home() {
   const [generationArtifacts, setGenerationArtifacts] = useState<string[]>([]);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const deepDesignStream = useDeepDesignStream();
+  const compareState = useCompareItems();
+  const [compareDrawerOpen, setCompareDrawerOpen] = useState(false);
 
   const chatSystemMessageRef = useRef<((text: string) => void) | null>(null);
   const chatToolActionRef = useRef<((toolName: string, args: Record<string, unknown>) => import("@/components/chat/ChatPanel").ToolActionHandle) | null>(null);
@@ -383,6 +388,49 @@ export default function Home() {
     [designId, loadVersion],
   );
 
+  const handleAddToCompare = useCallback(
+    async (item: CompareItem) => {
+      // Fetch version data to enrich the compare item
+      const dId = item.designId || designId;
+      if (dId && item.versionNo) {
+        try {
+          const resp = await fetch(`${API_BASE_URL}/api/designs/${dId}/versions/${item.versionNo}`);
+          if (resp.ok) {
+            const data = (await resp.json()) as VersionResponse;
+            const specEcho = data.validation_report?.spec_echo;
+            const enriched: CompareItem = {
+              ...item,
+              designId: dId,
+              spec: specEcho as Record<string, unknown> | undefined,
+              artifacts: data.files,
+              validationReport: data.validation_report as Record<string, unknown> | undefined,
+              defaultedFields: (data.validation_report as Record<string, unknown>)?.defaulted_fields as CompareItem["defaultedFields"],
+            };
+            enriched.metrics = extractCompareMetrics(enriched);
+            compareState.addCompareItem(enriched);
+            return;
+          }
+        } catch { /* fall through */ }
+      }
+      compareState.addCompareItem({ ...item, metrics: extractCompareMetrics(item) });
+    },
+    [designId, compareState.addCompareItem],
+  );
+
+  const handleCompareViewModel = useCallback(
+    (item: CompareItem) => {
+      void loadVersion(item.designId, item.versionNo);
+    },
+    [loadVersion],
+  );
+
+  const handleCompareSetCurrent = useCallback(
+    (item: CompareItem) => {
+      void loadVersion(item.designId, item.versionNo);
+    },
+    [loadVersion],
+  );
+
   return (
     <main className="workbench">
       <nav className="topbar">
@@ -390,6 +438,22 @@ export default function Home() {
         <span className="topbar-sep" />
         <span className="topbar-sub">固定翼无人机概念设计</span>
         <div className="topbar-right">
+          <button
+            onClick={() => setCompareDrawerOpen(true)}
+            style={{
+              fontSize: 12,
+              padding: "4px 10px",
+              background: compareState.items.length > 0 ? "var(--accent-bg)" : "transparent",
+              border: compareState.items.length > 0 ? "1px solid var(--accent-border)" : "1px solid var(--border-default)",
+              borderRadius: "var(--radius-sm)",
+              color: compareState.items.length > 0 ? "var(--accent)" : "var(--text-dim)",
+              cursor: "pointer",
+              marginRight: 8,
+              fontWeight: 500,
+            }}
+          >
+            方案对比{compareState.items.length > 0 ? ` (${compareState.items.length})` : ""}
+          </button>
           <SettingsPanel apiBaseUrl={API_BASE_URL} />
         </div>
       </nav>
@@ -470,6 +534,8 @@ export default function Home() {
                   designId={designId}
                   onLoadVersion={loadVersion}
                   onSwitchToParameters={() => setRightTab("parameters")}
+                  isInCompare={compareState.isInCompare}
+                  onAddToCompare={handleAddToCompare}
                 />
               )}
             </div>
@@ -482,11 +548,23 @@ export default function Home() {
         aeroAnalysis={aeroAnalysis}
         versionList={versionList}
         currentVersionNo={currentVersionNo}
+        designId={designId}
         onCompare={handleCompare}
         onCancelCompare={handleCancelCompare}
         onSelectVersion={handleSelectVersion}
         compareVersions={compareVersions}
         compareData={compareData}
+        isInGlobalCompare={compareState.isInCompare}
+        onAddToGlobalCompare={handleAddToCompare}
+      />
+      <CompareDrawer
+        open={compareDrawerOpen}
+        items={compareState.items}
+        onClose={() => setCompareDrawerOpen(false)}
+        onRemove={compareState.removeCompareItem}
+        onClear={compareState.clearCompareItems}
+        onViewModel={handleCompareViewModel}
+        onSetCurrent={handleCompareSetCurrent}
       />
     </main>
   );

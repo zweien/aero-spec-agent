@@ -8,6 +8,7 @@ import { UnifiedWorkflowTimeline } from "../runtime/UnifiedWorkflowTimeline";
 import { RecommendedVariantCard } from "./RecommendedVariantCard";
 import { VariantSummaryCard } from "./VariantSummaryCard";
 import type { useDeepDesignStream } from "./useDeepDesignStream";
+import type { CompareItem } from "@/components/compare/types";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -22,6 +23,8 @@ export type DeepDesignPanelProps = {
   designId: string | null;
   onLoadVersion: (designId: string, versionNo: number) => Promise<void>;
   onSwitchToParameters: () => void;
+  isInCompare?: (id: string) => boolean;
+  onAddToCompare?: (item: CompareItem) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -98,6 +101,8 @@ export function DeepDesignPanel({
   designId,
   onLoadVersion,
   onSwitchToParameters,
+  isInCompare,
+  onAddToCompare,
 }: DeepDesignPanelProps): JSX.Element {
   const [description, setDescription] = useState("");
   const [explorationDepth, setExplorationDepth] = useState<"quick" | "standard" | "deep">("standard");
@@ -424,6 +429,8 @@ export function DeepDesignPanel({
               apiBaseUrl={apiBaseUrl}
               onLoadVersion={onLoadVersion}
               onSwitchToParameters={onSwitchToParameters}
+              isInCompare={isInCompare}
+              onAddToCompare={onAddToCompare}
             />
           )}
 
@@ -438,6 +445,8 @@ export function DeepDesignPanel({
               apiBaseUrl={apiBaseUrl}
               onLoadVersion={onLoadVersion}
               onSwitchToParameters={onSwitchToParameters}
+              isInCompare={isInCompare}
+              onAddToCompare={onAddToCompare}
             />
           ))}
 

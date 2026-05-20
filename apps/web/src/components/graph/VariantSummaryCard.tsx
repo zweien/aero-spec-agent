@@ -2,6 +2,8 @@
 import React, { type JSX, useEffect, useState } from "react";
 
 import { VariantThumbnail } from "./VariantThumbnail";
+import { AddToCompareButton } from "@/components/compare/AddToCompareButton";
+import type { CompareItem } from "@/components/compare/types";
 
 export type VariantSummaryCardProps = {
   label: string;
@@ -11,6 +13,8 @@ export type VariantSummaryCardProps = {
   apiBaseUrl: string;
   onLoadVersion: (designId: string, versionNo: number) => Promise<void>;
   onSwitchToParameters: () => void;
+  isInCompare?: (id: string) => boolean;
+  onAddToCompare?: (item: CompareItem) => void;
 };
 
 export function VariantSummaryCard({
@@ -21,6 +25,8 @@ export function VariantSummaryCard({
   apiBaseUrl,
   onLoadVersion,
   onSwitchToParameters,
+  isInCompare,
+  onAddToCompare,
 }: VariantSummaryCardProps): JSX.Element {
   const [details, setDetails] = useState<{
     span?: number;
@@ -185,6 +191,19 @@ export function VariantSummaryCard({
           onClick={handleSetCurrent}
           disabled={status !== "succeeded"}
         />
+        {onAddToCompare && (
+          <AddToCompareButton
+            isAdded={!!isInCompare?.(`${designId}-v${versionNo}`)}
+            onAdd={() => onAddToCompare({
+              id: `${designId}-v${versionNo}`,
+              designId,
+              versionNo,
+              name: label,
+              source: "deep-design-variant",
+            })}
+            disabled={status !== "succeeded"}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
 "use client";
 import React, { type JSX, useCallback, useState } from "react";
+import { AddToCompareButton } from "@/components/compare/AddToCompareButton";
+import type { CompareItem } from "@/components/compare/types";
 
 export type RecommendedVariantCardProps = {
   report: string;
@@ -8,6 +10,8 @@ export type RecommendedVariantCardProps = {
   apiBaseUrl: string;
   onLoadVersion: (designId: string, versionNo: number) => Promise<void>;
   onSwitchToParameters: () => void;
+  isInCompare?: (id: string) => boolean;
+  onAddToCompare?: (item: CompareItem) => void;
 };
 
 export function RecommendedVariantCard({
@@ -17,6 +21,8 @@ export function RecommendedVariantCard({
   apiBaseUrl,
   onLoadVersion,
   onSwitchToParameters,
+  isInCompare,
+  onAddToCompare,
 }: RecommendedVariantCardProps): JSX.Element {
   const [applying, setApplying] = useState(false);
 
@@ -160,6 +166,18 @@ export function RecommendedVariantCard({
         >
           {applying ? "应用中..." : "应用此方案"}
         </button>
+        {onAddToCompare && recommended && (
+          <AddToCompareButton
+            isAdded={!!isInCompare?.(`${designId}-v${recommended.versionNo}`)}
+            onAdd={() => onAddToCompare({
+              id: `${designId}-v${recommended.versionNo}`,
+              designId,
+              versionNo: recommended.versionNo,
+              name: recommended.label,
+              source: "recommended",
+            })}
+          />
+        )}
       </div>
     </div>
   );

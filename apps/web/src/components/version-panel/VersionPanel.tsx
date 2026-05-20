@@ -4,6 +4,8 @@ import { useState } from "react";
 
 import type { DesignRuleEntry, PerformanceEstimateEntry, VspaeroAnalysisEntry } from "@/app/page";
 import { VersionCompare } from "./VersionCompare";
+import { AddToCompareButton } from "@/components/compare/AddToCompareButton";
+import type { CompareItem } from "@/components/compare/types";
 
 type VersionResponse = {
   files: string[];
@@ -27,11 +29,14 @@ type VersionPanelProps = {
   aeroAnalysis?: VspaeroAnalysisEntry | null;
   versionList?: number[];
   currentVersionNo?: number;
+  designId?: string | null;
   onCompare?: (v1: number, v2: number) => void;
   onCancelCompare?: () => void;
   onSelectVersion?: (versionNo: number) => void;
   compareVersions?: [number, number] | null;
   compareData?: [VersionResponse, VersionResponse] | null;
+  isInGlobalCompare?: (id: string) => boolean;
+  onAddToGlobalCompare?: (item: CompareItem) => void;
 };
 
 export function VersionPanel({
@@ -40,11 +45,14 @@ export function VersionPanel({
   aeroAnalysis,
   versionList,
   currentVersionNo,
+  designId,
   onCompare,
   onCancelCompare,
   onSelectVersion,
   compareVersions,
   compareData,
+  isInGlobalCompare,
+  onAddToGlobalCompare,
 }: VersionPanelProps) {
   const [compareMode, setCompareMode] = useState(false);
   const [selectedFirst, setSelectedFirst] = useState<number | null>(null);
@@ -89,15 +97,29 @@ export function VersionPanel({
             {versionList!.map((v) => {
               const isCurrent = v === currentVersionNo;
               const isSelected = v === selectedFirst;
+              const compareId = `${designId ?? "unknown"}-v${v}`;
               return (
-                <button
-                  key={v}
-                  type="button"
-                  className={`version-pill ${isCurrent ? "version-pill-active" : ""} ${isSelected ? "version-pill-selected" : ""}`}
-                  onClick={() => handleVersionClick(v)}
-                >
-                  v{v}
-                </button>
+                <span key={v} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <button
+                    type="button"
+                    className={`version-pill ${isCurrent ? "version-pill-active" : ""} ${isSelected ? "version-pill-selected" : ""}`}
+                    onClick={() => handleVersionClick(v)}
+                  >
+                    v{v}
+                  </button>
+                  {onAddToGlobalCompare && (
+                    <AddToCompareButton
+                      isAdded={!!isInGlobalCompare?.(compareId)}
+                      onAdd={() => onAddToGlobalCompare({
+                        id: compareId,
+                        designId: designId ?? "",
+                        versionNo: v,
+                        name: `v${v}`,
+                        source: "version",
+                      })}
+                    />
+                  )}
+                </span>
               );
             })}
           </div>

@@ -1,0 +1,177 @@
+"use client";
+
+import { type JSX } from "react";
+import type { CompareItem } from "./types";
+import { CompareItemCard } from "./CompareItemCard";
+import { CompareTable } from "./CompareTable";
+
+export type CompareDrawerProps = {
+  open: boolean;
+  items: CompareItem[];
+  onClose: () => void;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+  onViewModel?: (item: CompareItem) => void;
+  onSetCurrent?: (item: CompareItem) => void;
+};
+
+export function CompareDrawer({
+  open,
+  items,
+  onClose,
+  onRemove,
+  onClear,
+  onViewModel,
+  onSetCurrent,
+}: CompareDrawerProps): JSX.Element | null {
+  if (!open) return null;
+
+  const hasMinItems = items.length >= 2;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "min(720px, 90vw)",
+        background: "#fff",
+        borderLeft: "1px solid var(--border-default)",
+        boxShadow: "-4px 0 24px rgba(0,0,0,0.08)",
+        zIndex: 1000,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 16px",
+          borderBottom: "1px solid var(--border-default)",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+            方案对比
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              background: "var(--bg-surface)",
+              borderRadius: 8,
+              padding: "1px 8px",
+              border: "1px solid var(--border-default)",
+            }}
+          >
+            {items.length} 个方案
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {items.length > 0 && (
+            <button
+              onClick={onClear}
+              style={{
+                fontSize: 11,
+                padding: "4px 10px",
+                background: "transparent",
+                border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-sm)",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+              }}
+            >
+              清空对比
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            style={{
+              fontSize: 16,
+              padding: "2px 6px",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--text-muted)",
+            }}
+          >
+            &times;
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+        {!hasMinItems ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 200,
+              color: "var(--text-muted)",
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 500 }}>
+              请至少加入 2 个方案进行对比
+            </span>
+            <span style={{ fontSize: 12 }}>
+              在版本历史或 Deep Design 方案中点击"加入对比"
+            </span>
+          </div>
+        ) : (
+          <>
+            {/* Defaulted fields trust notice */}
+            {items.some((i) => (i.defaultedFields?.length ?? 0) >= 3) && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--warning, #ca8a04)",
+                  background: "rgba(234,179,8,0.06)",
+                  border: "1px solid rgba(234,179,8,0.2)",
+                  borderRadius: 6,
+                  padding: "8px 12px",
+                  marginBottom: 12,
+                  lineHeight: 1.5,
+                }}
+              >
+                部分方案包含较多系统默认补全参数，默认补全越多说明由系统假设的内容越多。建议在进入工程分析前进一步确认参数。
+              </div>
+            )}
+
+            {/* Item cards row */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(${items.length}, 1fr)`,
+                gap: 8,
+                marginBottom: 16,
+              }}
+            >
+              {items.map((item) => (
+                <CompareItemCard
+                  key={item.id}
+                  item={item}
+                  onRemove={onRemove}
+                  onViewModel={onViewModel}
+                  onSetCurrent={onSetCurrent}
+                />
+              ))}
+            </div>
+
+            {/* Compare table */}
+            <CompareTable items={items} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
