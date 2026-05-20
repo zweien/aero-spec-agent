@@ -31,6 +31,7 @@ class JobEventType(str, Enum):
     COMPLETED = "job_completed"
     FAILED = "job_failed"
     WORKFLOW_STAGE = "workflow_stage"
+    ARTIFACT_GENERATED = "artifact_generated"
 
 
 TERMINAL_TYPES = (JobEventType.COMPLETED, JobEventType.FAILED)

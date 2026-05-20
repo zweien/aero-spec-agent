@@ -62,6 +62,7 @@ def _map_event_type(event_type: str) -> str:
         "job_completed": "generation_complete",
         "job_failed": "generation_failed",
         "workflow_stage": "workflow_stage",
+        "artifact_generated": "artifact_generated",
     }
     return mapping.get(event_type, event_type)
 

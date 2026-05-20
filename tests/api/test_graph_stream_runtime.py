@@ -120,7 +120,7 @@ class TestFullLifecycleStreaming:
 
         # Collect events from async queue
         events = []
-        for _ in range(10):  # max 10 events
+        for _ in range(30):  # enough for all workflow_stage + progress events
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=10)
                 events.append(event)

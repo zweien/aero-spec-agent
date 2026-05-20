@@ -4,7 +4,7 @@ import React, { type JSX, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { GraphTimeline } from "./GraphTimeline";
+import { UnifiedWorkflowTimeline } from "../runtime/UnifiedWorkflowTimeline";
 import { RecommendedVariantCard } from "./RecommendedVariantCard";
 import { VariantSummaryCard } from "./VariantSummaryCard";
 import type { useDeepDesignStream } from "./useDeepDesignStream";
@@ -366,7 +366,7 @@ export function DeepDesignPanel({
           </div>
 
           {/* Timeline */}
-          <GraphTimeline nodes={stream.nodes} />
+          <UnifiedWorkflowTimeline nodes={stream.nodes} mode="deep-design" />
 
           {/* Collapsible runtime details */}
           <div style={{ borderTop: "1px solid var(--border-default)", paddingTop: "8px" }}>

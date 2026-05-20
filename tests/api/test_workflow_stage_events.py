@@ -105,23 +105,44 @@ def test_fake_backend_emits_validating_parameters_stage(runner):
     assert event.progress == 20
 
 
-def test_fake_backend_no_cad_sub_stages(runner):
-    """FakeCadBackend should NOT emit CAD sub-stage events (e.g. fuselage_created, wing_created)."""
+def test_fake_backend_emits_cad_sub_stages(runner):
+    """FakeCadBackend should emit CAD sub-stage events for testing visibility."""
     bus = get_job_event_bus()
     collected: list[JobEvent] = []
     bus.subscribe(collected.append)
 
     spec = _make_spec()
-    runner.generate(design_id="test-ws-nocad", spec=spec)
+    runner.generate(design_id="test-ws-cad", spec=spec)
 
     cad_stages = [
         e for e in collected
         if e.type == JobEventType.WORKFLOW_STAGE and "_created" in e.stage
     ]
-    assert len(cad_stages) == 0, (
-        f"FakeCadBackend should not emit CAD sub-stages, but found: "
+    assert len(cad_stages) >= 4, (
+        f"FakeCadBackend should emit CAD sub-stages, but only found: "
         f"{[e.stage for e in cad_stages]}"
     )
+
+
+def test_fake_backend_emits_all_8_cad_stages(runner):
+    """FakeCadBackend should emit all 8 CAD sub-stages."""
+    bus = get_job_event_bus()
+    collected: list[JobEvent] = []
+    bus.subscribe(collected.append)
+
+    spec = _make_spec()
+    runner.generate(design_id="test-ws-all8", spec=spec)
+
+    ws_events = [e for e in collected if e.type == JobEventType.WORKFLOW_STAGE]
+    stage_names = {e.stage for e in ws_events}
+
+    expected = {
+        "generating_spec", "validating_parameters",
+        "fuselage_created", "wing_created", "tail_created", "engine_created",
+        "vsp_model_saved", "step_exported", "glb_exported", "preview_ready",
+    }
+    missing = expected - stage_names
+    assert not missing, f"Missing workflow stages: {missing}"
 
 
 def test_sse_stream_includes_workflow_stage_events(client, runner):

@@ -6,8 +6,7 @@ import remarkGfm from "remark-gfm";
 
 import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
 import { resolveGenerationJob } from "@/lib/generationFlow";
-import { UnifiedWorkflowTimeline } from "@/components/runtime/UnifiedWorkflowTimeline";
-import { WorkflowErrorCard } from "@/components/runtime/WorkflowErrorCard";
+import { TaskRuntimeCard } from "@/components/runtime/TaskRuntimeCard";
 import {
   useWorkflowRuntime,
   getStageLabel,
@@ -15,7 +14,6 @@ import {
   type WorkflowStageEvent,
 } from "@/hooks/useWorkflowRuntime";
 import { createChatSseParser } from "./chatSse";
-import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import {
   streamJobEvents,
   toJobPollResult,
@@ -571,12 +569,44 @@ export function ChatPanel({
                   return null;
                 })}
                 {showPreliminaryTimeline && runtime.state.stages.length > 0 && (
-                  <UnifiedWorkflowTimeline
+                  <TaskRuntimeCard
+                    label="生成设计"
+                    isRunning={true}
+                    isFailed={false}
                     stages={runtime.state.stages}
-                    mode="normal"
+                    progress={runtime.state.progress}
                     elapsedTime={runtime.state.elapsedTime}
+                    artifacts={[]}
                   />
                 )}
+                {/* Runtime timeline at message level when ToolCard exists */}
+                {msg.role === "assistant" && hasToolPart && (() => {
+                  const toolPart = msg.parts.find((p): p is ToolPart => p.type === "tool");
+                  if (!toolPart) return null;
+                  const isRunning = toolPart.state === "running";
+                  const result = toolPart.output as GenerationCompleteData | undefined;
+                  const isFailed = Boolean(!isRunning && result?.job_id && !result?.version_no);
+                  const stages = toolPart.runtimeStages ?? [];
+                  if (stages.length === 0 && !isRunning) return null;
+                  const label = TOOL_LABELS[toolPart.toolName] ?? toolPart.toolName;
+                  const failedRuntimeStage = stages.find((s) => s.status === "failed");
+                  return (
+                    <TaskRuntimeCard
+                      label={label}
+                      isRunning={isRunning}
+                      isFailed={isFailed}
+                      stages={stages}
+                      progress={toolPart.runtimeProgress ?? 0}
+                      elapsedTime={toolPart.runtimeElapsedTime ?? 0}
+                      artifacts={(!isRunning && result?.files) ? result.files : []}
+                      versionNo={result?.version_no}
+                      failedStageLabel={failedRuntimeStage?.label}
+                      errorMessage={isFailed ? (result?.message ?? "生成失败") : undefined}
+                      apiBaseUrl={apiBaseUrl}
+                      designId={result?.design_id}
+                    />
+                  );
+                })()}
               </div>
             </div>
           );
@@ -637,17 +667,11 @@ export function ChatPanel({
 
 function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) {
   const [expanded, setExpanded] = useState(false);
-  const [showDiag, setShowDiag] = useState(false);
   const toolName = part.toolName;
   const label = TOOL_LABELS[toolName] ?? toolName;
   const isRunning = part.state === "running";
   const result = part.output as GenerationCompleteData | undefined;
   const isFailed = !isRunning && result?.job_id && !result?.version_no;
-  const failedJobId = isFailed ? result!.job_id : undefined;
-
-  // Find the failed stage label from runtime stages
-  const failedRuntimeStage = part.runtimeStages?.find((s) => s.status === "failed");
-  const failedStageLabel = failedRuntimeStage?.label ?? "未知阶段";
 
   return (
     <div
@@ -682,49 +706,8 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
         </div>
       )}
 
-      {part.runtimeStages && part.runtimeStages.length > 0 ? (
-        <UnifiedWorkflowTimeline
-          stages={part.runtimeStages}
-          mode="normal"
-          elapsedTime={part.runtimeElapsedTime}
-        />
-      ) : part.workflowStages && part.workflowStages.length > 0 ? (
-        <UnifiedWorkflowTimeline
-          stages={part.workflowStages.map((s) => ({
-            stage: s.stage ?? s.step,
-            label: s.label ?? getStageLabel(s.stage ?? s.step),
-            status: (s.status === "succeeded" ? "completed" : s.status === "failed" ? "failed" : s.status === "running" ? "running" : "pending") as "completed" | "running" | "pending" | "failed",
-            startedAt: null,
-            completedAt: null,
-            durationMs: s.duration_ms ?? null,
-          }))}
-          mode="normal"
-        />
-      ) : null}
-
-      {isRunning && part.runtimeProgress != null && part.runtimeProgress > 0 && (
-        <div className="workflow-progress-bar" style={{ marginTop: "8px" }}>
-          <div style={{ height: "4px", background: "var(--border-default)", borderRadius: "2px", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${Math.min(part.runtimeProgress, 100)}%`, background: "var(--accent)", borderRadius: "2px", transition: "width 0.3s ease-out" }} />
-          </div>
-          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>{part.runtimeProgress}%</div>
-        </div>
-      )}
-
       {!isRunning && result?.message && (
         <div className="tool-card-message">{result.message}</div>
-      )}
-
-      {isFailed && !isRunning && (
-        <WorkflowErrorCard
-          failedStage={failedStageLabel}
-          errorMessage={result?.message ?? "生成失败"}
-          onViewLogs={failedJobId ? () => setShowDiag(!showDiag) : undefined}
-        />
-      )}
-
-      {isFailed && showDiag && failedJobId && (
-        <DiagnosticsPanel apiBaseUrl={apiBaseUrl} jobId={failedJobId} />
       )}
 
       {!isRunning && result?.files && result.files.length > 0 && result.version_no && (

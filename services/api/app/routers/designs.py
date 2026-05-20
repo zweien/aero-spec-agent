@@ -71,6 +71,7 @@ _SSE_EVENT_MAP = {
     JobEventType.COMPLETED: "generation_complete",
     JobEventType.FAILED: "generation_failed",
     JobEventType.WORKFLOW_STAGE: "workflow_stage",
+    JobEventType.ARTIFACT_GENERATED: "artifact_generated",
 }
 
 

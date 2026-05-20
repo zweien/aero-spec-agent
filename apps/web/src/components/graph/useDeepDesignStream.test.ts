@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   parseSseChunk,
   type DeepDesignSseEvent,
-} from "./useDeepDesignStream.ts";
+} from "./useDeepDesignStream";
 
 test("parseSseChunk parses single event", () => {
   const chunk = "event: graph_node\ndata: {\"node\":\"parse\",\"status\":\"started\"}\n\n";

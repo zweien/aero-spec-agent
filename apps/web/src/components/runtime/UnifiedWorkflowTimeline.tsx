@@ -3,10 +3,30 @@
 import React, { type JSX } from "react";
 import type { WorkflowRuntimeStage } from "@/hooks/useWorkflowRuntime";
 
+// ---------------------------------------------------------------------------
+// GraphNode types (mirrored from graph/GraphExecutionPanel for zero-coupling)
+// ---------------------------------------------------------------------------
+
+export type GraphNodeState = "pending" | "running" | "completed" | "failed";
+
+export type GraphNode = {
+  name: string;
+  label: string;
+  state: GraphNodeState;
+  latencyMs?: number;
+};
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
 export type UnifiedTimelineMode = "normal" | "deep-design";
 
 export type UnifiedWorkflowTimelineProps = {
-  stages: WorkflowRuntimeStage[];
+  /** Workflow stages from useWorkflowRuntime (normal mode) */
+  stages?: WorkflowRuntimeStage[];
+  /** Graph nodes from deep design stream (deep-design mode) */
+  nodes?: GraphNode[];
   mode?: UnifiedTimelineMode;
   elapsedTime?: number;
 };
@@ -40,7 +60,33 @@ function formatElapsed(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-export function UnifiedWorkflowTimeline({ stages, mode = "normal", elapsedTime }: UnifiedWorkflowTimelineProps): JSX.Element {
+// ---------------------------------------------------------------------------
+// Convert GraphNode[] to WorkflowRuntimeStage[]
+// ---------------------------------------------------------------------------
+
+function nodesToStages(nodes: GraphNode[]): WorkflowRuntimeStage[] {
+  return nodes.map((n) => ({
+    stage: n.name,
+    label: n.label,
+    status: n.state as WorkflowRuntimeStage["status"],
+    startedAt: null,
+    completedAt: null,
+    durationMs: n.latencyMs ?? null,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function UnifiedWorkflowTimeline({ stages: stagesProp, nodes, mode = "normal", elapsedTime }: UnifiedWorkflowTimelineProps): JSX.Element {
+  // Resolve effective stages: prefer explicit stages, fall back to GraphNode conversion
+  const stages = (stagesProp && stagesProp.length > 0)
+    ? stagesProp
+    : nodes && nodes.length > 0
+      ? nodesToStages(nodes)
+      : [];
+
   if (stages.length === 0) return <div />;
 
   return (

@@ -257,7 +257,7 @@ class TestEventStreamResume:
         t1.start()
 
         events1 = []
-        for _ in range(10):
+        for _ in range(30):
             try:
                 event = await asyncio.wait_for(queue1.get(), timeout=10)
                 events1.append(event)
@@ -293,7 +293,7 @@ class TestEventStreamResume:
         t2.start()
 
         events2 = []
-        for _ in range(10):
+        for _ in range(30):
             try:
                 event = await asyncio.wait_for(queue2.get(), timeout=10)
                 events2.append(event)

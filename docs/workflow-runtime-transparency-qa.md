@@ -1,6 +1,6 @@
 # Workflow Runtime Transparency QA
 
-**Feature:** AI Workflow Runtime Transparency v2
+**Feature:** Unified AI Workflow Runtime Layer v3
 **Date:** 2026-05-20
 
 ---
@@ -48,6 +48,48 @@
 | CAD sub-stages | workflow_stage events appear in event log | |
 | Recommendation | AI recommendation card appears | |
 | GraphTimeline + UnifiedTimeline | Both coexist without conflict | |
+
+## FakeCadBackend CAD Sub-Stages (v3)
+
+| Step | Expected | Pass |
+|------|----------|------|
+| Submit design with fake backend | Generation starts | |
+| fuselage_created stage | "生成机身" appears in timeline | |
+| wing_created stage | "生成机翼" appears in timeline | |
+| tail_created stage | "生成尾翼" appears in timeline | |
+| engine_created stage | "生成发动机" appears in timeline | |
+| vsp_model_saved stage | "保存模型" appears in timeline | |
+| step_exported stage | "导出 STEP 文件" appears in timeline | |
+| glb_exported stage | "导出 3D 模型" appears in timeline | |
+| preview_ready stage | "三维预览准备就绪" appears in timeline | |
+| All 8 CAD sub-stages present | 10 total stages (2 spec + 8 CAD) | |
+
+## TaskRuntimeCard (v3)
+
+| Step | Expected | Pass |
+|------|----------|------|
+| Streaming starts | TaskRuntimeCard appears at message level | |
+| Timeline visible | Independent of ToolCard existence | |
+| Progress bar | Shows percentage during running state | |
+| Artifact links | File list appears after completion | |
+| Error card | WorkflowErrorCard shown on failure | |
+| Retry button | "重试" button functional | |
+
+## Artifact Generated Events (v3)
+
+| Step | Expected | Pass |
+|------|----------|------|
+| Files generated | artifact_generated SSE events emitted | |
+| Per artifact | One event per file (vsp3, step, glb) | |
+| Frontend artifacts list | Populated from events | |
+
+## UnifiedWorkflowTimeline in Deep Design (v3)
+
+| Step | Expected | Pass |
+|------|----------|------|
+| GraphTimeline replaced | UnifiedWorkflowTimeline renders graph nodes | |
+| mode="deep-design" | Graph nodes shown with Chinese labels | |
+| Visual consistency | Same style as normal workflow timeline | |
 
 ## Failure Cases
 

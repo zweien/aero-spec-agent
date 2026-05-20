@@ -7,24 +7,17 @@ from uuid import uuid4
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.job_events import JobEvent, JobEventType, get_job_event_bus
+from services.api.app.services.workflow_events import (
+    CAD_STAGE_LABELS,
+    publish_artifact_generated,
+    publish_workflow_stage,
+)
 from services.api.app.services.version_store import VersionStore
 from services.workers.cad_worker.openvsp_generator.backend import CadBackend
 from services.workers.cad_worker.openvsp_generator.backend_factory import get_cad_backend
 from services.workers.cad_worker.openvsp_generator.generate_aircraft import generate_aircraft
 
 logger = logging.getLogger(__name__)
-
-CAD_STAGE_LABELS: dict[str, str] = {
-    "fuselage_created": "正在生成机身",
-    "wing_created": "正在生成机翼",
-    "tail_created": "正在生成尾翼",
-    "engine_created": "正在生成发动机",
-    "vsp_model_saved": "正在保存模型",
-    "step_exported": "正在导出 STEP 文件",
-    "glb_exported": "正在导出 3D 模型",
-    "preview_ready": "三维预览准备就绪",
-}
-
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -130,57 +123,32 @@ class JobRunner:
                 ("generating_spec", "生成飞机参数", 10),
                 ("validating_parameters", "校验设计参数", 20),
             ]:
-                bus.publish(JobEvent(
-                    type=JobEventType.WORKFLOW_STAGE,
-                    job_id=job.id,
-                    design_id=job.design_id,
-                    version_no=job.version_no,
-                    stage=ws_stage,
-                    label=ws_label,
-                    progress=ws_progress,
-                ))
+                publish_workflow_stage(bus, job.id, job.design_id, job.version_no,
+                                      ws_stage, ws_label, progress=ws_progress)
                 job.current_step = ws_stage
                 job.progress = ws_progress
                 job.updated_at = _utcnow()
                 self._save_job(job)
-                bus.publish(JobEvent(
-                    type=JobEventType.PROGRESS,
-                    job_id=job.id,
-                    design_id=job.design_id,
-                    version_no=job.version_no,
-                    progress=ws_progress,
-                    current_step=ws_stage,
-                ))
 
             def _cad_progress(stage: str, progress: int) -> None:
                 label = CAD_STAGE_LABELS.get(stage, stage)
-                bus.publish(JobEvent(
-                    type=JobEventType.WORKFLOW_STAGE,
-                    job_id=job.id,
-                    design_id=job.design_id,
-                    version_no=job.version_no,
-                    stage=stage,
-                    label=label,
-                    progress=progress,
-                ))
+                publish_workflow_stage(bus, job.id, job.design_id, job.version_no,
+                                      stage, label, progress=progress)
                 job.current_step = stage
                 job.progress = progress
                 job.updated_at = _utcnow()
                 self._save_job(job)
-                bus.publish(JobEvent(
-                    type=JobEventType.PROGRESS,
-                    job_id=job.id,
-                    design_id=job.design_id,
-                    version_no=job.version_no,
-                    progress=progress,
-                    current_step=stage,
-                ))
 
             result = generate_aircraft(spec=spec, output_dir=output_dir, backend=self.backend, on_progress=_cad_progress)
             job.status = success_status
             job.progress = 100
             job.current_step = success_status
             job.files = {key: str(path) for key, path in result.files.items()}
+            for artifact_key, artifact_path in result.files.items():
+                publish_artifact_generated(
+                    bus, job.id, job.design_id, job.version_no,
+                    artifact_key, str(artifact_path),
+                )
             job.version_status = "succeeded"
             job.updated_at = _utcnow()
             if job.created_at:

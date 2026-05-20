@@ -4,7 +4,7 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 
 import { GraphTimeline } from "./GraphTimeline.tsx";
-import type { GraphNode } from "./GraphExecutionPanel.tsx";
+import type { GraphNode } from "../runtime/UnifiedWorkflowTimeline";
 
 test("GraphTimeline renders empty with no nodes", () => {
   const html = renderToString(<GraphTimeline nodes={[]} />);

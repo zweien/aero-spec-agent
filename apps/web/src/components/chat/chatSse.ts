@@ -4,6 +4,7 @@ export type ChatSseEventType =
   | "generation_started"
   | "generation_complete"
   | "workflow_stage"
+  | "artifact_generated"
   | "error";
 
 export type ChatSseEvent = {
@@ -17,6 +18,7 @@ const CHAT_EVENT_TYPES = new Set<string>([
   "generation_started",
   "generation_complete",
   "workflow_stage",
+  "artifact_generated",
   "error",
 ]);
 

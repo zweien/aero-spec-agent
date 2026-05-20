@@ -50,6 +50,19 @@ class FakeCadBackend:
                 fake_vspaero_results,
             )
             metadata["vspaero_analysis"] = fake_vspaero_results(spec)
+        # Emit CAD progress events for testing visibility
+        if on_progress:
+            for stage, progress in [
+                ("fuselage_created", 62),
+                ("wing_created", 68),
+                ("tail_created", 72),
+                ("engine_created", 76),
+                ("vsp_model_saved", 82),
+                ("step_exported", 86),
+                ("glb_exported", 92),
+                ("preview_ready", 96),
+            ]:
+                on_progress(stage, progress)
         return CadArtifacts(vsp3=vsp3, step=step, glb=glb, metadata=metadata)
 
 

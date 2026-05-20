@@ -172,12 +172,18 @@ export function useWorkflowRuntime() {
       const isFailed = !!event.error_message;
       const newStatus = isFailed ? "failed" : prev.status;
 
+      // Track artifacts from artifact_generated events
+      const updatedArtifacts =
+        event.metadata?.artifact_key && !prev.artifacts.includes(event.metadata.artifact_key as string)
+          ? [...prev.artifacts, event.metadata.artifact_key as string]
+          : prev.artifacts;
+
       return {
         stages: updatedStages,
         currentStage: isFailed ? null : event.stage,
         progress: event.progress ?? prev.progress,
         elapsedTime: startTimeRef.current ? now - startTimeRef.current : 0,
-        artifacts: prev.artifacts,
+        artifacts: updatedArtifacts,
         status: newStatus,
         error: isFailed ? { stage: event.stage, message: event.error_message! } : prev.error,
       };

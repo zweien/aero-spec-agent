@@ -114,6 +114,19 @@ export async function streamJobEvents(opts: StreamOptions): Promise<JobStreamRes
           continue; // Not terminal, continue processing
         }
 
+        if (evt.type === "artifact_generated") {
+          const stage: WorkflowStage = {
+            step: parsed.current_step ?? "",
+            progress: parsed.progress ?? 0,
+            status: parsed.status ?? "running",
+            timestamp: parsed.timestamp ?? "",
+            metadata: parsed.metadata,
+          };
+          stages.push(stage);
+          onStage?.(stage);
+          continue; // Not terminal, continue processing
+        }
+
         const stage: WorkflowStage = {
           step: parsed.current_step ?? "",
           progress: parsed.progress ?? 0,
