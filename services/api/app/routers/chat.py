@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -378,3 +378,141 @@ async def _event_to_sse(event):
     sse_lines = convert_sse_events([ev_dict])
     for line in sse_lines:
         yield line
+
+
+# --- Endpoints for AI SDK route handler ---
+
+
+@router.get("/conversations/{conversation_id}/state")
+async def get_conversation_state(conversation_id: str):
+    """Return conversation state for the Next.js route handler to build the system prompt."""
+    state = chat_service.get_or_create_state(conversation_id)
+
+    spec_yaml = None
+    if state.current_spec is not None:
+        from services.api.app.services.spec_io import dump_aircraft_spec
+        from pathlib import Path
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
+            dump_aircraft_spec(state.current_spec, Path(f.name))
+            spec_yaml = Path(f.name).read_text(encoding="utf-8")
+        Path(f.name).unlink(missing_ok=True)
+
+    return {
+        "design_id": getattr(state, "design_id", None),
+        "current_spec_yaml": spec_yaml,
+        "selected_refs": getattr(state, "selected_refs", []),
+    }
+
+
+class ToolExecuteRequest(BaseModel):
+    conversation_id: str = Field(min_length=1)
+    tool_name: str = Field(min_length=1)
+    args: dict = Field(default_factory=dict)
+
+
+@router.post("/tools/execute")
+async def tool_execute(req: ToolExecuteRequest, background_tasks: BackgroundTasks):
+    """Execute a tool call on behalf of the AI SDK route handler.
+
+    Reuses ChatService's tool execution logic (spec conversion, job enqueue).
+    Returns immediately with job_id for async processing.
+    """
+    state = chat_service.get_or_create_state(req.conversation_id)
+
+    if req.tool_name == "generate_design":
+        return await _tool_generate(state, req.args, background_tasks)
+    elif req.tool_name == "modify_design":
+        return await _tool_modify(state, req.args, background_tasks)
+    elif req.tool_name == "modify_selected_part":
+        return await _tool_modify_selected(state, req.args, background_tasks)
+    else:
+        raise HTTPException(status_code=400, detail=f"unknown tool: {req.tool_name}")
+
+
+async def _tool_generate(state, args: dict, background_tasks: BackgroundTasks):
+    from services.api.app.routers.designs import _get_job_runner
+    from services.api.app.services.chat_service import _flat_args_to_spec
+
+    try:
+        spec = _flat_args_to_spec(args)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"spec validation failed: {exc}") from exc
+
+    runner = _get_job_runner()
+    job = runner.enqueue_generate(design_id=state.design_id, spec=spec)
+    background_tasks.add_task(runner.run_queued_job, job.id, spec)
+    state.current_spec = spec
+    chat_service._save_state(state)
+
+    return {
+        "status": "started",
+        "job_id": job.id,
+        "design_id": job.design_id,
+        "version_no": job.version_no,
+    }
+
+
+async def _tool_modify(state, args: dict, background_tasks: BackgroundTasks):
+    from services.api.app.routers.designs import _get_job_runner
+    from services.api.app.services.chat_service import _flat_args_to_spec
+    from services.api.app.services.spec_patch import apply_patch
+
+    if state.current_spec is None:
+        raise HTTPException(status_code=400, detail="no current design to modify")
+
+    changes = args.get("changes", [])
+    if not changes:
+        raise HTTPException(status_code=400, detail="changes array is required")
+
+    try:
+        patched = apply_patch(state.current_spec, changes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    runner = _get_job_runner()
+    job = runner.enqueue_generate(design_id=state.design_id, spec=patched)
+    background_tasks.add_task(runner.run_queued_job, job.id, patched)
+    state.current_spec = patched
+    chat_service._save_state(state)
+
+    return {
+        "status": "started",
+        "job_id": job.id,
+        "design_id": job.design_id,
+        "version_no": job.version_no,
+    }
+
+
+async def _tool_modify_selected(state, args: dict, background_tasks: BackgroundTasks):
+    from services.api.app.routers.designs import _get_job_runner
+    from services.api.app.services.selected_part_modifier import apply_selected_part_modification
+
+    if state.current_spec is None:
+        raise HTTPException(status_code=400, detail="no current design to modify")
+
+    try:
+        patched = apply_selected_part_modification(
+            state.current_spec,
+            args.get("part_ref", ""),
+            args.get("operation", ""),
+            args.get("value"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    runner = _get_job_runner()
+    job = runner.enqueue_generate(design_id=state.design_id, spec=patched)
+    background_tasks.add_task(runner.run_queued_job, job.id, patched)
+    state.current_spec = patched
+    chat_service._save_state(state)
+
+    return {
+        "status": "started",
+        "job_id": job.id,
+        "design_id": job.design_id,
+        "version_no": job.version_no,
+    }

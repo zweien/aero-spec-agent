@@ -12,7 +12,6 @@ import {
   type WorkflowRuntimeStage,
   type WorkflowStageEvent,
 } from "@/hooks/useWorkflowRuntime";
-import { createChatSseParser } from "./chatSse";
 import {
   streamJobEvents,
   toJobPollResult,
@@ -88,6 +87,148 @@ const TOOL_LABELS: Record<string, string> = {
   modify_design: "修改设计",
   modify_selected_part: "修改选中部件",
 };
+
+type StreamCallbacks = {
+  appendAssistantText: (id: string, text: string) => void;
+  appendToolCall: (id: string, toolName: string, args: Record<string, unknown>) => void;
+  completeLatestTool: (id: string, output: GenerationCompleteData) => void;
+  failLatestTool: (id: string, errorMsg: string, jobId?: string) => void;
+  runtimeApplyEvent: (event: WorkflowStageEvent) => void;
+  runtimeTransitionToReal: () => void;
+  apiBaseUrl: string;
+};
+
+async function parseDataStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  onEvent: (event: Record<string, unknown>) => void,
+): Promise<void> {
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    while (true) {
+      const idx = buffer.indexOf("\n");
+      if (idx < 0) break;
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (!line.startsWith("data: ")) continue;
+      const raw = line.slice(6);
+      if (raw === "[DONE]") return;
+      try {
+        const event = JSON.parse(raw);
+        if (event && typeof event.type === "string") {
+          onEvent(event);
+          if (event.type === "finish") return;
+        }
+      } catch { /* skip malformed */ }
+    }
+  }
+}
+
+function startJobStreaming(jobId: string, assistantId: string, cb: StreamCallbacks): void {
+  void streamJobEvents({
+    apiBaseUrl: cb.apiBaseUrl,
+    jobId,
+    onStage: (stage) => {
+      cb.runtimeApplyEvent({
+        stage: stage.step,
+        label: stage.label ?? getStageLabel(stage.step),
+        progress: stage.progress,
+        status: stage.status,
+        metadata: stage.metadata,
+        error_message: stage.error_message,
+      });
+    },
+  }).then((jobResult) => {
+    if (jobResult.finalStatus === "succeeded") {
+      cb.completeLatestTool(assistantId, {
+        job_id: jobId,
+        design_id: jobResult.design_id,
+        version_no: jobResult.version_no,
+        status: "succeeded",
+        files: jobResult.files ? Object.keys(jobResult.files) : undefined,
+      });
+    } else {
+      cb.failLatestTool(assistantId, jobResult.error_message ?? "生成失败", jobId);
+    }
+  }).catch((err) => {
+    cb.failLatestTool(assistantId, err instanceof Error ? err.message : "Job stream failed", jobId);
+  });
+}
+
+async function handleAiSdkStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  assistantId: string,
+  cb: StreamCallbacks,
+): Promise<void> {
+  await parseDataStream(reader, decoder, (event) => {
+    switch (event.type) {
+      case "text-delta": {
+        const delta = event.delta as string;
+        if (delta) cb.appendAssistantText(assistantId, delta);
+        break;
+      }
+      case "tool-call": {
+        const toolName = event.toolName as string;
+        const args = (event.args ?? {}) as Record<string, unknown>;
+        cb.appendToolCall(assistantId, toolName, args);
+        cb.runtimeTransitionToReal();
+        break;
+      }
+      case "tool-result": {
+        const result = event.result as Record<string, unknown>;
+        const jobId = result?.job_id as string | undefined;
+        if (jobId && result?.status === "started") {
+          startJobStreaming(jobId, assistantId, cb);
+        } else if (result?.version_no || result?.status === "succeeded") {
+          cb.completeLatestTool(assistantId, result as unknown as GenerationCompleteData);
+        }
+        break;
+      }
+    }
+  });
+}
+
+async function handleLegacyStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  assistantId: string,
+  cb: StreamCallbacks,
+): Promise<void> {
+  await parseDataStream(reader, decoder, (event) => {
+    switch (event.type) {
+      case "text-delta": {
+        const delta = event.delta as string;
+        if (delta) cb.appendAssistantText(assistantId, delta);
+        break;
+      }
+      case "tool-input-available": {
+        const toolName = event.toolName as string;
+        const input = (event.input ?? {}) as Record<string, unknown>;
+        cb.appendToolCall(assistantId, toolName, input);
+        cb.runtimeTransitionToReal();
+        break;
+      }
+      case "generation-started": {
+        const jobId = event.job_id as string;
+        if (jobId) {
+          startJobStreaming(jobId, assistantId, cb);
+        }
+        break;
+      }
+      case "tool-output-available": {
+        const output = event.output as Record<string, unknown>;
+        if (output?.version_no) {
+          cb.completeLatestTool(assistantId, output as unknown as GenerationCompleteData);
+        }
+        break;
+      }
+    }
+  });
+}
 
 export function ChatPanel({
   conversationId,
@@ -335,15 +476,49 @@ export function ChatPanel({
       runtime.applyPreliminaryStages(["understanding_requirements", "generating_spec"]);
       onGenerationStage?.(getStageLabel("understanding_requirements"), 0, true);
 
-      const parser = createChatSseParser();
+      // Read LLM settings from localStorage
+      let llmSettings: Record<string, string> | undefined;
       try {
-        const response = await fetch(`${apiBaseUrl}/api/chat`, {
+        const { getLlmSettings } = await import("@/lib/llmSettings");
+        const settings = getLlmSettings();
+        if (settings.modelName || settings.apiKey || settings.baseUrl) {
+          llmSettings = {
+            modelName: settings.modelName,
+            apiKey: settings.apiKey,
+            baseUrl: settings.baseUrl,
+          };
+        }
+      } catch { /* ignore */ }
+
+      // Build messages in AI SDK UIMessage format
+      const uiMessages = messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          parts: m.parts.map((p) => {
+            if (p.type === "text") return { type: "text" as const, text: p.text };
+            return { type: "text" as const, text: "" };
+          }),
+        }));
+      // Add the current user message
+      uiMessages.push({
+        id: userId,
+        role: "user" as const,
+        parts: [{ type: "text" as const, text: trimmed }],
+      });
+
+      try {
+        const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             conversation_id: conversationId,
             message: trimmed,
             selected_refs: selectedRefs,
+            messages: uiMessages,
+            llm_settings: llmSettings,
+            mode: llmSettings ? undefined : "legacy",
           }),
         });
 
@@ -351,116 +526,23 @@ export function ChatPanel({
           throw new Error(`Chat API failed with status ${response.status}`);
         }
 
+        const useAiSdk = !!llmSettings;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        const cb: StreamCallbacks = {
+          appendAssistantText,
+          appendToolCall,
+          completeLatestTool,
+          failLatestTool,
+          runtimeApplyEvent: runtime.applyEvent,
+          runtimeTransitionToReal: runtime.transitionToRealStages,
+          apiBaseUrl,
+        };
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          for (const event of parser.push(decoder.decode(value, { stream: true }))) {
-            if (event.type === "message") {
-              appendAssistantText(assistantId, String(event.data.content ?? ""));
-            } else if (event.type === "tool_call") {
-              let args: Record<string, unknown> = {};
-              try {
-                args = JSON.parse(String(event.data.arguments ?? "{}"));
-              } catch {
-                args = {};
-              }
-              appendToolCall(assistantId, String(event.data.name ?? ""), args);
-            } else if (event.type === "generation_started") {
-              const jobId = String(event.data.job_id ?? event.data.id ?? "");
-              runtime.transitionToRealStages();
-              onGenerationStage?.(getStageLabel(runtime.state.currentStage ?? "generating_cad"), runtime.state.progress, true, { artifacts: runtime.state.artifacts });
-              if (jobId) {
-                const ctrl = new AbortController();
-                void streamJobEvents({
-                  apiBaseUrl,
-                  jobId,
-                  signal: ctrl.signal,
-                  onStage: (stage) => {
-                    appendWorkflowStage(assistantId, stage);
-                    const runtimeEvent: WorkflowStageEvent = {
-                      stage: stage.stage ?? stage.step,
-                      label: stage.label ?? getStageLabel(stage.stage ?? stage.step),
-                      progress: stage.progress,
-                      status: stage.status,
-                      metadata: stage.metadata,
-                      error_message: stage.error_message,
-                    };
-                    runtime.applyEvent(runtimeEvent);
-                    appendRuntimeStage(assistantId, runtime.state.stages, runtime.state.progress, runtime.state.elapsedTime);
-                    onGenerationStage?.(
-                      getStageLabel(runtime.state.currentStage ?? stage.step),
-                      runtime.state.progress,
-                      true,
-                      { artifacts: runtime.state.artifacts, error: runtime.state.error?.message },
-                    );
-                  },
-                })
-                  .then((result) => {
-                    const jobResult = toJobPollResult(result, jobId);
-                    if (result.finalStatus === "succeeded") {
-                      runtime.markCompleted(jobResult.files);
-                    }
-                    const eventData = event.data as GenerationCompleteData;
-                    completeLatestTool(assistantId, {
-                      ...eventData,
-                      ...jobResult,
-                      // Preserve design_id from event.data if jobResult doesn't have it
-                      design_id: jobResult.design_id || eventData.design_id,
-                      job_id: jobId,
-                    });
-                    onGenerationStage?.(null, 0, false);
-                  })
-                  .catch(() => {
-                    // Fallback to polling if SSE stream fails
-                    void resolveGenerationJob({ apiBaseUrl, jobId })
-                      .then((job) => {
-                        const eventData = event.data as GenerationCompleteData;
-                        completeLatestTool(assistantId, {
-                          ...eventData,
-                          ...job,
-                          design_id: job.design_id || eventData.design_id,
-                          job_id: job.id,
-                        });
-                        onGenerationStage?.(null, 0, false);
-                      })
-                      .catch((exc) => {
-                        const message = exc instanceof Error ? exc.message : "生成任务失败";
-                        failLatestTool(assistantId, message, jobId);
-                        onGenerationStage?.(null, 0, false, { error: message });
-                      });
-                  });
-              }
-            } else if (event.type === "generation_complete") {
-              const jobId = String(event.data.job_id ?? event.data.id ?? "");
-              if (jobId && event.data.status !== "succeeded") {
-                void resolveGenerationJob({ apiBaseUrl, jobId })
-                  .then((job) => {
-                    const eventData = event.data as GenerationCompleteData;
-                    completeLatestTool(assistantId, {
-                      ...eventData,
-                      ...job,
-                      design_id: job.design_id || eventData.design_id,
-                      job_id: job.id,
-                    });
-                    onGenerationStage?.(null, 0, false);
-                  })
-                  .catch((exc) => {
-                    const message = exc instanceof Error ? exc.message : "生成任务失败";
-                    failLatestTool(assistantId, message, jobId);
-                    onGenerationStage?.(null, 0, false, { error: message });
-                  });
-              } else {
-                completeLatestTool(assistantId, event.data as GenerationCompleteData);
-                onGenerationStage?.(null, 0, false);
-              }
-            } else if (event.type === "error") {
-              appendMessage("error", String(event.data.content ?? "未知错误"));
-            }
-          }
+        if (useAiSdk) {
+          await handleAiSdkStream(reader, decoder, assistantId, cb);
+        } else {
+          await handleLegacyStream(reader, decoder, assistantId, cb);
         }
       } catch (exc) {
         const message = exc instanceof Error ? exc.message : "Chat 请求失败";
@@ -474,9 +556,7 @@ export function ChatPanel({
       apiBaseUrl,
       appendAssistantText,
       appendMessage,
-      appendRuntimeStage,
       appendToolCall,
-      appendWorkflowStage,
       completeLatestTool,
       failLatestTool,
       conversationId,

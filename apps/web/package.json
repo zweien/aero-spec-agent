@@ -8,6 +8,7 @@
     "build": "next build"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.64",
     "@ai-sdk/react": "^3.0.184",
     "ai": "^6.0.182",
     "next": "^14.2.0",
@@ -15,7 +16,8 @@
     "react-dom": "^18.3.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
