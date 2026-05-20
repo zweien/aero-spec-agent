@@ -9,6 +9,9 @@ export type WorkflowStage = {
   duration_ms?: number;
   files?: Record<string, string>;
   version_no?: number;
+  stage?: string;
+  label?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type JobStreamResult = {
@@ -95,6 +98,22 @@ export async function streamJobEvents(opts: StreamOptions): Promise<JobStreamRes
     for (const evt of events) {
       try {
         const parsed = JSON.parse(evt.data);
+
+        if (evt.type === "workflow_stage") {
+          const stage: WorkflowStage = {
+            step: parsed.current_step ?? parsed.stage ?? "",
+            progress: parsed.progress ?? 0,
+            status: parsed.status ?? "running",
+            timestamp: parsed.timestamp ?? "",
+            stage: parsed.stage ?? "",
+            label: parsed.label ?? "",
+            metadata: parsed.metadata,
+          };
+          stages.push(stage);
+          onStage?.(stage);
+          continue; // Not terminal, continue processing
+        }
+
         const stage: WorkflowStage = {
           step: parsed.current_step ?? "",
           progress: parsed.progress ?? 0,

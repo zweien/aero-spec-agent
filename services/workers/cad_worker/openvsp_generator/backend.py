@@ -18,6 +18,8 @@ from services.workers.cad_worker.openvsp_generator.verify_model import (
     verify_vsp3_file,
 )
 
+ProgressCallback = Callable[[str, int], None]
+
 
 @dataclass(frozen=True)
 class CadArtifacts:
@@ -29,12 +31,12 @@ class CadArtifacts:
 
 
 class CadBackend(Protocol):
-    def generate(self, spec: AircraftSpec, output_dir: Path) -> CadArtifacts:
+    def generate(self, spec: AircraftSpec, output_dir: Path, *, on_progress: "ProgressCallback | None" = None) -> CadArtifacts:
         """Generate CAD artifacts."""
 
 
 class FakeCadBackend:
-    def generate(self, spec: AircraftSpec, output_dir: Path) -> CadArtifacts:
+    def generate(self, spec: AircraftSpec, output_dir: Path, *, on_progress: ProgressCallback | None = None) -> CadArtifacts:
         output_dir.mkdir(parents=True, exist_ok=True)
         vsp3 = output_dir / "aircraft.vsp3"
         step = output_dir / "aircraft.step"
@@ -61,17 +63,21 @@ class OpenVspBackend:
         self._obj_to_glb = obj_to_glb
         self._vsp_module = vsp_module
 
-    def generate(self, spec: AircraftSpec, output_dir: Path) -> CadArtifacts:
+    def generate(self, spec: AircraftSpec, output_dir: Path, *, on_progress: ProgressCallback | None = None) -> CadArtifacts:
         output_dir.mkdir(parents=True, exist_ok=True)
         adapter = OpenVspAdapter(module=self._vsp_module)
         adapter.clear_model()
 
         build_results: list[GeometryBuildResult] = [
             create_fuselage(adapter, spec),
-            create_main_wing(adapter, spec),
-            *create_tail(adapter, spec),
-            *create_engine_nacelles(adapter, spec),
         ]
+        if on_progress: on_progress("fuselage_created", 62)
+        build_results.append(create_main_wing(adapter, spec))
+        if on_progress: on_progress("wing_created", 68)
+        build_results.extend(create_tail(adapter, spec))
+        if on_progress: on_progress("tail_created", 72)
+        build_results.extend(create_engine_nacelles(adapter, spec))
+        if on_progress: on_progress("engine_created", 76)
 
         adapter.update()
 
@@ -80,6 +86,7 @@ class OpenVspBackend:
         obj = output_dir / "aircraft.obj"
         glb = output_dir / "aircraft.glb"
         adapter.write_vsp_file(vsp3)
+        if on_progress: on_progress("vsp_model_saved", 82)
 
         vspaero_data: dict[str, Any] = {}
         if _vspaero_enabled():
@@ -97,10 +104,13 @@ class OpenVspBackend:
                 except Exception as exc:
                     vspaero_data = {"status": "failed", "error_message": str(exc)}
         adapter.export_file(step, "EXPORT_STEP")
+        if on_progress: on_progress("step_exported", 86)
         adapter.export_file(obj, "EXPORT_OBJ")
         self._obj_to_glb(obj, glb)
+        if on_progress: on_progress("glb_exported", 92)
 
         applied_parameters = _stable_applied_parameters(build_results)
+        if on_progress: on_progress("preview_ready", 96)
         vsp3_validation = verify_vsp3_file(vsp3)
         step_validation = verify_vsp3_file(step)
         obj_validation = verify_vsp3_file(obj)

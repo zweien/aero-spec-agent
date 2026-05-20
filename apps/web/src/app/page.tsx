@@ -98,6 +98,9 @@ export default function Home() {
   const [compareData, setCompareData] = useState<[VersionResponse, VersionResponse] | null>(null);
   const [selectedRefs, setSelectedRefs] = useState<string[]>([]);
   const [rightTab, setRightTab] = useState<"parameters" | "deep-design">("parameters");
+  const [generationStage, setGenerationStage] = useState<string | null>(null);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
   const deepDesignStream = useDeepDesignStream();
 
   const chatSystemMessageRef = useRef<((text: string) => void) | null>(null);
@@ -367,6 +370,11 @@ export default function Home() {
             registerSystemMessage={registerSystemMessage}
             registerToolAction={registerToolAction}
             selectedRefs={selectedRefs}
+            onGenerationStage={(stage, progress, generating) => {
+              setGenerationStage(stage);
+              setGenerationProgress(progress);
+              setIsGenerating(generating);
+            }}
           />
         </div>
         <div
@@ -380,6 +388,9 @@ export default function Home() {
               modelUrl={previewSource?.url}
               spec={previewSpec}
               onSelectPart={handleSelectPart}
+              generationStage={generationStage}
+              generationProgress={generationProgress}
+              isGenerating={isGenerating}
             />
           </div>
           <div className="right-panel">

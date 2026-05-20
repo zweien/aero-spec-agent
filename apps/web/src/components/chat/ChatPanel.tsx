@@ -6,6 +6,14 @@ import remarkGfm from "remark-gfm";
 
 import { buildVersionFileUrl } from "@/components/cad-viewer/cadPreviewSource";
 import { resolveGenerationJob } from "@/lib/generationFlow";
+import { UnifiedWorkflowTimeline } from "@/components/runtime/UnifiedWorkflowTimeline";
+import { WorkflowErrorCard } from "@/components/runtime/WorkflowErrorCard";
+import {
+  useWorkflowRuntime,
+  getStageLabel,
+  type WorkflowRuntimeStage,
+  type WorkflowStageEvent,
+} from "@/hooks/useWorkflowRuntime";
 import { createChatSseParser } from "./chatSse";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import {
@@ -13,7 +21,6 @@ import {
   toJobPollResult,
   type WorkflowStage,
 } from "./useJobEventStream";
-import { WorkflowTimeline } from "./WorkflowTimeline";
 
 export type GenerationCompleteData = {
   job_id?: string;
@@ -40,6 +47,9 @@ type ToolPart = {
   output?: Record<string, unknown>;
   state: "running" | "done";
   workflowStages?: WorkflowStage[];
+  runtimeStages?: WorkflowRuntimeStage[];
+  runtimeProgress?: number;
+  runtimeElapsedTime?: number;
 };
 
 type ChatMessage = {
@@ -62,6 +72,7 @@ type ChatPanelProps = {
   registerSystemMessage?: (fn: (text: string) => void) => void;
   registerToolAction?: (fn: (toolName: string, args: Record<string, unknown>) => ToolActionHandle) => void;
   selectedRefs?: string[];
+  onGenerationStage?: (stage: string | null, progress: number, isGenerating: boolean) => void;
 };
 
 const PART_REF_LABELS: Record<string, string> = {
@@ -87,6 +98,7 @@ export function ChatPanel({
   registerSystemMessage,
   registerToolAction,
   selectedRefs = [],
+  onGenerationStage,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -94,6 +106,7 @@ export function ChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const messageCounterRef = useRef(1);
   const toolCounterRef = useRef(1);
+  const runtime = useWorkflowRuntime();
 
   const isStreaming = status === "streaming";
 
@@ -234,6 +247,23 @@ export function ChatPanel({
     );
   }, []);
 
+  const appendRuntimeStage = useCallback((messageId: string, stages: WorkflowRuntimeStage[], progress: number, elapsedTime: number) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        const parts = [...msg.parts];
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const part = parts[i];
+          if (part.type === "tool" && part.state === "running") {
+            parts[i] = { ...part, runtimeStages: stages, runtimeProgress: progress, runtimeElapsedTime: elapsedTime };
+            break;
+          }
+        }
+        return { ...msg, parts };
+      }),
+    );
+  }, []);
+
   const completeLatestTool = useCallback(
     (messageId: string, output: GenerationCompleteData) => {
       setMessages((prev) =>
@@ -301,6 +331,9 @@ export function ChatPanel({
         },
       ]);
       setStatus("streaming");
+      runtime.reset();
+      runtime.applyPreliminaryStages(["understanding_requirements", "generating_spec"]);
+      onGenerationStage?.(getStageLabel("understanding_requirements"), 0, true);
 
       const parser = createChatSseParser();
       try {
@@ -338,21 +371,44 @@ export function ChatPanel({
               appendToolCall(assistantId, String(event.data.name ?? ""), args);
             } else if (event.type === "generation_started") {
               const jobId = String(event.data.job_id ?? event.data.id ?? "");
+              runtime.transitionToRealStages();
+              onGenerationStage?.(getStageLabel(runtime.state.currentStage ?? "generating_cad"), runtime.state.progress, true);
               if (jobId) {
                 const ctrl = new AbortController();
                 void streamJobEvents({
                   apiBaseUrl,
                   jobId,
                   signal: ctrl.signal,
-                  onStage: (stage) => appendWorkflowStage(assistantId, stage),
+                  onStage: (stage) => {
+                    appendWorkflowStage(assistantId, stage);
+                    const runtimeEvent: WorkflowStageEvent = {
+                      stage: stage.stage ?? stage.step,
+                      label: stage.label ?? getStageLabel(stage.stage ?? stage.step),
+                      progress: stage.progress,
+                      status: stage.status,
+                      metadata: stage.metadata,
+                      error_message: stage.error_message,
+                    };
+                    runtime.applyEvent(runtimeEvent);
+                    appendRuntimeStage(assistantId, runtime.state.stages, runtime.state.progress, runtime.state.elapsedTime);
+                    onGenerationStage?.(
+                      getStageLabel(runtime.state.currentStage ?? stage.step),
+                      runtime.state.progress,
+                      true,
+                    );
+                  },
                 })
                   .then((result) => {
                     const jobResult = toJobPollResult(result, jobId);
+                    if (result.finalStatus === "succeeded") {
+                      runtime.markCompleted(jobResult.files);
+                    }
                     completeLatestTool(assistantId, {
                       ...(event.data as GenerationCompleteData),
                       ...jobResult,
                       job_id: jobId,
                     });
+                    onGenerationStage?.(null, 0, false);
                   })
                   .catch(() => {
                     // Fallback to polling if SSE stream fails
@@ -363,10 +419,12 @@ export function ChatPanel({
                           ...job,
                           job_id: job.id,
                         });
+                        onGenerationStage?.(null, 0, false);
                       })
                       .catch((exc) => {
                         const message = exc instanceof Error ? exc.message : "生成任务失败";
                         failLatestTool(assistantId, message, jobId);
+                        onGenerationStage?.(null, 0, false);
                       });
                   });
               }
@@ -380,13 +438,16 @@ export function ChatPanel({
                       ...job,
                       job_id: job.id,
                     });
+                    onGenerationStage?.(null, 0, false);
                   })
                   .catch((exc) => {
                     const message = exc instanceof Error ? exc.message : "生成任务失败";
                     failLatestTool(assistantId, message, jobId);
+                    onGenerationStage?.(null, 0, false);
                   });
               } else {
                 completeLatestTool(assistantId, event.data as GenerationCompleteData);
+                onGenerationStage?.(null, 0, false);
               }
             } else if (event.type === "error") {
               appendMessage("error", String(event.data.content ?? "未知错误"));
@@ -398,17 +459,21 @@ export function ChatPanel({
         appendMessage("error", message);
       } finally {
         setStatus("idle");
+        onGenerationStage?.(null, 0, false);
       }
     },
     [
       apiBaseUrl,
       appendAssistantText,
       appendMessage,
+      appendRuntimeStage,
       appendToolCall,
       appendWorkflowStage,
       completeLatestTool,
       failLatestTool,
       conversationId,
+      onGenerationStage,
+      runtime,
       selectedRefs,
       status,
     ],
@@ -505,9 +570,11 @@ export function ChatPanel({
                   }
                   return null;
                 })}
-                {showPreliminaryTimeline && (
-                  <WorkflowTimeline
-                    stages={[{ step: "writing_spec", progress: 10, status: "running", timestamp: "" }]}
+                {showPreliminaryTimeline && runtime.state.stages.length > 0 && (
+                  <UnifiedWorkflowTimeline
+                    stages={runtime.state.stages}
+                    mode="normal"
+                    elapsedTime={runtime.state.elapsedTime}
                   />
                 )}
               </div>
@@ -570,12 +637,17 @@ export function ChatPanel({
 
 function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) {
   const [expanded, setExpanded] = useState(false);
+  const [showDiag, setShowDiag] = useState(false);
   const toolName = part.toolName;
   const label = TOOL_LABELS[toolName] ?? toolName;
   const isRunning = part.state === "running";
   const result = part.output as GenerationCompleteData | undefined;
   const isFailed = !isRunning && result?.job_id && !result?.version_no;
   const failedJobId = isFailed ? result!.job_id : undefined;
+
+  // Find the failed stage label from runtime stages
+  const failedRuntimeStage = part.runtimeStages?.find((s) => s.status === "failed");
+  const failedStageLabel = failedRuntimeStage?.label ?? "未知阶段";
 
   return (
     <div
@@ -610,15 +682,48 @@ function ToolCard({ part, apiBaseUrl }: { part: ToolPart; apiBaseUrl: string }) 
         </div>
       )}
 
-      {part.workflowStages && part.workflowStages.length > 0 && (
-        <WorkflowTimeline stages={part.workflowStages} />
+      {part.runtimeStages && part.runtimeStages.length > 0 ? (
+        <UnifiedWorkflowTimeline
+          stages={part.runtimeStages}
+          mode="normal"
+          elapsedTime={part.runtimeElapsedTime}
+        />
+      ) : part.workflowStages && part.workflowStages.length > 0 ? (
+        <UnifiedWorkflowTimeline
+          stages={part.workflowStages.map((s) => ({
+            stage: s.stage ?? s.step,
+            label: s.label ?? getStageLabel(s.stage ?? s.step),
+            status: (s.status === "succeeded" ? "completed" : s.status === "failed" ? "failed" : s.status === "running" ? "running" : "pending") as "completed" | "running" | "pending" | "failed",
+            startedAt: null,
+            completedAt: null,
+            durationMs: s.duration_ms ?? null,
+          }))}
+          mode="normal"
+        />
+      ) : null}
+
+      {isRunning && part.runtimeProgress != null && part.runtimeProgress > 0 && (
+        <div className="workflow-progress-bar" style={{ marginTop: "8px" }}>
+          <div style={{ height: "4px", background: "var(--border-default)", borderRadius: "2px", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.min(part.runtimeProgress, 100)}%`, background: "var(--accent)", borderRadius: "2px", transition: "width 0.3s ease-out" }} />
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>{part.runtimeProgress}%</div>
+        </div>
       )}
 
       {!isRunning && result?.message && (
         <div className="tool-card-message">{result.message}</div>
       )}
 
-      {isFailed && failedJobId && (
+      {isFailed && !isRunning && (
+        <WorkflowErrorCard
+          failedStage={failedStageLabel}
+          errorMessage={result?.message ?? "生成失败"}
+          onViewLogs={failedJobId ? () => setShowDiag(!showDiag) : undefined}
+        />
+      )}
+
+      {isFailed && showDiag && failedJobId && (
         <DiagnosticsPanel apiBaseUrl={apiBaseUrl} jobId={failedJobId} />
       )}
 

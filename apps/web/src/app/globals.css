@@ -1663,3 +1663,31 @@ textarea:focus {
 .compare-status-warn { color: #facc15; }
 .compare-status-fail { color: #f87171; }
 .compare-status-skip { color: var(--text-muted); }
+
+/* =============================================
+   WORKFLOW RUNTIME TRANSPARENCY
+   ============================================= */
+
+.workflow-progress-bar {
+  margin-top: 8px;
+}
+
+.workflow-error-card {
+  border: 1px solid var(--error);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.cad-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}

@@ -3,6 +3,7 @@ export type ChatSseEventType =
   | "tool_call"
   | "generation_started"
   | "generation_complete"
+  | "workflow_stage"
   | "error";
 
 export type ChatSseEvent = {
@@ -15,6 +16,7 @@ const CHAT_EVENT_TYPES = new Set<string>([
   "tool_call",
   "generation_started",
   "generation_complete",
+  "workflow_stage",
   "error",
 ]);
 

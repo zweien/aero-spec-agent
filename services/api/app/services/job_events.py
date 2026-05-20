@@ -30,6 +30,7 @@ class JobEventType(str, Enum):
     PROGRESS = "job_progress"
     COMPLETED = "job_completed"
     FAILED = "job_failed"
+    WORKFLOW_STAGE = "workflow_stage"
 
 
 TERMINAL_TYPES = (JobEventType.COMPLETED, JobEventType.FAILED)
@@ -47,6 +48,9 @@ class JobEvent:
     error_message: str | None = None
     files: dict[str, str] = field(default_factory=dict)
     duration_ms: float | None = None
+    stage: str = ""
+    label: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.timestamp:

@@ -61,6 +61,7 @@ def _map_event_type(event_type: str) -> str:
         "job_progress": "generation_progress",
         "job_completed": "generation_complete",
         "job_failed": "generation_failed",
+        "workflow_stage": "workflow_stage",
     }
     return mapping.get(event_type, event_type)
 
@@ -83,4 +84,10 @@ def _build_payload(ev: dict[str, Any]) -> dict[str, Any]:
         payload["progress"] = ev["progress"]
     if ev.get("current_step"):
         payload["current_step"] = ev["current_step"]
+    if ev.get("stage"):
+        payload["stage"] = ev["stage"]
+    if ev.get("label"):
+        payload["label"] = ev["label"]
+    if ev.get("metadata"):
+        payload["metadata"] = ev["metadata"]
     return payload

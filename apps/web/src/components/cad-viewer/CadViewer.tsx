@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AircraftThreePreview } from "./AircraftThreePreview";
+import { CADLoadingOverlay } from "./CADLoadingOverlay";
 import type { CadPreviewFormat } from "./cadPreviewSource";
 import {
   cadPreviewStatusLabel,
@@ -18,9 +19,12 @@ type CadViewerProps = {
   modelUrl?: string;
   onSelectPart?: (partRef: string | null) => void;
   spec?: AircraftPreviewSpec | null;
+  generationStage?: string | null;
+  generationProgress?: number;
+  isGenerating?: boolean;
 };
 
-export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec }: CadViewerProps) {
+export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generationStage, generationProgress, isGenerating }: CadViewerProps) {
   const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
   const [drawingsPct, setDrawingsPct] = useState(28);
   const [topPct, setTopPct] = useState(50);
@@ -173,6 +177,11 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec }: CadView
         ) : (
           <span>等待生成模型</span>
         )}
+        <CADLoadingOverlay
+          currentStage={generationStage ?? null}
+          progress={generationProgress ?? 0}
+          visible={isGenerating ?? false}
+        />
       </div>
     </section>
   );

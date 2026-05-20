@@ -65,6 +65,12 @@ def _job_event_to_sse(event) -> str | None:
         evt_dict["error_message"] = event.error_message
     if event.duration_ms is not None:
         evt_dict["duration_ms"] = event.duration_ms
+    if getattr(event, "stage", ""):
+        evt_dict["stage"] = event.stage
+    if getattr(event, "label", ""):
+        evt_dict["label"] = event.label
+    if getattr(event, "metadata", None):
+        evt_dict["metadata"] = event.metadata
     return convert_job_event_to_sse(evt_dict)
 
 

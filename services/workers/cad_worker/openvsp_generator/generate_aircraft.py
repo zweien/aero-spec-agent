@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
-from services.workers.cad_worker.openvsp_generator.backend import CadArtifacts, CadBackend
+from services.workers.cad_worker.openvsp_generator.backend import CadArtifacts, CadBackend, ProgressCallback
 from services.workers.cad_worker.openvsp_generator.design_rules import run_design_rules
 from services.workers.cad_worker.openvsp_generator.performance_estimate import run_performance_estimate
 from services.workers.cad_worker.openvsp_generator.verify_model import verification_entry
@@ -62,8 +62,12 @@ def _glb_parseable_entry(path: Path) -> dict[str, Any]:
     return verification_entry(True, actual)
 
 
-def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend) -> GenerationResult:
-    artifacts = backend.generate(spec, output_dir)
+def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend, *, on_progress: ProgressCallback | None = None) -> GenerationResult:
+    try:
+        artifacts = backend.generate(spec, output_dir, on_progress=on_progress)
+    except TypeError:
+        # Backward compat: legacy backends that don't accept on_progress yet
+        artifacts = backend.generate(spec, output_dir)
     artifact_files = _artifact_files(artifacts)
     backend_name = str(artifacts.metadata.get("backend", backend.__class__.__name__))
     generation_log_path = output_dir / "generation_log.json"

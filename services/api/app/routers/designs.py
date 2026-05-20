@@ -70,6 +70,7 @@ _SSE_EVENT_MAP = {
     JobEventType.PROGRESS: "generation_progress",
     JobEventType.COMPLETED: "generation_complete",
     JobEventType.FAILED: "generation_failed",
+    JobEventType.WORKFLOW_STAGE: "workflow_stage",
 }
 
 
@@ -112,6 +113,12 @@ async def _stream_job_events(job_id: str) -> AsyncIterator[str]:
                 payload["duration_ms"] = event.duration_ms
             if event.files:
                 payload["files"] = event.files
+            if event.stage:
+                payload["stage"] = event.stage
+            if event.label:
+                payload["label"] = event.label
+            if event.metadata:
+                payload["metadata"] = event.metadata
 
             yield _sse_line(sse_type, payload)
 

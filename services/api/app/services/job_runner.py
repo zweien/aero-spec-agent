@@ -14,6 +14,17 @@ from services.workers.cad_worker.openvsp_generator.generate_aircraft import gene
 
 logger = logging.getLogger(__name__)
 
+CAD_STAGE_LABELS: dict[str, str] = {
+    "fuselage_created": "正在生成机身",
+    "wing_created": "正在生成机翼",
+    "tail_created": "正在生成尾翼",
+    "engine_created": "正在生成发动机",
+    "vsp_model_saved": "正在保存模型",
+    "step_exported": "正在导出 STEP 文件",
+    "glb_exported": "正在导出 3D 模型",
+    "preview_ready": "三维预览准备就绪",
+}
+
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -114,14 +125,22 @@ class JobRunner:
         try:
             self.store.write_spec(job.design_id, job.version_no, spec)
 
-            # Emit fine-grained CAD progress events
-            for step_name, step_progress in [
-                ("geometry_building", 25),
-                ("mesh_export", 40),
-                ("report_generating", 50),
+            # Emit workflow_stage + backward-compatible PROGRESS events
+            for ws_stage, ws_label, ws_progress in [
+                ("generating_spec", "生成飞机参数", 10),
+                ("validating_parameters", "校验设计参数", 20),
             ]:
-                job.current_step = step_name
-                job.progress = step_progress
+                bus.publish(JobEvent(
+                    type=JobEventType.WORKFLOW_STAGE,
+                    job_id=job.id,
+                    design_id=job.design_id,
+                    version_no=job.version_no,
+                    stage=ws_stage,
+                    label=ws_label,
+                    progress=ws_progress,
+                ))
+                job.current_step = ws_stage
+                job.progress = ws_progress
                 job.updated_at = _utcnow()
                 self._save_job(job)
                 bus.publish(JobEvent(
@@ -129,23 +148,35 @@ class JobRunner:
                     job_id=job.id,
                     design_id=job.design_id,
                     version_no=job.version_no,
-                    progress=job.progress,
-                    current_step=job.current_step,
+                    progress=ws_progress,
+                    current_step=ws_stage,
                 ))
 
-            job.current_step = "generating_cad"
-            job.progress = 60
-            job.updated_at = _utcnow()
-            self._save_job(job)
-            bus.publish(JobEvent(
-                type=JobEventType.PROGRESS,
-                job_id=job.id,
-                design_id=job.design_id,
-                version_no=job.version_no,
-                progress=job.progress,
-                current_step=job.current_step,
-            ))
-            result = generate_aircraft(spec=spec, output_dir=output_dir, backend=self.backend)
+            def _cad_progress(stage: str, progress: int) -> None:
+                label = CAD_STAGE_LABELS.get(stage, stage)
+                bus.publish(JobEvent(
+                    type=JobEventType.WORKFLOW_STAGE,
+                    job_id=job.id,
+                    design_id=job.design_id,
+                    version_no=job.version_no,
+                    stage=stage,
+                    label=label,
+                    progress=progress,
+                ))
+                job.current_step = stage
+                job.progress = progress
+                job.updated_at = _utcnow()
+                self._save_job(job)
+                bus.publish(JobEvent(
+                    type=JobEventType.PROGRESS,
+                    job_id=job.id,
+                    design_id=job.design_id,
+                    version_no=job.version_no,
+                    progress=progress,
+                    current_step=stage,
+                ))
+
+            result = generate_aircraft(spec=spec, output_dir=output_dir, backend=self.backend, on_progress=_cad_progress)
             job.status = success_status
             job.progress = 100
             job.current_step = success_status

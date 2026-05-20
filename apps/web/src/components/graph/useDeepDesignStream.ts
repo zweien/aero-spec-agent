@@ -166,6 +166,21 @@ function applyEvent(
     }
   }
 
+  // --- workflow_stage events (CAD sub-stages) ---
+  if (eventType === "workflow_stage") {
+    const stage = (data.stage as string) || "";
+    const label = (data.label as string) || stage;
+    next.events = [
+      ...next.events,
+      {
+        timestamp: toTimestamp(),
+        eventType: `stage:${stage}`,
+        jobId: (data.job_id as string) || undefined,
+        detail: label || undefined,
+      },
+    ];
+  }
+
   // --- message events (final result) ---
   if (eventType === "message") {
     const content = data.content as string;
