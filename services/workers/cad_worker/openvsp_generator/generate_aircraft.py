@@ -89,6 +89,8 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend,
         },
         "spec_echo": spec.model_dump(mode="json"),
     }
+    from services.api.app.services.spec_defaults import collect_defaulted_fields
+    validation_report["defaulted_fields"] = collect_defaulted_fields(spec.model_dump(mode="json"))
     for key, value in backend_validation.items():
         if key == "vsp3" and isinstance(value, dict):
             validation_report["vsp3"].update(value)

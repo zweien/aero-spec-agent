@@ -16,6 +16,8 @@ export type WorkflowStage = {
   metadata?: Record<string, unknown>;
 };
 
+export type DefaultedField = { path: string; label: string; value: number | string; unit?: string; reason: string };
+
 export type JobStreamResult = {
   stages: WorkflowStage[];
   finalStatus: "succeeded" | "failed" | "timeout";
@@ -24,6 +26,7 @@ export type JobStreamResult = {
   design_id?: string;
   duration_ms?: number;
   error_message?: string;
+  defaulted_fields?: DefaultedField[];
 };
 
 type StreamOptions = {
@@ -145,6 +148,9 @@ export async function streamJobEvents(opts: StreamOptions): Promise<JobStreamRes
             design_id: parsed.design_id ?? undefined,
             duration_ms: parsed.duration_ms,
             error_message: parsed.error_message,
+            defaulted_fields: Array.isArray(parsed.metadata?.defaulted_fields)
+              ? parsed.metadata.defaulted_fields as DefaultedField[]
+              : undefined,
           };
         }
 

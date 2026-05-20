@@ -29,6 +29,7 @@ export type GenerationCompleteData = {
   message?: string;
   error?: string;
   error_message?: string;
+  defaulted_fields?: { path: string; label: string; value: number | string; unit?: string; reason: string }[];
 };
 
 type ChatRole = "user" | "assistant" | "system" | "error";
@@ -208,6 +209,7 @@ async function startJobStreaming(jobId: string, assistantId: string, cb: StreamC
         version_no: jobResult.version_no,
         status: "succeeded",
         files: finalArtifacts,
+        defaulted_fields: jobResult.defaulted_fields,
       });
     } else {
       const errorMessage = jobResult.error_message ?? "生成失败";
@@ -1015,6 +1017,7 @@ export function ChatPanel({
 	                      stages={stages}
 	                      artifacts={toolPart.runtimeArtifacts ?? (((!toolPart || toolPart.state === "done") && result?.files) ? result.files : [])}
 	                      errorMessage={toolPart.runtimeError ?? (result?.status === "failed" ? result?.error_message ?? result?.error : undefined)}
+	                      defaultedFields={result?.defaulted_fields}
 	                    />
                   );
                 })()}

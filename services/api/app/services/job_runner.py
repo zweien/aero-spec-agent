@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.api.app.services.job_events import JobEvent, JobEventType, get_job_event_bus
+from services.api.app.services.spec_defaults import collect_defaulted_fields
 from services.api.app.services.workflow_events import (
     ARTIFACT_LABELS,
     CAD_STAGE_LABELS,
@@ -202,6 +203,7 @@ class JobRunner:
                 current_step="succeeded",
                 files=job.files,
                 duration_ms=job.duration_ms,
+                metadata={"defaulted_fields": collect_defaulted_fields(spec.model_dump(mode="json"))},
             ))
         except Exception as exc:
             # Store partial stage history even on failure

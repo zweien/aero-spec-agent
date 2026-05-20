@@ -2,6 +2,7 @@
 
 import { type JSX, useEffect, useRef, useState } from "react";
 import type { WorkflowRuntimeStage } from "@/hooks/useWorkflowRuntime";
+import { DefaultedFieldsNotice, type DefaultedField } from "@/components/runtime/DefaultedFieldsNotice";
 
 export type AgentRunDetailsProps = {
   id?: string;
@@ -11,6 +12,7 @@ export type AgentRunDetailsProps = {
   stages: WorkflowRuntimeStage[];
   artifacts: string[];
   errorMessage?: string;
+  defaultedFields?: DefaultedField[];
 };
 
 function formatDuration(ms: number | null): string {
@@ -32,6 +34,7 @@ export function AgentRunDetails({
   stages,
   artifacts,
   errorMessage,
+  defaultedFields,
 }: AgentRunDetailsProps): JSX.Element {
   const STORAGE_KEY = "agent-run-details-open";
   const [isOpen, setIsOpen] = useState<boolean>(() => {
@@ -126,6 +129,10 @@ export function AgentRunDetails({
               </div>
             ))}
           </>
+        )}
+
+        {defaultedFields && defaultedFields.length > 0 && (
+          <DefaultedFieldsNotice fields={defaultedFields} />
         )}
       </div>
     </details>

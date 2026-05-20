@@ -39,25 +39,7 @@ _CHAT_GENERATION_EXECUTOR = ThreadPoolExecutor(
 # Conversion helpers
 # ---------------------------------------------------------------------------
 
-_REQUIRED_DEFAULTS: dict[str, dict[str, Any]] = {
-    "fuselage.length": {"value": 5.0, "unit": "m", "source": "rule_default", "confidence": 0.5},
-    "wing.position": {"value": "mid", "source": "rule_default", "confidence": 0.5},
-    "wing.span": {"value": 6.0, "unit": "m", "source": "rule_default", "confidence": 0.5},
-    "wing.root_chord": {"value": 1.0, "unit": "m", "source": "rule_default", "confidence": 0.5},
-    "wing.tip_chord": {"value": 0.6, "unit": "m", "source": "rule_default", "confidence": 0.5},
-    "tail.type": {"value": "conventional", "source": "rule_default", "confidence": 0.5},
-}
-
-
-def _ensure_required_defaults(spec_data: dict[str, Any]) -> None:
-    for dotted_path, default in _REQUIRED_DEFAULTS.items():
-        keys = dotted_path.split(".")
-        target = spec_data
-        for key in keys[:-1]:
-            target = target.setdefault(key, {})
-        last_key = keys[-1]
-        if last_key not in target or not target[last_key]:
-            target[last_key] = default
+from services.api.app.services.spec_defaults import ensure_required_defaults  # noqa: E402
 
 
 def _flat_args_to_spec(args: dict[str, Any]) -> AircraftSpec:
@@ -105,7 +87,7 @@ def _flat_args_to_spec(args: dict[str, Any]) -> AircraftSpec:
                 target[last_key] = scalar
 
     # Fill required fields with rule_defaults if the LLM omitted them.
-    _ensure_required_defaults(spec_data)
+    ensure_required_defaults(spec_data)
 
     return AircraftSpec.model_validate(spec_data)
 

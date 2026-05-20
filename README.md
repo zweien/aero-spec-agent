@@ -173,18 +173,31 @@ npm run dev
 
 Open http://localhost:3900 and start describing your aircraft.
 
-> **New to the project?** Use `CAD_BACKEND=fake` — it generates deterministic placeholder artifacts instantly, no OpenVSP installation required. Ideal for user testing and feature exploration. See [User Beta Test Plan](docs/user-beta-test-plan.md) for structured test cases.
+### Recommended: Real-time Agent Run Mode
 
-For Manus-style real-time Agent Run testing, use the async chat path:
+For the best experience with live CAD sub-stage streaming, use the async mode:
 
 ```bash
-CAD_BACKEND=fake \
-FAKE_CAD_STEP_DELAY_MS=300 \
-CHAT_GENERATION_MODE=async \
-.venv/bin/python -m uvicorn services.api.app.main:app --host "$API_HOST" --port "$API_PORT"
+# Terminal 1 — Backend (async mode with visible stages)
+set -a && . ./.env && set +a
+CAD_BACKEND=fake CHAT_GENERATION_MODE=async FAKE_CAD_STEP_DELAY_MS=300 \
+  .venv/bin/python -m uvicorn services.api.app.main:app --host "$API_HOST" --port "$API_PORT"
+
+# Terminal 2 — Frontend (auto-loads .env.local)
+cd apps/web && npm run dev
 ```
 
-The legacy `sync` path is still available as the default fallback, but it blocks the request handler while CAD generation runs and cannot stream CAD sub-stages to `/api/jobs/{id}/stream` in real time.
+What you'll see:
+1. Type an aircraft description → AI generates parameters in real-time
+2. TaskRuntimeCard shows each CAD stage (机身→机翼→尾翼→发动机→导出)
+3. CADLoadingOverlay shows progress in the 3D viewer
+4. AgentRunActions: view model, deep design, export report, run details
+5. Blue notice if any parameters were auto-filled with defaults
+
+> `FAKE_CAD_STEP_DELAY_MS=300` slows each stage to 300ms for observation. Set to `0` for full speed.
+> The legacy `sync` mode is still available as fallback but cannot stream CAD sub-stages.
+
+See [Agent Run User Test Guide](docs/agent-run-user-test-guide.md) for detailed instructions.
 
 ### 4. Try Deep Design (Demo Flow)
 

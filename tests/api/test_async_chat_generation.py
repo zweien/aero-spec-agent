@@ -103,3 +103,55 @@ async def test_generate_design_sync_mode_keeps_legacy_generation_complete(tmp_pa
         "event: generation_complete",
     ]
     assert len(runner.generated_specs) == 1
+
+
+def test_spec_defaults_module_collects_defaulted_fields():
+    from services.api.app.services.spec_defaults import (
+        collect_defaulted_fields,
+        ensure_required_defaults,
+    )
+
+    spec_data: dict = {
+        "schema_version": "0.1",
+        "aircraft": {"name": "test", "type": "fixed_wing_uav", "layout": "conventional"},
+        "mission": {},
+        "fuselage": {},
+        "wing": {"span": {"value": 12.0, "unit": "m", "source": "user", "confidence": 1.0}},
+        "tail": {},
+        "engine": {},
+    }
+    ensure_required_defaults(spec_data)
+
+    defaulted = collect_defaulted_fields(spec_data)
+    paths = {f["path"] for f in defaulted}
+    assert "fuselage.length" in paths
+    assert "wing.position" in paths
+    assert "tail.type" in paths
+    # wing.span was user-provided, should NOT be in defaulted
+    assert "wing.span" not in paths
+    # Each entry has required keys
+    for f in defaulted:
+        assert "label" in f
+        assert "value" in f
+        assert "reason" in f
+
+
+def test_spec_defaults_no_defaults_when_all_provided():
+    from services.api.app.services.spec_defaults import (
+        collect_defaulted_fields,
+        ensure_required_defaults,
+    )
+
+    spec_data: dict = {
+        "fuselage": {"length": {"value": 5.0, "source": "user", "confidence": 1.0}},
+        "wing": {
+            "position": {"value": "high", "source": "user", "confidence": 1.0},
+            "span": {"value": 12.0, "source": "user", "confidence": 1.0},
+            "root_chord": {"value": 1.0, "source": "user", "confidence": 1.0},
+            "tip_chord": {"value": 0.5, "source": "user", "confidence": 1.0},
+        },
+        "tail": {"type": {"value": "conventional", "source": "user", "confidence": 1.0}},
+    }
+    ensure_required_defaults(spec_data)
+    defaulted = collect_defaulted_fields(spec_data)
+    assert defaulted == []
