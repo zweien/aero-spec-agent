@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // --- Types ---
 
@@ -82,6 +82,24 @@ const INITIAL_STATE: WorkflowRuntimeState = {
 export function useWorkflowRuntime() {
   const [state, setState] = useState<WorkflowRuntimeState>(INITIAL_STATE);
   const startTimeRef = useRef<number | null>(null);
+
+  // Tick elapsedTime + preliminary progress every ~200ms while running
+  useEffect(() => {
+    if (state.status !== "running" || !startTimeRef.current) return;
+    const id = setInterval(() => {
+      const now = Date.now();
+      setState((prev) => {
+        if (prev.status !== "running" || !startTimeRef.current) return prev;
+        const elapsed = now - startTimeRef.current!;
+        // During preliminary phase (no real stages completed yet), simulate progress 0→45%
+        const progress = prev.progress < 46
+          ? Math.min(45, Math.round(elapsed / 100))
+          : prev.progress;
+        return { ...prev, elapsedTime: elapsed, progress };
+      });
+    }, 200);
+    return () => clearInterval(id);
+  }, [state.status]);
 
   const reset = useCallback(() => {
     setState(INITIAL_STATE);
