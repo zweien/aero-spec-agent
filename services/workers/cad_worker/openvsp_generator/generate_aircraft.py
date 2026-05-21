@@ -133,6 +133,11 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend,
     vspaero_data = artifacts.metadata.get("vspaero_analysis")
     if vspaero_data:
         validation_report["vspaero_analysis"] = vspaero_data
+    from services.api.app.services.design_metrics import compute_design_metrics
+    validation_report["design_metrics"] = compute_design_metrics(
+        spec.model_dump(mode="json"),
+        validation_report.get("defaulted_fields"),
+    )
     generation_log = {
         "aircraft": spec.aircraft.name,
         "backend": backend_name,

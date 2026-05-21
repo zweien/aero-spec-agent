@@ -1,29 +1,36 @@
 import type { CompareItem, CompareMetrics } from "./types";
 
 type PerfEstimate = { estimate_id: string; value: number };
+type DesignMetrics = Record<string, unknown>;
 
 /**
  * Extract CompareMetrics from an item's spec, validationReport, and defaultedFields.
- * Purely client-side — no backend calls.
+ * Priority: validationReport.design_metrics (backend) > client-side computation.
  */
 export function extractCompareMetrics(item: CompareItem): CompareMetrics {
   const spec = item.spec ?? {};
   const vr = (item.validationReport ?? {}) as Record<string, unknown>;
+  const dm = (vr.design_metrics ?? null) as DesignMetrics | null;
   const perfEstimates = ((vr as Record<string, unknown>)?.performance_estimate as Record<string, unknown>)?.estimates as PerfEstimate[] | undefined;
   const defaultedFields = item.defaultedFields;
 
   const findEst = (id: string) => perfEstimates?.find((e) => e.estimate_id === id)?.value;
 
-  // wingspan_m — try multiple paths
+  // wingspan_m — backend > spec
   const wingspan_m =
+    (dm?.wingspan_m as number | undefined) ??
     numVal(spec, "wing.span") ??
     numVal(spec, "wingspan");
 
   // fuselage_length_m
-  const fuselage_length_m = numVal(spec, "fuselage.length");
+  const fuselage_length_m =
+    (dm?.fuselage_length_m as number | undefined) ??
+    numVal(spec, "fuselage.length");
 
-  // wing_area_m2 — prefer estimate, then fallback to trapezoidal
-  let wing_area_m2 = findEst("wing_area_m2") ?? findEst("wing_area");
+  // wing_area_m2 — backend > estimate > trapezoidal
+  let wing_area_m2 =
+    (dm?.wing_area_m2 as number | undefined) ??
+    findEst("wing_area_m2") ?? findEst("wing_area");
   if (wing_area_m2 == null) {
     const rootChord = numVal(spec, "wing.root_chord");
     const tipChord = numVal(spec, "wing.tip_chord");
@@ -32,24 +39,35 @@ export function extractCompareMetrics(item: CompareItem): CompareMetrics {
     }
   }
 
-  // aspect_ratio — prefer estimate, then compute from span/area
-  let aspect_ratio = findEst("aspect_ratio_perf");
+  // aspect_ratio — backend > estimate > compute
+  let aspect_ratio =
+    (dm?.aspect_ratio as number | undefined) ??
+    findEst("aspect_ratio_perf");
   if (aspect_ratio == null && wingspan_m != null && wing_area_m2 != null && wing_area_m2 > 0) {
     aspect_ratio = (wingspan_m * wingspan_m) / wing_area_m2;
   }
 
-  // estimated_lift_to_drag — prefer estimate, fallback to heuristic
-  let estimated_lift_to_drag = findEst("ld_cruise");
+  // estimated_lift_to_drag — backend > estimate > heuristic
+  let estimated_lift_to_drag =
+    (dm?.estimated_lift_to_drag as number | undefined) ??
+    findEst("ld_cruise");
   if (estimated_lift_to_drag == null && aspect_ratio != null) {
     estimated_lift_to_drag = clamp(8 + aspect_ratio * 0.7, 8, 22);
   }
 
-  // estimated_range_km / endurance_h
-  const estimated_range_km = findEst("range_est");
-  const estimated_endurance_h = findEst("endurance_est");
+  // estimated_range_km / endurance_h — backend > estimate
+  const estimated_range_km =
+    (dm?.estimated_range_km as number | undefined) ??
+    findEst("range_est");
 
-  // wing_loading_kg_m2
-  const wing_loading_kg_m2 = findEst("wing_loading_mtow");
+  const estimated_endurance_h =
+    (dm?.estimated_endurance_h as number | undefined) ??
+    findEst("endurance_est");
+
+  // wing_loading_kg_m2 — backend > estimate
+  const wing_loading_kg_m2 =
+    (dm?.wing_loading_kg_m2 as number | undefined) ??
+    findEst("wing_loading_mtow");
 
   // defaulted_fields_count — handle null array
   const defaulted_fields_count = Array.isArray(defaultedFields) ? defaultedFields.length : 0;
@@ -58,11 +76,14 @@ export function extractCompareMetrics(item: CompareItem): CompareMetrics {
   const coreMetrics = [wingspan_m, fuselage_length_m, wing_area_m2, aspect_ratio, estimated_lift_to_drag, estimated_range_km, estimated_endurance_h];
   const missing_metrics_count = coreMetrics.filter((v) => v == null).length;
 
-  // risk_level
-  let risk_level: CompareMetrics["risk_level"] = "low";
-  if (defaulted_fields_count >= 5) risk_level = "medium";
-  else if (aspect_ratio != null && aspect_ratio < 5) risk_level = "medium";
-  else if (missing_metrics_count >= 5) risk_level = "medium";
+  // risk_level — backend > client heuristic
+  const dmRisk = dm?.risk_level as CompareMetrics["risk_level"] | undefined;
+  let risk_level: CompareMetrics["risk_level"] = dmRisk ?? "low";
+  if (!dmRisk) {
+    if (defaulted_fields_count >= 5) risk_level = "medium";
+    else if (aspect_ratio != null && aspect_ratio < 5) risk_level = "medium";
+    else if (missing_metrics_count >= 5) risk_level = "medium";
+  }
 
   return {
     wingspan_m,

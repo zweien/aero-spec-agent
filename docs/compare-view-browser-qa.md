@@ -154,3 +154,34 @@ cd apps/web && npm run dev
 
 ### 阻塞项
 - LLM API 恢复后需重新执行完整端到端 QA
+
+---
+
+### 测试日期 2026-05-21
+
+### 环境
+- Browser: Chromium (Playwright CLI)
+- Backend: CAD_BACKEND=fake, CHAT_GENERATION_MODE=async, FAKE_CAD_STEP_DELAY_MS=300
+- LLM: MiniMax-M2.5 @ 192.168.2.220:3000/v1 (API 可达)
+
+### 测试结果
+
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| LLM API 连通性 | PASS | HTTP 200, 模型返回有效响应 |
+| Test Connection 端点 | PASS | /api/llm-test 对有效 API 返回 ok:true |
+| LLM 多配置管理 | PASS | localStorage 保存/切换/预设按钮正常 |
+| Tool Call (generate_design) | FAIL | MiniMax-M2.5 不调用 tools, 仅返回文本 |
+| VersionPanel 渲染 | BLOCKED | 依赖 tool call 触发生成 |
+| Compare View e2e | BLOCKED | 依赖 tool call 生成 v1 |
+
+### 根因分析
+
+MiniMax-M2.5 (cyankiwi/MiniMax-M2.7-AWQ-4bit, VLLM 0.20.1) **不支持 function calling / tool use**。
+模型忽略 AI SDK 传递的 tool definitions, 以纯文本回复设计参数, 不触发 generate_design tool call。
+无 tool call = 无 job = 无 v1 = VersionPanel 不渲染 = Compare View 无法测试。
+
+### 解决方案待选
+- (a) 更换支持 tool use 的 LLM (Qwen2.5, DeepSeek, Llama 3.1+)
+- (b) 检测无 tool call 时解析文本响应并触发生成
+- (c) 对不支持 tool use 的模型自动切换为 mode=legacy

@@ -54,6 +54,10 @@ def test_version_endpoint_returns_files(client: TestClient):
     assert response.status_code == 200
     assert "aircraft_spec.yaml" in response.json()["files"]
     assert response.json()["validation_report"]["engine.count"]["status"] == "pass"
+    dm = response.json()["validation_report"]["design_metrics"]
+    assert dm["wingspan_m"] is not None
+    assert dm["aspect_ratio"] is not None
+    assert dm["confidence"] in ("heuristic", "partial", "low")
 
 
 def test_version_file_endpoint_returns_generated_artifact(client: TestClient):

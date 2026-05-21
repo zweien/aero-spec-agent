@@ -111,4 +111,67 @@ describe("extractCompareMetrics", () => {
     assert.equal(m.fuselage_length_m, undefined);
     assert.equal(m.wing_area_m2, undefined);
   });
+
+  it("prefers design_metrics from backend over spec values", () => {
+    const item = makeItem({
+      spec: {
+        wing: { span: { value: 10 }, root_chord: { value: 1 }, tip_chord: { value: 0.5 } },
+        fuselage: { length: { value: 6 } },
+      },
+      validationReport: {
+        design_metrics: {
+          wingspan_m: 12.5,
+          fuselage_length_m: 8.3,
+          wing_area_m2: 14.0,
+          aspect_ratio: 11.16,
+          estimated_lift_to_drag: 15.8,
+          wing_loading_kg_m2: 71.4,
+          estimated_range_km: 200,
+          estimated_endurance_h: 5.5,
+          risk_level: "low",
+          confidence: "heuristic",
+          warnings: [],
+        },
+      },
+    });
+    const m = extractCompareMetrics(item);
+    assert.equal(m.wingspan_m, 12.5);
+    assert.equal(m.fuselage_length_m, 8.3);
+    assert.equal(m.wing_area_m2, 14.0);
+    assert.equal(m.aspect_ratio, 11.16);
+    assert.equal(m.estimated_lift_to_drag, 15.8);
+    assert.equal(m.wing_loading_kg_m2, 71.4);
+    assert.equal(m.estimated_range_km, 200);
+    assert.equal(m.estimated_endurance_h, 5.5);
+    assert.equal(m.risk_level, "low");
+  });
+
+  it("falls back to spec when design_metrics is missing", () => {
+    const item = makeItem({
+      spec: { wing: { span: { value: 10 } } },
+      validationReport: {},
+    });
+    const m = extractCompareMetrics(item);
+    assert.equal(m.wingspan_m, 10);
+  });
+
+  it("uses design_metrics risk_level over client heuristic", () => {
+    const item = makeItem({
+      defaultedFields: Array.from({ length: 6 }, (_, i) => ({
+        path: `field.${i}`,
+        label: `Field ${i}`,
+        value: i,
+        reason: "test",
+      })),
+      validationReport: {
+        design_metrics: {
+          risk_level: "high",
+          confidence: "low",
+          warnings: [],
+        },
+      },
+    });
+    const m = extractCompareMetrics(item);
+    assert.equal(m.risk_level, "high");
+  });
 });
