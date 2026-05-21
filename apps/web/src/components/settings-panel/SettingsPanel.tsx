@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getLlmSettings, saveLlmSettings } from "@/lib/llmSettings";
+import {
+  getLlmSettings,
+  getProfiles,
+  getActiveProfileId,
+  setActiveProfileId,
+  addProfile,
+  removeProfile,
+  updateProfile,
+  PRESET_TEMPLATES,
+  type LlmProfile,
+} from "@/lib/llmSettings";
 
 type LlmTestStatus = "idle" | "testing" | "ok" | "fail";
 
@@ -22,6 +32,12 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
   const [llmTestStatus, setLlmTestStatus] = useState<LlmTestStatus>("idle");
   const [llmTestMsg, setLlmTestMsg] = useState("");
 
+  // Profile management
+  const [profiles, setProfiles] = useState<LlmProfile[]>([]);
+  const [activeId, setActiveId] = useState<string>("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newName, setNewName] = useState("");
+
   useEffect(() => {
     void (async () => {
       try {
@@ -34,11 +50,15 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
       } catch { /* ignore */ }
     })();
 
-    // Load LLM settings from localStorage
-    const llm = getLlmSettings();
-    setLlmModel(llm.modelName);
-    setLlmApiKey(llm.apiKey);
-    setLlmBaseUrl(llm.baseUrl);
+    // Load profiles and active settings
+    const p = getProfiles();
+    setProfiles(p);
+    const aid = getActiveProfileId() ?? "";
+    setActiveId(aid);
+    const settings = getLlmSettings();
+    setLlmModel(settings.modelName);
+    setLlmApiKey(settings.apiKey);
+    setLlmBaseUrl(settings.baseUrl);
   }, [apiBaseUrl]);
 
   const save = useCallback(
@@ -62,12 +82,53 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
   );
 
   const saveLlm = useCallback(() => {
-    saveLlmSettings({
-      modelName: llmModel,
-      apiKey: llmApiKey,
-      baseUrl: llmBaseUrl,
-    });
-  }, [llmModel, llmApiKey, llmBaseUrl]);
+    if (activeId) {
+      updateProfile(activeId, { modelName: llmModel, apiKey: llmApiKey, baseUrl: llmBaseUrl });
+    }
+  }, [activeId, llmModel, llmApiKey, llmBaseUrl]);
+
+  const handleSelectProfile = useCallback((id: string) => {
+    setActiveProfileId(id);
+    setActiveId(id);
+    const p = getProfiles().find((p) => p.id === id);
+    if (p) {
+      setLlmModel(p.modelName);
+      setLlmApiKey(p.apiKey);
+      setLlmBaseUrl(p.baseUrl);
+    }
+  }, []);
+
+  const handleAddProfile = useCallback(() => {
+    if (!newName.trim()) return;
+    const p = addProfile(newName.trim(), { modelName: llmModel, apiKey: llmApiKey, baseUrl: llmBaseUrl });
+    setProfiles(getProfiles());
+    setActiveId(p.id);
+    setShowAddForm(false);
+    setNewName("");
+  }, [newName, llmModel, llmApiKey, llmBaseUrl]);
+
+  const handleRemoveProfile = useCallback(() => {
+    if (!activeId) return;
+    removeProfile(activeId);
+    const updated = getProfiles();
+    setProfiles(updated);
+    if (updated.length > 0) {
+      handleSelectProfile(updated[0].id);
+    } else {
+      setActiveId("");
+      setLlmModel("");
+      setLlmApiKey("");
+      setLlmBaseUrl("");
+    }
+  }, [activeId, handleSelectProfile]);
+
+  const handlePreset = useCallback((template: { modelName: string; baseUrl: string }) => {
+    setLlmModel(template.modelName);
+    setLlmBaseUrl(template.baseUrl);
+    if (!showAddForm && activeId) {
+      updateProfile(activeId, { modelName: template.modelName, baseUrl: template.baseUrl });
+    }
+  }, [activeId, showAddForm]);
 
   const testLlm = useCallback(async () => {
     if (!llmApiKey && !llmBaseUrl) {
@@ -99,7 +160,6 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
         setLlmTestMsg(resp.status === 400 ? "缺少 API Key" : `HTTP ${resp.status}: ${err.slice(0, 80)}`);
         return;
       }
-      // Read a small chunk to confirm the LLM responded
       const reader = resp.body!.getReader();
       const { value } = await reader.read();
       reader.cancel();
@@ -150,6 +210,84 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
           </label>
 
           <div className="settings-section-title" style={{ marginTop: 8 }}>LLM 配置</div>
+
+          {/* Profile selector */}
+          <div className="settings-row" style={{ gap: 4 }}>
+            <select
+              value={activeId}
+              onChange={(e) => handleSelectProfile(e.target.value)}
+              style={{ flex: 1, fontSize: 11 }}
+            >
+              <option value="">（默认）</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowAddForm(!showAddForm)}
+              style={{ fontSize: 11, padding: "2px 6px", cursor: "pointer" }}
+              title="添加配置"
+            >
+              +
+            </button>
+            {activeId && profiles.length > 0 && (
+              <button
+                type="button"
+                onClick={handleRemoveProfile}
+                style={{ fontSize: 11, padding: "2px 6px", cursor: "pointer", color: "var(--error)" }}
+                title="删除当前配置"
+              >
+                &times;
+              </button>
+            )}
+          </div>
+
+          {/* Add profile form */}
+          {showAddForm && (
+            <div className="settings-row" style={{ gap: 4 }}>
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="配置名称"
+                style={{ flex: 1, fontSize: 11 }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleAddProfile(); }}
+              />
+              <button
+                type="button"
+                onClick={handleAddProfile}
+                disabled={!newName.trim()}
+                style={{ fontSize: 11, padding: "2px 8px", cursor: "pointer" }}
+              >
+                保存
+              </button>
+            </div>
+          )}
+
+          {/* Quick-fill presets */}
+          <div className="settings-row" style={{ gap: 4, flexWrap: "wrap" }}>
+            {PRESET_TEMPLATES.map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => handlePreset(t)}
+                style={{
+                  fontSize: 10,
+                  padding: "2px 6px",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: 3,
+                  background: "transparent",
+                  cursor: "pointer",
+                  color: "var(--text-dim)",
+                }}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+
+          {/* LLM fields */}
           <label className="settings-row">
             <span className="settings-label">模型</span>
             <input
