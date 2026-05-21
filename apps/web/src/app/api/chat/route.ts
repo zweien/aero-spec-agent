@@ -6,6 +6,7 @@ import {
   type UIMessage,
 } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
 import { buildSystemPrompt } from "@/lib/systemPrompt";
 import { createChatTools } from "@/lib/chatTools";
@@ -73,18 +74,18 @@ export async function POST(req: NextRequest) {
 
   const systemPrompt = buildSystemPrompt(specYaml, selected_refs ?? []);
 
-  // 3. Create OpenAI-compatible provider
-  const openai = createOpenAI({
-    apiKey,
-    baseURL: baseUrl,
-  });
+  // 3. Create provider — use openai-compatible for custom endpoints
+  const isOpenAIDefault = !baseUrl || baseUrl === "https://api.openai.com/v1";
+  const model = isOpenAIDefault
+    ? createOpenAI({ apiKey })(modelName)
+    : createOpenAICompatible({ name: "custom", apiKey, baseURL: baseUrl }).chatModel(modelName);
 
   // 4. Create tools bound to this conversation
   const tools = createChatTools(conversation_id);
 
   // 5. Stream with AI SDK
   const result = streamText({
-    model: openai(modelName),
+    model,
     system: systemPrompt,
     messages: await convertToModelMessages(messages),
     tools,
