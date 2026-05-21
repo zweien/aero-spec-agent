@@ -140,35 +140,22 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
     setLlmTestStatus("testing");
     setLlmTestMsg("");
     try {
-      const resp = await fetch("/api/chat", {
+      const resp = await fetch("/api/llm-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          conversation_id: "__test__",
-          message: "hi",
-          messages: [{ id: "t1", role: "user", parts: [{ type: "text", text: "hi" }] }],
-          llm_settings: {
-            modelName: llmModel || undefined,
-            apiKey: llmApiKey || undefined,
-            baseUrl: llmBaseUrl || undefined,
-          },
+          modelName: llmModel || undefined,
+          apiKey: llmApiKey || undefined,
+          baseUrl: llmBaseUrl || undefined,
         }),
       });
-      if (!resp.ok) {
-        const err = await resp.text().catch(() => "");
-        setLlmTestStatus("fail");
-        setLlmTestMsg(resp.status === 400 ? "缺少 API Key" : `HTTP ${resp.status}: ${err.slice(0, 80)}`);
-        return;
-      }
-      const reader = resp.body!.getReader();
-      const { value } = await reader.read();
-      reader.cancel();
-      if (value && value.length > 0) {
+      const data = (await resp.json()) as { ok: boolean; error?: string };
+      if (data.ok) {
         setLlmTestStatus("ok");
         setLlmTestMsg("连接成功");
       } else {
         setLlmTestStatus("fail");
-        setLlmTestMsg("LLM 返回为空");
+        setLlmTestMsg(data.error ?? `HTTP ${resp.status}`);
       }
     } catch (err) {
       setLlmTestStatus("fail");
