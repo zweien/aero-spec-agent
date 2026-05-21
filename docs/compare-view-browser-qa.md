@@ -118,3 +118,39 @@ cd apps/web && npm run dev
 - [x] ChatPanel / CADViewer / DeepDesignPanel 无回归
 - [x] 新增测试通过
 - [x] npm run build 通过
+
+## QA Results
+
+### 测试日期
+2026-05-20
+
+### 环境
+- Browser: Chromium (Playwright CLI)
+- Backend: CAD_BACKEND=fake, CHAT_GENERATION_MODE=async, FAKE_CAD_STEP_DELAY_MS=300
+- LLM: MiniMax-M2.5 @ 192.168.2.220:300 (connection issue during test)
+
+### 测试结果
+
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| CompareDrawer 空状态 | PASS | 显示"还没有加入对比的方案" |
+| CompareDrawer 1个方案 | PASS | 显示"请至少加入 2 个方案进行对比" |
+| CompareDrawer 打开/关闭 | PASS | position:fixed, z-index:1000 |
+| 方案对比按钮(0个) | PASS | 显示"方案对比" |
+| 生成设计 v1 | BLOCKED | LLM Connection error - API不可用 |
+| v1 加入对比 | SKIP | 依赖v1生成 |
+| Deep Design variants | SKIP | 依赖v1生成 |
+| CompareTable 指标显示 | PASS (code review) | 缺失值显示"暂无"，最佳值高亮 |
+| metricExtractors | PASS | 33 tests, 真实spec_echo结构验证 |
+| bestValue | PASS | 12 tests, 全规则覆盖 |
+| npm run build | PASS | 无错误 |
+| 全部前端测试 | PASS | 128 tests |
+| 全部后端测试 | PASS | 462 tests |
+
+### 发现的问题
+1. LLM API (MiniMax-M2.5) 返回空响应，端到端流程暂时无法验证
+2. metricExtractors 浮点精度问题已修复 (使用 Math.abs 而非 strictEqual)
+3. defaulted_fields 为 null (旧版本) 时正确处理
+
+### 阻塞项
+- LLM API 恢复后需重新执行完整端到端 QA

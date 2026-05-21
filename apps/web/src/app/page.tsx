@@ -109,6 +109,7 @@ export default function Home() {
   const deepDesignStream = useDeepDesignStream();
   const compareState = useCompareItems();
   const [compareDrawerOpen, setCompareDrawerOpen] = useState(false);
+  const compareFull = compareState.items.length >= compareState.maxItems;
 
   const chatSystemMessageRef = useRef<((text: string) => void) | null>(null);
   const chatToolActionRef = useRef<((toolName: string, args: Record<string, unknown>) => import("@/components/chat/ChatPanel").ToolActionHandle) | null>(null);
@@ -536,6 +537,7 @@ export default function Home() {
                   onSwitchToParameters={() => setRightTab("parameters")}
                   isInCompare={compareState.isInCompare}
                   onAddToCompare={handleAddToCompare}
+                  compareFull={compareFull}
                 />
               )}
             </div>
@@ -556,6 +558,7 @@ export default function Home() {
         compareData={compareData}
         isInGlobalCompare={compareState.isInCompare}
         onAddToGlobalCompare={handleAddToCompare}
+        compareFull={compareFull}
       />
       <CompareDrawer
         open={compareDrawerOpen}

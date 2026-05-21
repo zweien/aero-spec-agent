@@ -15,6 +15,7 @@ export type VariantSummaryCardProps = {
   onSwitchToParameters: () => void;
   isInCompare?: (id: string) => boolean;
   onAddToCompare?: (item: CompareItem) => void;
+  compareFull?: boolean;
 };
 
 export function VariantSummaryCard({
@@ -27,6 +28,7 @@ export function VariantSummaryCard({
   onSwitchToParameters,
   isInCompare,
   onAddToCompare,
+  compareFull,
 }: VariantSummaryCardProps): JSX.Element {
   const [details, setDetails] = useState<{
     span?: number;
@@ -194,6 +196,7 @@ export function VariantSummaryCard({
         {onAddToCompare && (
           <AddToCompareButton
             isAdded={!!isInCompare?.(`${designId}-v${versionNo}`)}
+            maxReached={compareFull && !isInCompare?.(`${designId}-v${versionNo}`)}
             onAdd={() => onAddToCompare({
               id: `${designId}-v${versionNo}`,
               designId,

@@ -12,6 +12,7 @@ export type RecommendedVariantCardProps = {
   onSwitchToParameters: () => void;
   isInCompare?: (id: string) => boolean;
   onAddToCompare?: (item: CompareItem) => void;
+  compareFull?: boolean;
 };
 
 export function RecommendedVariantCard({
@@ -23,6 +24,7 @@ export function RecommendedVariantCard({
   onSwitchToParameters,
   isInCompare,
   onAddToCompare,
+  compareFull,
 }: RecommendedVariantCardProps): JSX.Element {
   const [applying, setApplying] = useState(false);
 
@@ -169,6 +171,7 @@ export function RecommendedVariantCard({
         {onAddToCompare && recommended && (
           <AddToCompareButton
             isAdded={!!isInCompare?.(`${designId}-v${recommended.versionNo}`)}
+            maxReached={compareFull && !isInCompare?.(`${designId}-v${recommended.versionNo}`)}
             onAdd={() => onAddToCompare({
               id: `${designId}-v${recommended.versionNo}`,
               designId,

@@ -35,7 +35,7 @@ export function CompareDrawer({
         top: 0,
         right: 0,
         bottom: 0,
-        width: "min(720px, 90vw)",
+        width: "min(960px, 94vw)",
         background: "#fff",
         borderLeft: "1px solid var(--border-default)",
         boxShadow: "-4px 0 24px rgba(0,0,0,0.08)",
@@ -108,25 +108,16 @@ export function CompareDrawer({
 
       {/* Content */}
       <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
-        {!hasMinItems ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 200,
-              color: "var(--text-muted)",
-              gap: 8,
-            }}
-          >
-            <span style={{ fontSize: 14, fontWeight: 500 }}>
-              请至少加入 2 个方案进行对比
-            </span>
-            <span style={{ fontSize: 12 }}>
-              在版本历史或 Deep Design 方案中点击"加入对比"
-            </span>
-          </div>
+        {items.length === 0 ? (
+          <EmptyState
+            title="还没有加入对比的方案"
+            subtitle="可在版本历史或 Deep Design 方案卡片中点击「加入对比」"
+          />
+        ) : !hasMinItems ? (
+          <EmptyState
+            title="请至少加入 2 个方案进行对比"
+            subtitle="在版本历史或 Deep Design 方案中点击「加入对比」"
+          />
         ) : (
           <>
             {/* Defaulted fields trust notice */}
@@ -147,23 +138,25 @@ export function CompareDrawer({
               </div>
             )}
 
-            {/* Item cards row */}
+            {/* Item cards row — scrollable when many */}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: `repeat(${items.length}, 1fr)`,
+                display: "flex",
                 gap: 8,
                 marginBottom: 16,
+                overflowX: "auto",
+                paddingBottom: 4,
               }}
             >
               {items.map((item) => (
-                <CompareItemCard
-                  key={item.id}
-                  item={item}
-                  onRemove={onRemove}
-                  onViewModel={onViewModel}
-                  onSetCurrent={onSetCurrent}
-                />
+                <div key={item.id} style={{ minWidth: 150, flex: "1 0 150px" }}>
+                  <CompareItemCard
+                    item={item}
+                    onRemove={onRemove}
+                    onViewModel={onViewModel}
+                    onSetCurrent={onSetCurrent}
+                  />
+                </div>
               ))}
             </div>
 
@@ -172,6 +165,25 @@ export function CompareDrawer({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function EmptyState({ title, subtitle }: { title: string; subtitle: string }): JSX.Element {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: 200,
+        color: "var(--text-muted)",
+        gap: 8,
+      }}
+    >
+      <span style={{ fontSize: 14, fontWeight: 500 }}>{title}</span>
+      <span style={{ fontSize: 12 }}>{subtitle}</span>
     </div>
   );
 }

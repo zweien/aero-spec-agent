@@ -25,6 +25,7 @@ export type DeepDesignPanelProps = {
   onSwitchToParameters: () => void;
   isInCompare?: (id: string) => boolean;
   onAddToCompare?: (item: CompareItem) => void;
+  compareFull?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,7 @@ export function DeepDesignPanel({
   onSwitchToParameters,
   isInCompare,
   onAddToCompare,
+  compareFull,
 }: DeepDesignPanelProps): JSX.Element {
   const [description, setDescription] = useState("");
   const [explorationDepth, setExplorationDepth] = useState<"quick" | "standard" | "deep">("standard");
@@ -431,6 +433,7 @@ export function DeepDesignPanel({
               onSwitchToParameters={onSwitchToParameters}
               isInCompare={isInCompare}
               onAddToCompare={onAddToCompare}
+              compareFull={compareFull}
             />
           )}
 
@@ -447,6 +450,7 @@ export function DeepDesignPanel({
               onSwitchToParameters={onSwitchToParameters}
               isInCompare={isInCompare}
               onAddToCompare={onAddToCompare}
+              compareFull={compareFull}
             />
           ))}
 

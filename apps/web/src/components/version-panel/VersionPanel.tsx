@@ -37,6 +37,7 @@ type VersionPanelProps = {
   compareData?: [VersionResponse, VersionResponse] | null;
   isInGlobalCompare?: (id: string) => boolean;
   onAddToGlobalCompare?: (item: CompareItem) => void;
+  compareFull?: boolean;
 };
 
 export function VersionPanel({
@@ -53,6 +54,7 @@ export function VersionPanel({
   compareData,
   isInGlobalCompare,
   onAddToGlobalCompare,
+  compareFull,
 }: VersionPanelProps) {
   const [compareMode, setCompareMode] = useState(false);
   const [selectedFirst, setSelectedFirst] = useState<number | null>(null);
@@ -110,6 +112,7 @@ export function VersionPanel({
                   {onAddToGlobalCompare && (
                     <AddToCompareButton
                       isAdded={!!isInGlobalCompare?.(compareId)}
+                      maxReached={compareFull && !isInGlobalCompare?.(compareId)}
                       onAdd={() => onAddToGlobalCompare({
                         id: compareId,
                         designId: designId ?? "",
