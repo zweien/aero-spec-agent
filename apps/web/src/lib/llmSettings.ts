@@ -117,6 +117,7 @@ export function updateProfile(id: string, patch: Partial<Omit<LlmProfile, "id">>
 export const PRESET_TEMPLATES: Array<{ name: string; modelName: string; baseUrl: string }> = [
   { name: "DeepSeek", modelName: "deepseek-chat", baseUrl: "https://api.deepseek.com/v1" },
   { name: "OpenAI", modelName: "gpt-4o", baseUrl: "https://api.openai.com/v1" },
+  { name: "MiniMax-M2.5", modelName: "MiniMax-M2.5", baseUrl: "http://192.168.2.220:3000/v1" },
   { name: "自定义", modelName: "", baseUrl: "" },
 ];
 
