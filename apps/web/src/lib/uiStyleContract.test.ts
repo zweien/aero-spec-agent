@@ -60,6 +60,9 @@ test("compare view uses drawer and table class semantics", () => {
   const drawer = source("components/compare/CompareDrawer.tsx");
   const table = source("components/compare/CompareTable.tsx");
   const card = source("components/compare/CompareItemCard.tsx");
+  const addButton = source("components/compare/AddToCompareButton.tsx");
+  const metricCell = source("components/compare/CompareMetricCell.tsx");
+  const css = source("app/globals.css");
 
   assert.match(drawer, /compare-drawer/);
   assert.match(drawer, /notice notice-info/);
@@ -68,4 +71,24 @@ test("compare view uses drawer and table class semantics", () => {
   assert.doesNotMatch(drawer, /style=\{\{/);
   assert.doesNotMatch(table, /style=\{\{/);
   assert.doesNotMatch(card, /style=\{\{/);
+  assert.doesNotMatch(addButton, /style=\{\{/);
+  assert.doesNotMatch(metricCell, /style=\{\{/);
+  assert.match(css, /\.compare-drawer \{/);
+  assert.match(css, /\.compare-table-scroll \{/);
+  assert.match(css, /\.compare-metric-cell \{/);
+});
+
+test("compare drawer and metric rows expose dialog and table semantics", () => {
+  const drawer = source("components/compare/CompareDrawer.tsx");
+  const table = source("components/compare/CompareTable.tsx");
+
+  assert.match(drawer, /role="dialog"/);
+  assert.match(drawer, /compare-drawer-scrim/);
+  assert.match(drawer, /aria-modal="true"/);
+  assert.match(drawer, /aria-labelledby="compare-drawer-title"/);
+  assert.match(drawer, /id="compare-drawer-title"/);
+  assert.match(drawer, /closeButtonRef\.current\?\.focus\(\)/);
+  assert.match(drawer, /previousFocus\?\.focus\(\)/);
+  assert.match(drawer, /event\.key === "Escape"/);
+  assert.match(table, /<th scope="row" className="compare-metric-label">/);
 });

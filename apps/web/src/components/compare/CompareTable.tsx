@@ -102,9 +102,9 @@ function MetricGroup({
       </tr>
       {group.rows.map((row) => (
         <tr key={row.key}>
-          <td className="compare-metric-label">
+          <th scope="row" className="compare-metric-label">
             {row.label}
-          </td>
+          </th>
           {items.map((_, i) => {
             const m = metricsMap[i];
             const raw = m?.[row.key];

@@ -1949,11 +1949,18 @@ select:focus {
 
 /* Compare drawer */
 
-.compare-drawer {
+.compare-drawer-scrim {
   position: fixed;
-  inset: 0 0 0 auto;
+  inset: 0;
   z-index: 1000;
   display: flex;
+  justify-content: flex-end;
+  background: var(--bg-overlay);
+}
+
+.compare-drawer {
+  display: flex;
+  height: 100%;
   width: min(960px, 94vw);
   flex-direction: column;
   overflow: hidden;
@@ -2206,6 +2213,7 @@ select:focus {
   padding: 4px 8px;
   background: var(--bg-elevated);
   color: var(--text);
+  font-size: 12px;
   font-weight: 500;
 }
 
