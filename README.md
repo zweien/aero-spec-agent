@@ -10,11 +10,11 @@ Describe an aircraft in plain language — get parametric CAD models, aerodynami
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-000?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Three.js](https://img.shields.io/badge/Three.js-r164-black?logo=three.js&logoColor=white)](https://threejs.org/)
+[![Three.js](https://img.shields.io/badge/Three.js-0.184-black?logo=three.js&logoColor=white)](https://threejs.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-2.0+-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 [![OpenVSP](https://img.shields.io/badge/OpenVSP-3.50-1E88E5?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHRleHQgZmlsbD0id2hpdGUiIGZvbnQtc2l6ZT0iMTIiIHk9IjE2IiB4PSIyIj5WU1A8L3RleHQ+PC9zdmc+)](http://openvsp.org/)
-[![Tests](https://img.shields.io/badge/tests-528%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-700%2B%20passing-brightgreen)]()
 
 [Report Bug](https://github.com/zweien/aero-spec-agent/issues) · [Request Feature](https://github.com/zweien/aero-spec-agent/issues) · [View Demo](#quick-start)
 
@@ -203,7 +203,21 @@ What you'll see:
 
 See [Agent Run User Test Guide](docs/agent-run-user-test-guide.md) for detailed instructions.
 
-### 4. Try Deep Design (Demo Flow)
+### 4. Quick Demo
+
+Seed three demo designs (long-endurance UAV, high-speed recon, heavy-lift cruiser) with one command:
+
+```bash
+# Make sure backend is running first (Terminal 1 from step 3)
+CAD_BACKEND=fake .venv/bin/python scripts/seed_demo_designs.py
+```
+
+Then open http://localhost:3900 — the demo designs appear in the version panel with metrics, trust badges, and 3D previews. No LLM key needed for viewing seeded data.
+
+> Demo designs carry a `demo-` ID prefix and are clearly labeled. They can coexist with normal designs.
+> See [Demo Scenarios](docs/demo-scenarios.md) for details on each scenario.
+
+### 5. Try Deep Design (Demo Flow)
 
 Once the server is running:
 
@@ -353,10 +367,10 @@ storage/designs/{design_id}/
 ## Testing
 
 ```bash
-# Backend tests — 528 tests (fake backend, no OpenVSP needed)
+# Backend tests — 548+ tests (fake backend, no OpenVSP needed)
 CAD_BACKEND=fake .venv/bin/python -m pytest tests/ -q
 
-# Frontend component tests — 65 tests
+# Frontend component tests — 159 tests
 cd apps/web && npx tsx --test src/components/**/*.test.ts* && cd ../..
 
 # Frontend production build
@@ -373,14 +387,16 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 
 | Component | Status | Backend | Tests |
 |-----------|--------|---------|-------|
-| Fake CAD pipeline | Pass | fake | 528+ |
+| Fake CAD pipeline | Pass | fake | 548+ |
 | OpenVSP env check | Script ready | N/A | -- |
-| OpenVSP integration | Skipped (no install) | openvsp | -- |
+| OpenVSP single/twin engine | Pass | openvsp | validate script |
 | OpenVSP failure injection | Pass | fake | 12 |
+| Variant trust / confidence | Pass | fake | 8 |
 | DesignMetrics source/confidence | Pass | fake | 7 |
 | DesignMetricsCard UI | Pass | any | manual |
 | Compare View export | Pass | any | 7 |
-| Frontend build | Pass | -- | 65 |
+| Demo seed script | Pass | fake | manual |
+| Frontend build | Pass | -- | 159 |
 
 Run `python scripts/summarize_qa_status.py` for detailed QA doc status.
 
@@ -459,7 +475,7 @@ aero-spec-agent/
 │           └── vspaero_analysis.py    # Panel method sweep
 │
 ├── packages/aircraft-schema/          # Spec YAML definitions & examples
-├── tests/api/                         # 528 backend tests
+├── tests/api/                         # 548 backend tests
 ├── storage/                           # Generated design artifacts (gitignored)
 └── pyproject.toml                     # Python project config
 ```

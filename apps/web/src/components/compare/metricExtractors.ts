@@ -3,6 +3,10 @@ import type { CompareItem, CompareMetrics, CompareMetricSource, MetricConfidence
 type PerfEstimate = { estimate_id: string; value: number };
 type DesignMetrics = Record<string, unknown>;
 
+function safeNum(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+}
+
 function sourceFor(dmValue: unknown, estValue: unknown, clientValue: unknown): CompareMetricSource {
   if (dmValue != null) return "backend_design_metrics";
   if (estValue != null) return "performance_estimate";
@@ -170,10 +174,10 @@ function numVal(obj: Record<string, unknown>, dottedPath: string): number | unde
     if (cur == null || typeof cur !== "object") return undefined;
     cur = (cur as Record<string, unknown>)[p];
   }
-  if (typeof cur === "number") return cur;
+  if (typeof cur === "number") return safeNum(cur);
   if (cur != null && typeof cur === "object") {
     const v = (cur as Record<string, unknown>).value;
-    if (typeof v === "number") return v;
+    if (typeof v === "number") return safeNum(v);
   }
   return undefined;
 }

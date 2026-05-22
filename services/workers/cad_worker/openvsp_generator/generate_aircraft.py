@@ -138,6 +138,19 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend,
         spec.model_dump(mode="json"),
         validation_report.get("defaulted_fields"),
     )
+
+    # Variant trust assessment
+    from services.workers.cad_worker.openvsp_generator.variant_trust import compute_variant_trust
+    dm = validation_report.get("design_metrics", {})
+    trust = compute_variant_trust(
+        backend_name=backend_name,
+        metrics_source=dm.get("metrics_source", "client_heuristic"),
+        defaulted_parameter_count=len(validation_report.get("defaulted_fields", [])),
+        warnings=dm.get("warnings", []),
+        has_real_geometry=backend_name != "fake",
+        has_aero_analysis=bool(vspaero_data and vspaero_data.get("status") == "success"),
+    )
+    validation_report["variant_trust"] = trust.to_dict()
     generation_log = {
         "aircraft": spec.aircraft.name,
         "backend": backend_name,

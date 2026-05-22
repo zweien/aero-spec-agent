@@ -37,6 +37,11 @@ export function VariantSummaryCard({
     aspectRatio?: number;
     wingLoading?: number;
   } | null>(null);
+  const [trust, setTrust] = useState<{
+    confidence_level?: string;
+    generated_by?: string;
+    defaulted_parameter_count?: number;
+  } | null>(null);
 
   useEffect(() => {
     if (status !== "succeeded") return;
@@ -57,6 +62,8 @@ export function VariantSummaryCard({
           aspectRatio: findEst("aspect_ratio_perf")?.value,
           wingLoading: findEst("wing_loading_mtow")?.value,
         });
+        const vt = data?.validation_report?.variant_trust;
+        if (vt) setTrust(vt);
       })
       .catch(() => {});
     return () => {
@@ -157,6 +164,23 @@ export function VariantSummaryCard({
             }}
           >
             v{versionNo}
+            {trust && (
+              <span
+                style={{
+                  marginLeft: 6,
+                  fontSize: 10,
+                  fontWeight: 500,
+                  padding: "1px 4px",
+                  borderRadius: "var(--radius-sm)",
+                  color: trust.confidence_level === "high" ? "var(--success)" : trust.confidence_level === "low" ? "var(--warning, #ca8a04)" : "var(--text-muted)",
+                  background: trust.confidence_level === "high" ? "var(--success-bg)" : trust.confidence_level === "low" ? "var(--warning-bg, #fef3c7)" : "var(--bg-surface)",
+                  border: "1px solid var(--border-default)",
+                }}
+              >
+                {trust.confidence_level === "high" ? "高可信" : trust.confidence_level === "medium" ? "中可信" : "低可信"}
+                {trust.generated_by === "fake_cad" ? " · Fake CAD" : ""}
+              </span>
+            )}
           </span>
         </div>
       </div>
