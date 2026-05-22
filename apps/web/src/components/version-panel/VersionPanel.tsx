@@ -5,7 +5,8 @@ import { useState } from "react";
 import type { DesignRuleEntry, PerformanceEstimateEntry, VspaeroAnalysisEntry } from "@/app/page";
 import { VersionCompare } from "./VersionCompare";
 import { AddToCompareButton } from "@/components/compare/AddToCompareButton";
-import type { CompareItem } from "@/components/compare/types";
+import type { CompareItem, CompareMetrics } from "@/components/compare/types";
+import { DesignMetricsCard } from "@/components/metrics/DesignMetricsCard";
 
 type VersionResponse = {
   files: string[];
@@ -27,6 +28,7 @@ type VersionPanelProps = {
   designRules?: DesignRuleEntry[] | null;
   perfEstimates?: PerformanceEstimateEntry[] | null;
   aeroAnalysis?: VspaeroAnalysisEntry | null;
+  designMetrics?: CompareMetrics | null;
   versionList?: number[];
   currentVersionNo?: number;
   designId?: string | null;
@@ -44,6 +46,7 @@ export function VersionPanel({
   designRules,
   perfEstimates,
   aeroAnalysis,
+  designMetrics,
   versionList,
   currentVersionNo,
   designId,
@@ -59,7 +62,7 @@ export function VersionPanel({
   const [compareMode, setCompareMode] = useState(false);
   const [selectedFirst, setSelectedFirst] = useState<number | null>(null);
 
-  const hasContent = (designRules && designRules.length > 0) || (perfEstimates && perfEstimates.length > 0) || aeroAnalysis;
+  const hasContent = (designRules && designRules.length > 0) || (perfEstimates && perfEstimates.length > 0) || aeroAnalysis || designMetrics;
   const hasVersions = versionList && versionList.length > 0;
 
   if (!hasContent && !hasVersions) return null;
@@ -162,6 +165,7 @@ export function VersionPanel({
             <PerformanceEstimateSummary estimates={perfEstimates} />
           )}
           {aeroAnalysis && <VspaeroSummary analysis={aeroAnalysis} />}
+          {designMetrics && <DesignMetricsSummary metrics={designMetrics} />}
         </>
       )}
 
@@ -414,6 +418,43 @@ function VspaeroSummary({ analysis }: { analysis: VspaeroAnalysisEntry }) {
               )}
             </>
           )}
+        </div>
+      )}
+    </span>
+  );
+}
+
+function DesignMetricsSummary({ metrics }: { metrics: CompareMetrics }) {
+  const [expanded, setExpanded] = useState(false);
+  const metricCount = [
+    metrics.wingspan_m,
+    metrics.fuselage_length_m,
+    metrics.wing_area_m2,
+    metrics.aspect_ratio,
+    metrics.estimated_lift_to_drag,
+    metrics.estimated_range_km,
+    metrics.estimated_endurance_h,
+    metrics.wing_loading_kg_m2,
+  ].filter((v) => v != null).length;
+
+  return (
+    <span className="design-rules">
+      <button
+        type="button"
+        className="design-rules-toggle"
+        onClick={() => setExpanded(!expanded)}
+      >
+        设计指标
+        <span className="design-rule-pill design-rule-pill-pass">
+          {metricCount}
+        </span>
+        <span className="design-rules-arrow">
+          {expanded ? "▾" : "▸"}
+        </span>
+      </button>
+      {expanded && (
+        <div className="design-rules-list" style={{ padding: 8 }}>
+          <DesignMetricsCard metrics={metrics} />
         </div>
       )}
     </span>

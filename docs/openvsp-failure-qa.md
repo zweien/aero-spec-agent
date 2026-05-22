@@ -1,3 +1,10 @@
+---
+qa_id: openvsp-failure
+status: pass
+date: 2026-05-22
+env: fake
+---
+
 # OpenVSP 失败注入 QA
 
 ## 测试环境

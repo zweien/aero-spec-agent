@@ -1,3 +1,10 @@
+---
+qa_id: design-metrics-mvp
+status: pass
+date: 2026-05-22
+env: fake
+---
+
 # DesignMetrics 指标来源与可信度 QA
 
 ## 概述

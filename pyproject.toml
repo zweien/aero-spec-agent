@@ -25,6 +25,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["openvsp: requires real OpenVSP installation"]
 
 [tool.setuptools.packages.find]
 include = ["services*"]

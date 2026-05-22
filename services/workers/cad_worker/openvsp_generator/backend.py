@@ -134,7 +134,10 @@ class OpenVspBackend:
                     vspaero_data = report.to_dict()
                 except Exception as exc:
                     vspaero_data = {"status": "failed", "error_message": str(exc)}
-        adapter.export_file(step, "EXPORT_STEP")
+        try:
+            adapter.export_file(step, "EXPORT_STEP")
+        except Exception as exc:
+            adapter.errors.append(f"STEP export failed: {exc}")
         if on_progress: on_progress("step_exported", 86)
         if fail_stage == "exporting_step":
             raise RuntimeError(f"OpenVSP failure injection at stage: exporting_step")

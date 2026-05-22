@@ -18,7 +18,7 @@ import { DeepDesignPanel } from "@/components/graph/DeepDesignPanel";
 import { useDeepDesignStream } from "@/components/graph/useDeepDesignStream";
 import { CompareDrawer } from "@/components/compare/CompareDrawer";
 import { useCompareItems, extractCompareMetrics } from "@/components/compare";
-import type { CompareItem } from "@/components/compare/types";
+import type { CompareItem, CompareMetrics } from "@/components/compare/types";
 
 type VersionResponse = {
   files: string[];
@@ -33,6 +33,18 @@ type VersionResponse = {
       summary: Record<string, number>;
     };
     vspaero_analysis?: VspaeroAnalysisEntry;
+    design_metrics?: {
+      wingspan_m?: number;
+      fuselage_length_m?: number;
+      wing_area_m2?: number;
+      aspect_ratio?: number;
+      estimated_lift_to_drag?: number;
+      estimated_range_km?: number;
+      estimated_endurance_h?: number;
+      wing_loading_kg_m2?: number;
+      risk_level?: string;
+      [key: string]: unknown;
+    };
   };
 };
 
@@ -93,6 +105,7 @@ export default function Home() {
   const [designRules, setDesignRules] = useState<DesignRuleEntry[] | null>(null);
   const [perfEstimates, setPerfEstimates] = useState<PerformanceEstimateEntry[] | null>(null);
   const [aeroAnalysis, setAeroAnalysis] = useState<VspaeroAnalysisEntry | null>(null);
+  const [designMetrics, setDesignMetrics] = useState<CompareMetrics | null>(null);
   const [versionList, setVersionList] = useState<number[]>([]);
   const [currentVersionNo, setCurrentVersionNo] = useState<number | undefined>(undefined);
   const [designId, setDesignId] = useState<string | null>(null);
@@ -187,6 +200,29 @@ export default function Home() {
       );
       setAeroAnalysis(
         version.validation_report?.vspaero_analysis ?? null,
+      );
+      const dm = version.validation_report?.design_metrics;
+      setDesignMetrics(
+        dm
+          ? {
+              wingspan_m: dm.wingspan_m as number | undefined,
+              fuselage_length_m: dm.fuselage_length_m as number | undefined,
+              wing_area_m2: dm.wing_area_m2 as number | undefined,
+              aspect_ratio: dm.aspect_ratio as number | undefined,
+              estimated_lift_to_drag: dm.estimated_lift_to_drag as number | undefined,
+              estimated_range_km: dm.estimated_range_km as number | undefined,
+              estimated_endurance_h: dm.estimated_endurance_h as number | undefined,
+              wing_loading_kg_m2: dm.wing_loading_kg_m2 as number | undefined,
+              risk_level: (["low", "medium", "high", "unknown"].includes(dm.risk_level as string)
+                ? (dm.risk_level as "low" | "medium" | "high" | "unknown")
+                : undefined),
+              metric_sources: Object.fromEntries(
+                Object.entries(dm).filter(([_, v]) => v != null).map(([k]) => [k, "backend_design_metrics"]),
+              ),
+              confidence: "high",
+              warnings: [],
+            }
+          : null,
       );
 
       const source = selectCadPreviewSource({
@@ -548,6 +584,7 @@ export default function Home() {
         designRules={designRules}
         perfEstimates={perfEstimates}
         aeroAnalysis={aeroAnalysis}
+        designMetrics={designMetrics}
         versionList={versionList}
         currentVersionNo={currentVersionNo}
         designId={designId}

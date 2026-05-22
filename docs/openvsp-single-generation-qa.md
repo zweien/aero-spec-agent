@@ -1,3 +1,10 @@
+---
+qa_id: openvsp-single-generation
+status: skip
+date: 2026-05-22
+env: fake
+---
+
 # OpenVSP 单方案生成 QA
 
 ## 状态

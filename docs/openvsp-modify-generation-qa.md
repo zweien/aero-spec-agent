@@ -1,3 +1,10 @@
+---
+qa_id: openvsp-modify-generation
+status: skip
+date: 2026-05-22
+env: fake
+---
+
 # OpenVSP 修改生成 QA
 
 ## 状态

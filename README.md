@@ -369,6 +369,21 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 .venv/bin/python -m ruff check .
 ```
 
+## Current Verification Status
+
+| Component | Status | Backend | Tests |
+|-----------|--------|---------|-------|
+| Fake CAD pipeline | Pass | fake | 528+ |
+| OpenVSP env check | Script ready | N/A | -- |
+| OpenVSP integration | Skipped (no install) | openvsp | -- |
+| OpenVSP failure injection | Pass | fake | 12 |
+| DesignMetrics source/confidence | Pass | fake | 7 |
+| DesignMetricsCard UI | Pass | any | manual |
+| Compare View export | Pass | any | 7 |
+| Frontend build | Pass | -- | 65 |
+
+Run `python scripts/summarize_qa_status.py` for detailed QA doc status.
+
 ## Tech Stack
 
 | Layer | Technology |

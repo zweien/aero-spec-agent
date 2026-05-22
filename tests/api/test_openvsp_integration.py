@@ -9,11 +9,20 @@ from services.workers.cad_worker.openvsp_generator.errors import OpenVspUnavaila
 from services.workers.cad_worker.openvsp_generator.generate_aircraft import generate_aircraft
 
 
-pytestmark = pytest.mark.skipif(
-    os.getenv("RUN_OPENVSP_TESTS") != "1"
-    or os.getenv("CAD_BACKEND", "").strip().lower() != "openvsp",
-    reason="OpenVSP integration tests require RUN_OPENVSP_TESTS=1 and CAD_BACKEND=openvsp",
-)
+_skip_reason = "OpenVSP integration tests require RUN_OPENVSP_TESTS=1 and CAD_BACKEND=openvsp"
+_strict = os.getenv("STRICT_OPENVSP_TESTS") == "1"
+
+if _strict and not (os.getenv("RUN_OPENVSP_TESTS") == "1" and os.getenv("CAD_BACKEND", "").strip().lower() == "openvsp"):
+    pytest.fail("STRICT_OPENVSP_TESTS=1 but OpenVSP environment not configured")
+
+pytestmark = [
+    pytest.mark.openvsp,
+    pytest.mark.skipif(
+        os.getenv("RUN_OPENVSP_TESTS") != "1"
+        or os.getenv("CAD_BACKEND", "").strip().lower() != "openvsp",
+        reason=_skip_reason,
+    ),
+]
 
 
 def test_openvsp_backend_generates_real_vsp3_and_validation_report(tmp_path: Path):

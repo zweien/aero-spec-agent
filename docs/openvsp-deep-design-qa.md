@@ -1,3 +1,10 @@
+---
+qa_id: openvsp-deep-design
+status: skip
+date: 2026-05-22
+env: fake
+---
+
 # OpenVSP Deep Design QA
 
 ## 状态
