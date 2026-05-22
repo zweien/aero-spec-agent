@@ -46,33 +46,19 @@ export function DesignMetricsCard({ metrics, versionLabel }: DesignMetricsCardPr
   const warnings = metrics.warnings ?? [];
 
   return (
-    <div
-      style={{
-        border: "1px solid var(--border-default)",
-        borderRadius: 8,
-        padding: 12,
-        background: "var(--bg-surface)",
-        fontSize: 12,
-      }}
-    >
+    <div className="design-metrics-card">
       {versionLabel && (
-        <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--text)" }}>
+        <div className="design-metrics-title">
           {versionLabel} 设计指标
         </div>
       )}
 
       {/* Metrics grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-          gap: "6px 16px",
-        }}
-      >
+      <div className="design-metrics-grid">
         {displays.map((d) => (
-          <div key={d.key} style={{ display: "flex", justifyContent: "space-between", gap: 4 }}>
-            <span style={{ color: "var(--text-muted)" }}>{d.label}</span>
-            <span style={{ fontWeight: 500, color: "var(--text)" }}>
+          <div key={d.key} className="design-metrics-row">
+            <span className="design-metrics-label">{d.label}</span>
+            <span className="design-metrics-value">
               {d.value}{d.unit ? ` ${d.unit}` : ""}
             </span>
           </div>
@@ -80,28 +66,18 @@ export function DesignMetricsCard({ metrics, versionLabel }: DesignMetricsCardPr
       </div>
 
       {/* Risk + Confidence */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginTop: 8,
-          paddingTop: 8,
-          borderTop: "1px solid var(--border-default)",
-          fontSize: 11,
-          color: "var(--text-muted)",
-        }}
-      >
+      <div className="design-metrics-meta">
         <span>
-          风险等级: <span style={{ color: riskColor(riskLevel), fontWeight: 500 }}>{riskLabel(riskLevel)}</span>
+          风险等级: <span className={`risk-level risk-level-${riskLevel}`}>{riskLabel(riskLevel)}</span>
         </span>
         <span>
-          置信度: <span style={{ fontWeight: 500 }}>{CONFIDENCE_LABELS[confidence]}</span>
+          置信度: <span className="design-metrics-confidence">{CONFIDENCE_LABELS[confidence]}</span>
         </span>
       </div>
 
       {/* Warnings */}
       {warnings.length > 0 && (
-        <div style={{ marginTop: 6, fontSize: 11, color: "var(--warning, #ca8a04)" }}>
+        <div className="design-metrics-warnings">
           {warnings.map((w, i) => (
             <div key={i}>{w}</div>
           ))}
@@ -109,16 +85,7 @@ export function DesignMetricsCard({ metrics, versionLabel }: DesignMetricsCardPr
       )}
 
       {/* Disclaimer */}
-      <div
-        style={{
-          marginTop: 8,
-          paddingTop: 8,
-          borderTop: "1px solid var(--border-default)",
-          fontSize: 10,
-          color: "var(--text-muted)",
-          fontStyle: "italic",
-        }}
-      >
+      <div className="design-metrics-disclaimer">
         概念设计估算，仅用于初步方案筛选。
       </div>
     </div>
@@ -127,15 +94,6 @@ export function DesignMetricsCard({ metrics, versionLabel }: DesignMetricsCardPr
 
 function fmt(v: number): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(2);
-}
-
-function riskColor(level: string): string {
-  switch (level) {
-    case "low": return "var(--success, #16a34a)";
-    case "medium": return "var(--warning, #ca8a04)";
-    case "high": return "var(--error, #dc2626)";
-    default: return "var(--text-muted)";
-  }
 }
 
 function riskLabel(level: string): string {

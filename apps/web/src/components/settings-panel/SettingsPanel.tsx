@@ -196,14 +196,14 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
             />
           </label>
 
-          <div className="settings-section-title" style={{ marginTop: 8 }}>LLM 配置</div>
+          <div className="settings-section-title settings-section-spaced">LLM 配置</div>
 
           {/* Profile selector */}
-          <div className="settings-row" style={{ gap: 4 }}>
+          <div className="settings-row settings-profile-row">
             <select
               value={activeId}
               onChange={(e) => handleSelectProfile(e.target.value)}
-              style={{ flex: 1, fontSize: 11 }}
+              className="settings-profile-select"
             >
               <option value="">（默认）</option>
               {profiles.map((p) => (
@@ -213,7 +213,7 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
             <button
               type="button"
               onClick={() => setShowAddForm(!showAddForm)}
-              style={{ fontSize: 11, padding: "2px 6px", cursor: "pointer" }}
+              className="toolbar-button"
               title="添加配置"
             >
               +
@@ -222,7 +222,7 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
               <button
                 type="button"
                 onClick={handleRemoveProfile}
-                style={{ fontSize: 11, padding: "2px 6px", cursor: "pointer", color: "var(--error)" }}
+                className="toolbar-button toolbar-button-danger"
                 title="删除当前配置"
               >
                 &times;
@@ -232,20 +232,20 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
 
           {/* Add profile form */}
           {showAddForm && (
-            <div className="settings-row" style={{ gap: 4 }}>
+            <div className="settings-row settings-new-profile-row">
               <input
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="配置名称"
-                style={{ flex: 1, fontSize: 11 }}
+                className="settings-field-input"
                 onKeyDown={(e) => { if (e.key === "Enter") handleAddProfile(); }}
               />
               <button
                 type="button"
                 onClick={handleAddProfile}
                 disabled={!newName.trim()}
-                style={{ fontSize: 11, padding: "2px 8px", cursor: "pointer" }}
+                className="toolbar-button"
               >
                 保存
               </button>
@@ -253,21 +253,13 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
           )}
 
           {/* Quick-fill presets */}
-          <div className="settings-row" style={{ gap: 4, flexWrap: "wrap" }}>
+          <div className="settings-row settings-preset-row">
             {PRESET_TEMPLATES.map((t) => (
               <button
                 key={t.name}
                 type="button"
                 onClick={() => handlePreset(t)}
-                style={{
-                  fontSize: 10,
-                  padding: "2px 6px",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: 3,
-                  background: "transparent",
-                  cursor: "pointer",
-                  color: "var(--text-dim)",
-                }}
+                className="settings-preset"
               >
                 {t.name}
               </button>
@@ -283,7 +275,7 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
               onChange={(e) => setLlmModel(e.target.value)}
               onBlur={saveLlm}
               placeholder="留空使用默认"
-              style={{ width: 120 }}
+              className="settings-inline-field"
             />
           </label>
           <label className="settings-row">
@@ -294,7 +286,7 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
               onChange={(e) => setLlmApiKey(e.target.value)}
               onBlur={saveLlm}
               placeholder="留空使用默认"
-              style={{ width: 120 }}
+              className="settings-inline-field"
             />
           </label>
           <label className="settings-row">
@@ -305,10 +297,10 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
               onChange={(e) => setLlmBaseUrl(e.target.value)}
               onBlur={saveLlm}
               placeholder="留空使用默认"
-              style={{ width: 120 }}
+              className="settings-inline-field"
             />
           </label>
-          <div className="settings-row" style={{ justifyContent: "flex-end" }}>
+          <div className="settings-row settings-actions-row">
             {llmTestMsg && (
               <span className={`llm-test-result ${llmTestStatus === "ok" ? "llm-test-ok" : "llm-test-fail"}`}>
                 {llmTestMsg}

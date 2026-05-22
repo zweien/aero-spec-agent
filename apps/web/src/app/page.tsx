@@ -477,17 +477,7 @@ export default function Home() {
         <div className="topbar-right">
           <button
             onClick={() => setCompareDrawerOpen(true)}
-            style={{
-              fontSize: 12,
-              padding: "4px 10px",
-              background: compareState.items.length > 0 ? "var(--accent-bg)" : "transparent",
-              border: compareState.items.length > 0 ? "1px solid var(--accent-border)" : "1px solid var(--border-default)",
-              borderRadius: "var(--radius-sm)",
-              color: compareState.items.length > 0 ? "var(--accent)" : "var(--text-dim)",
-              cursor: "pointer",
-              marginRight: 8,
-              fontWeight: 500,
-            }}
+            className={`topbar-compare${compareState.items.length > 0 ? " topbar-compare-active" : ""}`}
           >
             方案对比{compareState.items.length > 0 ? ` (${compareState.items.length})` : ""}
           </button>

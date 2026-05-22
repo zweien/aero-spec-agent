@@ -24,3 +24,20 @@ test("root layout exposes Inter and globals use DESIGN tokens", () => {
   assert.ok(baseFieldRule);
   assert.doesNotMatch(baseFieldRule, /outline:\s*none;/);
 });
+
+test("workspace settings and metrics use semantic UI classes", () => {
+  const page = source("app/page.tsx");
+  const settings = source("components/settings-panel/SettingsPanel.tsx");
+  const metrics = source("components/metrics/DesignMetricsCard.tsx");
+
+  assert.match(page, /className=\{`topbar-compare/);
+  assert.doesNotMatch(page, /background: compareState\.items\.length/);
+
+  assert.match(settings, /settings-profile-row/);
+  assert.match(settings, /settings-preset/);
+  assert.doesNotMatch(settings, /style=\{\{/);
+
+  assert.match(metrics, /design-metrics-card/);
+  assert.match(metrics, /risk-level-\$\{riskLevel\}/);
+  assert.doesNotMatch(metrics, /style=\{\{/);
+});
