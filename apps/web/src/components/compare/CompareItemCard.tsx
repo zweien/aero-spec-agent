@@ -13,7 +13,7 @@ export type CompareItemCardProps = {
 const SOURCE_LABELS: Record<CompareSource, { text: string; color: string; bg: string }> = {
   version: { text: "Version", color: "var(--text-dim)", bg: "var(--bg-surface)" },
   "deep-design-variant": { text: "Deep Design", color: "var(--accent)", bg: "var(--accent-bg)" },
-  recommended: { text: "推荐方案", color: "#fff", bg: "var(--accent)" },
+  recommended: { text: "推荐方案", color: "var(--accent-bright)", bg: "var(--accent-bg)" },
 };
 
 export function CompareItemCard({ item, onRemove, onViewModel, onSetCurrent }: CompareItemCardProps): JSX.Element {
@@ -59,7 +59,7 @@ export function CompareItemCard({ item, onRemove, onViewModel, onSetCurrent }: C
         <div
           style={{
             fontSize: 11,
-            color: dfCount >= 3 ? "var(--warning, #ca8a04)" : "var(--text-muted)",
+            color: dfCount >= 3 ? "var(--warning)" : "var(--text-muted)",
             marginBottom: 6,
           }}
         >
@@ -95,9 +95,9 @@ export function CompareItemCard({ item, onRemove, onViewModel, onSetCurrent }: C
 
 function RiskBadge({ level }: { level: string }): JSX.Element {
   const cfg: Record<string, { bg: string; color: string; text: string }> = {
-    low: { bg: "rgba(34,197,94,0.1)", color: "var(--success, #16a34a)", text: "风险：低" },
-    medium: { bg: "rgba(234,179,8,0.1)", color: "var(--warning, #ca8a04)", text: "风险：中" },
-    high: { bg: "rgba(239,68,68,0.1)", color: "var(--error, #dc2626)", text: "风险：高" },
+    low: { bg: "var(--success-bg)", color: "var(--success)", text: "风险：低" },
+    medium: { bg: "var(--warning-bg)", color: "var(--warning)", text: "风险：中" },
+    high: { bg: "var(--error-bg)", color: "var(--error)", text: "风险：高" },
     unknown: { bg: "var(--bg-surface)", color: "var(--text-muted)", text: "风险：未知" },
   };
   const c = cfg[level] ?? cfg.unknown;

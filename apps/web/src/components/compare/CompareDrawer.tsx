@@ -51,9 +51,9 @@ export function CompareDrawer({
         right: 0,
         bottom: 0,
         width: "min(960px, 94vw)",
-        background: "#fff",
+        background: "var(--bg-panel)",
         borderLeft: "1px solid var(--border-default)",
-        boxShadow: "-4px 0 24px rgba(0,0,0,0.08)",
+        boxShadow: "-4px 0 24px rgba(0,0,0,0.3)",
         zIndex: 1000,
         display: "flex",
         flexDirection: "column",
@@ -155,9 +155,9 @@ export function CompareDrawer({
             <div
               style={{
                 fontSize: 11,
-                color: "var(--text-muted)",
-                background: "rgba(59,130,246,0.04)",
-                border: "1px solid rgba(59,130,246,0.12)",
+                color: "var(--text-dim)",
+                background: "var(--accent-bg)",
+                border: "1px solid var(--accent-border)",
                 borderRadius: 6,
                 padding: "8px 12px",
                 marginBottom: 12,
@@ -172,9 +172,9 @@ export function CompareDrawer({
               <div
                 style={{
                   fontSize: 11,
-                  color: "var(--warning, #ca8a04)",
-                  background: "rgba(234,179,8,0.06)",
-                  border: "1px solid rgba(234,179,8,0.2)",
+                  color: "var(--warning)",
+                  background: "var(--warning-bg)",
+                  border: "1px solid var(--warning-bg)",
                   borderRadius: 6,
                   padding: "8px 12px",
                   marginBottom: 12,

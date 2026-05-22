@@ -23,9 +23,9 @@ export function AddToCompareButton({ isAdded, onAdd, disabled, maxReached }: Add
         fontSize: 11,
         padding: "4px 8px",
         background: isAdded ? "var(--bg-surface)" : "transparent",
-        border: isAdded ? "1px solid var(--success, #16a34a)" : "1px solid var(--border-default)",
+        border: isAdded ? "1px solid var(--success)" : "1px solid var(--border-default)",
         borderRadius: "var(--radius-sm)",
-        color: isAdded ? "var(--success, #16a34a)" : isDisabled ? "var(--text-muted)" : "var(--text-dim)",
+        color: isAdded ? "var(--success)" : isDisabled ? "var(--text-muted)" : "var(--text-dim)",
         cursor: isDisabled ? "default" : "pointer",
         opacity: isDisabled && !isAdded ? 0.5 : 1,
       }}

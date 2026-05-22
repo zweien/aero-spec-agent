@@ -30,15 +30,15 @@ export function CompareMetricCell({ value, unit, isBest, isRisk, source, confide
     : String(value);
 
   const bg = isBest
-    ? "rgba(34,197,94,0.08)"
+    ? "var(--success-bg)"
     : isRisk || confidence === "low"
-      ? "rgba(234,179,8,0.08)"
+      ? "var(--warning-bg)"
       : "transparent";
 
   const color = isBest
-    ? "var(--success, #16a34a)"
+    ? "var(--success)"
     : isRisk || confidence === "low"
-      ? "var(--warning, #ca8a04)"
+      ? "var(--warning)"
       : "var(--text)";
 
   const sourceTitle = source ? SOURCE_LABELS[source] : undefined;
