@@ -31,13 +31,11 @@ export type UnifiedWorkflowTimelineProps = {
   elapsedTime?: number;
 };
 
-type StatusColor = "var(--success)" | "var(--accent)" | "var(--error)" | "var(--text-muted)";
-
-const STATUS_COLORS: Record<string, StatusColor> = {
-  completed: "var(--success)",
-  running: "var(--accent)",
-  failed: "var(--error)",
-  pending: "var(--text-muted)",
+const STATUS_CLASSES: Record<string, string> = {
+  completed: "workflow-stage-completed status-success",
+  running: "workflow-stage-running status-running",
+  failed: "workflow-stage-failed status-error",
+  pending: "workflow-stage-pending",
 };
 
 function stageIcon(status: string): string {
@@ -90,55 +88,35 @@ export function UnifiedWorkflowTimeline({ stages: stagesProp, nodes, mode = "nor
   if (stages.length === 0) return <div />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", marginTop: "8px" }}>
+    <div className={`workflow-timeline workflow-timeline-${mode}`}>
       {stages.map((item, i) => {
         const isLast = i === stages.length - 1;
-        const isRunning = item.status === "running";
-        const color = STATUS_COLORS[item.status] ?? "var(--text-muted)";
         const duration = formatDuration(item.durationMs);
+        const statusClass = STATUS_CLASSES[item.status] ?? "workflow-stage-pending";
 
         return (
-          <div key={item.stage}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                style={{
-                  color,
-                  fontSize: "14px",
-                  lineHeight: 1,
-                  animation: isRunning ? "pulse 1.5s ease-in-out infinite" : "none",
-                }}
-              >
+          <div key={item.stage} className={`workflow-stage ${statusClass}`}>
+            <div className="workflow-stage-row">
+              <span className="workflow-stage-indicator">
                 {stageIcon(item.status)}
               </span>
-              <span
-                style={{
-                  fontSize: "13px",
-                  color: item.status === "pending" ? "var(--text-muted)" : "var(--text)",
-                  flex: 1,
-                }}
-              >
+              <span className="workflow-stage-label">
                 {item.label}
               </span>
               {duration && (
-                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                <span className="workflow-stage-duration">
                   {duration}
                 </span>
               )}
             </div>
             {!isLast && (
-              <div
-                style={{
-                  marginLeft: "6px",
-                  borderLeft: "2px solid var(--border-default)",
-                  height: "14px",
-                }}
-              />
+              <div className="workflow-stage-rail" />
             )}
           </div>
         );
       })}
       {elapsedTime != null && elapsedTime > 0 && (
-        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", paddingLeft: "22px" }}>
+        <div className="workflow-elapsed-time">
           已运行：{formatElapsed(elapsedTime)}
         </div>
       )}

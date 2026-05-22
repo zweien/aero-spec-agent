@@ -78,30 +78,17 @@ export function CADLoadingOverlay({
       <div
         className="cad-loading-overlay cad-loading-overlay--error"
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "rgba(0,0,0,0.6)",
           opacity,
-          transition: "opacity 0.5s ease-out",
-          pointerEvents: "auto",
-          zIndex: 10,
         }}
       >
-        <div style={{ fontSize: "20px", marginBottom: "8px" }}>&#x26A0;</div>
-        <div style={{ fontSize: "14px", color: "#f87171", fontWeight: 500, maxWidth: "260px", textAlign: "center" }}>
+        <div className="cad-loading-overlay-error-icon">&#x26A0;</div>
+        <div className="cad-loading-overlay-error-title">
           生成失败
         </div>
-        <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "4px", maxWidth: "260px", textAlign: "center" }}>
+        <div className="cad-loading-overlay-error-copy">
           {error}
         </div>
-        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", marginTop: "12px" }}>
+        <div className="cad-loading-overlay-error-note">
           之前的模型仍然可用
         </div>
       </div>
@@ -114,58 +101,27 @@ export function CADLoadingOverlay({
       <div
         className="cad-loading-overlay cad-loading-overlay--compact"
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "rgba(0,0,0,0.55)",
           opacity,
-          transition: "opacity 0.5s ease-out",
           pointerEvents: opacity === 0 ? "none" : "auto",
-          zIndex: 10,
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+        <div className="cad-loading-overlay-running">
           {/* Spinner */}
-          <div
-            style={{
-              width: "28px",
-              height: "28px",
-              border: "2px solid rgba(255,255,255,0.15)",
-              borderTopColor: "var(--accent, #60a5fa)",
-              borderRadius: "50%",
-              animation: "cad-overlay-spin 0.8s linear infinite",
-            }}
-          />
+          <div className="cad-loading-overlay-spinner" />
           {/* Stage text */}
           {stageWithProgress && (
-            <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.85)", fontWeight: 500 }}>
+            <div className="cad-loading-overlay-title">
               {stageWithProgress}
             </div>
           )}
           {/* Progress bar */}
           {progress > 0 && (
-            <div style={{ width: "140px" }}>
-              <div
-                style={{
-                  height: "3px",
-                  background: "rgba(255,255,255,0.1)",
-                  borderRadius: "2px",
-                  overflow: "hidden",
-                }}
-              >
+            <div className="cad-loading-overlay-progress cad-loading-overlay-progress-compact">
+              <div className="cad-loading-overlay-progress-track">
                 <div
+                  className="cad-loading-overlay-progress-fill"
                   style={{
-                    height: "100%",
                     width: `${Math.min(progress, 100)}%`,
-                    background: "var(--accent, #60a5fa)",
-                    borderRadius: "2px",
-                    transition: "width 0.3s ease-out",
                   }}
                 />
               </div>
@@ -173,30 +129,15 @@ export function CADLoadingOverlay({
           )}
           {/* Mini artifact badges */}
           {artifacts.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center", maxWidth: "240px", marginTop: "4px" }}>
+            <div className="cad-loading-overlay-artifacts cad-loading-overlay-artifacts-compact">
               {artifacts.map((a) => (
-                <span
-                  key={a}
-                  style={{
-                    fontSize: "10px",
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    background: "rgba(96, 165, 250, 0.15)",
-                    color: "rgba(147, 197, 253, 0.9)",
-                    border: "1px solid rgba(96, 165, 250, 0.2)",
-                  }}
-                >
+                <span key={a} className="cad-loading-overlay-artifact">
                   {artifactLabel(a)}
                 </span>
               ))}
             </div>
           )}
         </div>
-        <style>{`
-          @keyframes cad-overlay-spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
     );
   }
@@ -206,77 +147,29 @@ export function CADLoadingOverlay({
     <div
       className="cad-loading-overlay cad-loading-overlay--full"
       style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--bg-secondary, rgba(0,0,0,0.05))",
         opacity,
-        transition: "opacity 0.5s ease-out",
         pointerEvents: opacity === 0 ? "none" : "auto",
-        zIndex: 10,
       }}
     >
       <div className="cad-loading-skeleton">
-        <div
-          style={{
-            width: "120px",
-            height: "40px",
-            background: "var(--border-default, rgba(128,128,128,0.2))",
-            borderRadius: "4px",
-            marginBottom: "16px",
-            animation: "cad-overlay-pulse 2s ease-in-out infinite",
-          }}
-        />
-        <div
-          style={{
-            width: "80px",
-            height: "80px",
-            background: "var(--border-default, rgba(128,128,128,0.2))",
-            borderRadius: "50%",
-            marginBottom: "16px",
-            animation: "cad-overlay-pulse 2s ease-in-out infinite 0.3s",
-          }}
-        />
-        <div
-          style={{
-            width: "160px",
-            height: "12px",
-            background: "var(--border-default, rgba(128,128,128,0.2))",
-            borderRadius: "2px",
-            animation: "cad-overlay-pulse 2s ease-in-out infinite 0.6s",
-          }}
-        />
+        <div className="cad-loading-skeleton-fuselage" />
+        <div className="cad-loading-skeleton-engine" />
+        <div className="cad-loading-skeleton-copy" />
       </div>
       {/* Stage label with progress */}
       {stageWithProgress && (
-        <div style={{ marginTop: "16px", fontSize: "13px", color: "var(--text-muted, #888)" }}>
+        <div className="cad-loading-overlay-copy">
           {stageWithProgress}
         </div>
       )}
       {/* Progress bar */}
       {progress > 0 && (
-        <div style={{ marginTop: "8px", width: "160px" }}>
-          <div
-            style={{
-              height: "4px",
-              background: "var(--border-default, rgba(128,128,128,0.15))",
-              borderRadius: "2px",
-              overflow: "hidden",
-            }}
-          >
+        <div className="cad-loading-overlay-progress cad-loading-overlay-progress-full">
+          <div className="cad-loading-overlay-progress-track">
             <div
+              className="cad-loading-overlay-progress-fill"
               style={{
-                height: "100%",
                 width: `${Math.min(progress, 100)}%`,
-                background: "var(--accent, #60a5fa)",
-                borderRadius: "2px",
-                transition: "width 0.3s ease-out",
               }}
             />
           </div>
@@ -284,30 +177,14 @@ export function CADLoadingOverlay({
       )}
       {/* Artifact list */}
       {artifacts.length > 0 && (
-        <div style={{ marginTop: "12px", display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center", maxWidth: "280px" }}>
+        <div className="cad-loading-overlay-artifacts">
           {artifacts.map((a) => (
-            <span
-              key={a}
-              style={{
-                fontSize: "11px",
-                padding: "2px 8px",
-                borderRadius: "4px",
-                background: "var(--border-default, rgba(128,128,128,0.1))",
-                color: "var(--text-muted, #888)",
-                border: "1px solid var(--border-default, rgba(128,128,128,0.15))",
-              }}
-            >
+            <span key={a} className="cad-loading-overlay-artifact">
               {artifactLabel(a)} &#x2713;
             </span>
           ))}
         </div>
       )}
-      <style>{`
-        @keyframes cad-overlay-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-      `}</style>
     </div>
   );
 }

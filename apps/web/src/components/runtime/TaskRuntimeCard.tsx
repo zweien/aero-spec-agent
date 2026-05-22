@@ -57,9 +57,9 @@ export function TaskRuntimeCard(props: TaskRuntimeCardProps): JSX.Element {
   if (isRunning) {
     headerIcon = <span className="spinner" />;
   } else if (isFailed) {
-    headerIcon = <span style={{ color: "#ef4444" }}>✗</span>;
+    headerIcon = <span className="status-error">✗</span>;
   } else {
-    headerIcon = <span style={{ color: "#10b981" }}>✓</span>;
+    headerIcon = <span className="status-success">✓</span>;
   }
 
   // Card class modifier
@@ -85,7 +85,7 @@ export function TaskRuntimeCard(props: TaskRuntimeCardProps): JSX.Element {
         const runningStage = stages.find((s) => s.status === "running");
         if (!runningStage) return null;
         return (
-          <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px", marginBottom: "4px" }}>
+          <div className="workflow-running-description">
             {getStageDescription(runningStage.stage)}
           </div>
         );
@@ -97,27 +97,16 @@ export function TaskRuntimeCard(props: TaskRuntimeCardProps): JSX.Element {
 
         {/* Progress bar when running */}
         {isRunning && progress > 0 && (
-          <div className="workflow-progress-bar" style={{ marginTop: "8px" }}>
-            <div
-              style={{
-                height: "4px",
-                background: "var(--border-default)",
-                borderRadius: "2px",
-                overflow: "hidden",
-              }}
-            >
+          <div className="workflow-progress-bar">
+            <div className="workflow-progress-track">
               <div
                 className="workflow-progress-fill"
                 style={{
-                  height: "100%",
                   width: `${Math.min(progress, 100)}%`,
-                  background: "var(--accent)",
-                  borderRadius: "2px",
-                  transition: "width 0.3s ease-out",
                 }}
               />
             </div>
-            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
+            <div className="workflow-progress-value">
               {Math.round(progress)}%
             </div>
           </div>

@@ -104,7 +104,7 @@ export function VersionPanel({
               const isSelected = v === selectedFirst;
               const compareId = `${designId ?? "unknown"}-v${v}`;
               return (
-                <span key={v} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span key={v} className="version-pill-with-compare">
                   <button
                     type="button"
                     className={`version-pill ${isCurrent ? "version-pill-active" : ""} ${isSelected ? "version-pill-selected" : ""}`}

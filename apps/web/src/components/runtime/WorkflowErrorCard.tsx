@@ -25,44 +25,31 @@ export function WorkflowErrorCard({
   const tips = suggestions ?? DEFAULT_SUGGESTIONS;
 
   return (
-    <div className="workflow-error-card" style={{
-      border: "1px solid var(--error)",
-      borderRadius: "6px",
-      padding: "12px",
-      marginTop: "8px",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-        <span style={{ color: "var(--error)", fontSize: "14px" }}>✗</span>
-        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--error)" }}>
+    <div className="workflow-error-card runtime-notice status-error">
+      <div className="workflow-error-header">
+        <span className="workflow-error-icon">✗</span>
+        <span className="workflow-error-title">
           生成失败：{failedStage}
         </span>
       </div>
-      <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "0 0 8px 22px" }}>
+      <p className="workflow-error-copy">
         {errorMessage}
       </p>
       {tips.length > 0 && (
-        <div style={{ margin: "0 0 8px 22px" }}>
-          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>建议：</span>
-          <ul style={{ margin: "4px 0 0 0", paddingLeft: "16px", fontSize: "12px", color: "var(--text-muted)" }}>
+        <div className="workflow-error-suggestions">
+          <span className="workflow-error-suggestions-title">建议：</span>
+          <ul className="workflow-error-suggestions-list">
             {tips.map((tip, i) => (
               <li key={i}>{tip}</li>
             ))}
           </ul>
         </div>
       )}
-      <div style={{ display: "flex", gap: "8px", marginLeft: "22px" }}>
+      <div className="workflow-error-actions">
         {onRetry && (
           <button
             onClick={onRetry}
-            style={{
-              fontSize: "12px",
-              padding: "4px 12px",
-              background: "var(--accent)",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
+            className="workflow-error-retry"
           >
             重试
           </button>
@@ -70,15 +57,7 @@ export function WorkflowErrorCard({
         {onViewLogs && (
           <button
             onClick={onViewLogs}
-            style={{
-              fontSize: "12px",
-              padding: "4px 12px",
-              background: "transparent",
-              color: "var(--text-muted)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
+            className="workflow-error-logs"
           >
             查看日志
           </button>

@@ -96,14 +96,20 @@ export function AgentRunDetails({
 
         {stages.length > 0 && (
           <>
-            <div className="detail-row" style={{ marginTop: 6 }}>
-              <span className="detail-key" style={{ fontWeight: 600 }}>Stages</span>
+            <div className="detail-row detail-section-title">
+              <span className="detail-key">Stages</span>
             </div>
             {stages.map((s, i) => {
               const icon = s.status === "failed" ? "✗ " : s.status === "running" ? "⟳ " : "● ";
-              const rowStyle = s.status === "failed" ? { color: "var(--error, #e53e3e)" } : undefined;
+              const statusClass = s.status === "failed"
+                ? " status-error"
+                : s.status === "running"
+                  ? " status-running"
+                  : s.status === "completed"
+                    ? " status-success"
+                    : "";
               return (
-                <div className="detail-row" key={i} style={rowStyle}>
+                <div className={`detail-row workflow-stage-${s.status}${statusClass}`} key={i}>
                   <span className="detail-key">{icon}{s.label}</span>
                   <span className="detail-value">
                     {formatTimestamp(s.startedAt)}
@@ -116,16 +122,16 @@ export function AgentRunDetails({
         )}
 
         {errorMessage && (
-          <div className="detail-row" style={{ marginTop: 6 }}>
-            <span className="detail-key" style={{ fontWeight: 600, color: "var(--error, #e53e3e)" }}>错误</span>
-            <span className="detail-value" style={{ color: "var(--error, #e53e3e)" }}>{errorMessage}</span>
+          <div className="detail-row detail-section-title status-error">
+            <span className="detail-key">错误</span>
+            <span className="detail-value">{errorMessage}</span>
           </div>
         )}
 
         {artifacts.length > 0 && (
           <>
-            <div className="detail-row" style={{ marginTop: 6 }}>
-              <span className="detail-key" style={{ fontWeight: 600 }}>Artifacts</span>
+            <div className="detail-row detail-section-title">
+              <span className="detail-key">Artifacts</span>
             </div>
             {artifacts.map((a, i) => (
               <div className="detail-row" key={i}>

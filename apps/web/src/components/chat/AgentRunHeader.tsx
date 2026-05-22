@@ -20,11 +20,11 @@ export function AgentRunHeader({
   // Status icon
   let statusIcon: JSX.Element;
   if (status === "running") {
-    statusIcon = <span className="status-icon" style={{ color: "var(--accent)" }}>&#10227;</span>;
+    statusIcon = <span className="status-icon status-running">&#10227;</span>;
   } else if (status === "completed") {
-    statusIcon = <span className="status-icon" style={{ color: "var(--success)" }}>&#10003;</span>;
+    statusIcon = <span className="status-icon status-success">&#10003;</span>;
   } else {
-    statusIcon = <span className="status-icon" style={{ color: "var(--error)" }}>&#10007;</span>;
+    statusIcon = <span className="status-icon status-error">&#10007;</span>;
   }
 
   // Title text

@@ -10,11 +10,11 @@ export type WorkflowTimelineProps = {
 
 type StepState = "completed" | "running" | "failed" | "pending";
 
-const STATE_COLORS: Record<StepState, string> = {
-  completed: "var(--success)",
-  running: "var(--accent)",
-  failed: "var(--error)",
-  pending: "var(--text-muted)",
+const STATE_CLASSES: Record<StepState, string> = {
+  completed: "workflow-stage-completed status-success",
+  running: "workflow-stage-running status-running",
+  failed: "workflow-stage-failed status-error",
+  pending: "workflow-stage-pending",
 };
 
 const ALL_STEPS = [
@@ -76,43 +76,23 @@ export function WorkflowTimeline({ stages }: WorkflowTimelineProps): JSX.Element
   const steps = inferStepStates(stages);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", marginTop: "8px" }}>
+    <div className="workflow-timeline">
       {steps.map((item, i) => {
         const isLast = i === steps.length - 1;
-        const isRunning = item.state === "running";
-        const color = STATE_COLORS[item.state];
 
         return (
-          <div key={item.step}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                style={{
-                  color,
-                  fontSize: "16px",
-                  lineHeight: 1,
-                  animation: isRunning ? "pulse 1.5s ease-in-out infinite" : "none",
-                }}
-              >
+          <div key={item.step} className={`workflow-stage ${STATE_CLASSES[item.state]}`}>
+            <div className="workflow-stage-row">
+              <span className="workflow-stage-indicator workflow-stage-indicator-large">
                 {circleIcon(item.state)}
               </span>
-              <span
-                style={{
-                  fontSize: "13px",
-                  color: item.state === "pending" ? "var(--text-muted)" : "var(--text)",
-                }}
-              >
+              <span className="workflow-stage-label">
                 {getStepLabel(item.step)}
               </span>
             </div>
 
             {!isLast && (
-              <div
-                style={{
-                  marginLeft: "7px",
-                  borderLeft: "2px solid var(--border-default)",
-                  height: "16px",
-                }}
-              />
+              <div className="workflow-stage-rail workflow-stage-rail-large" />
             )}
           </div>
         );

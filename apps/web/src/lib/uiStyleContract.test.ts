@@ -125,3 +125,29 @@ test("deep design and graph cards use semantic class names", () => {
   assert.match(css, /\.graph-variant-running \{/);
   assert.match(css, /\.recommended-variant-applying:disabled \{[^}]*background:\s*var\(--accent-solid\);/);
 });
+
+test("runtime notices and cad overlays use shared state classes", () => {
+  const fallbackNotice = source("components/chat/FallbackToolNotice.tsx");
+  const defaultedNotice = source("components/runtime/DefaultedFieldsNotice.tsx");
+  const workflowError = source("components/runtime/WorkflowErrorCard.tsx");
+  const cadOverlay = source("components/cad-viewer/CADLoadingOverlay.tsx");
+  const taskRuntime = source("components/runtime/TaskRuntimeCard.tsx");
+  const agentHeader = source("components/chat/AgentRunHeader.tsx");
+  const agentDetails = source("components/chat/AgentRunDetails.tsx");
+  const css = source("app/globals.css");
+
+  assert.match(fallbackNotice, /runtime-notice runtime-notice-info/);
+  assert.match(defaultedNotice, /runtime-notice runtime-notice-info/);
+  assert.match(workflowError, /workflow-error-card runtime-notice status-error/);
+  assert.match(cadOverlay, /cad-loading-overlay/);
+  assert.match(cadOverlay, /cad-loading-overlay-progress-fill/);
+  for (const migratedSource of [fallbackNotice, defaultedNotice, cadOverlay]) {
+    assert.doesNotMatch(migratedSource, /#3b82f6|rgba\(59,\s*130,\s*246|#60a5fa/);
+  }
+  for (const runtimeSource of [taskRuntime, agentHeader, agentDetails]) {
+    assert.doesNotMatch(runtimeSource, /#ef4444|#10b981|#e53e3e/);
+  }
+  assert.match(css, /\.runtime-notice \{/);
+  assert.match(css, /\.runtime-notice-info \{/);
+  assert.match(css, /\.cad-loading-overlay-error-title \{/);
+});

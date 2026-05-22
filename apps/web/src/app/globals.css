@@ -1793,6 +1793,12 @@ select:focus {
   flex-wrap: wrap;
 }
 
+.version-pill-with-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .version-pill {
   display: inline-flex;
   align-items: center;
@@ -2914,11 +2920,260 @@ select:focus {
   margin-top: 8px;
 }
 
+.workflow-progress-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--border-default);
+}
+
+.workflow-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.3s ease-out;
+}
+
+.workflow-progress-value,
+.workflow-running-description {
+  color: var(--text-muted);
+}
+
+.workflow-progress-value {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.workflow-running-description {
+  margin-block: 8px 4px;
+  font-size: 12px;
+}
+
+.status-running {
+  color: var(--accent-bright);
+}
+
+.status-success {
+  color: var(--success);
+}
+
+.status-warning {
+  color: var(--warning);
+}
+
+.status-error {
+  color: var(--error);
+}
+
+.runtime-notice {
+  margin-top: 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.runtime-notice-info {
+  border-color: var(--info-border);
+  background: var(--info-bg);
+}
+
+.runtime-notice-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: unset;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.runtime-notice-toggle:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.runtime-notice-icon {
+  color: var(--accent-bright);
+  font-size: 12px;
+}
+
+.runtime-notice-caret {
+  margin-left: auto;
+  font-size: 10px;
+}
+
+.runtime-notice-body {
+  margin-top: 8px;
+}
+
+.runtime-notice-copy {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.runtime-notice-body .runtime-notice-copy {
+  margin: 0 0 6px;
+}
+
+.runtime-notice-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.runtime-notice-table th {
+  padding: 2px 8px 2px 0;
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.runtime-notice-table th:last-child {
+  padding-right: 0;
+}
+
+.runtime-notice-table td {
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.runtime-notice-table td:last-child {
+  padding-right: 0;
+  color: var(--text-muted);
+}
+
+.workflow-timeline {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.workflow-stage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-stage-indicator {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.workflow-stage-indicator-large {
+  font-size: 16px;
+}
+
+.workflow-stage-label {
+  flex: 1;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.workflow-stage-duration,
+.workflow-elapsed-time {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.workflow-stage-rail {
+  height: 14px;
+  margin-left: 6px;
+  border-left: 2px solid var(--border-default);
+}
+
+.workflow-stage-rail-large {
+  height: 16px;
+  margin-left: 7px;
+}
+
+.workflow-stage-running .workflow-stage-indicator,
+.status-running .workflow-stage-indicator {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.workflow-stage-pending,
+.workflow-stage-pending .workflow-stage-label {
+  color: var(--text-muted);
+}
+
+.workflow-elapsed-time {
+  margin-top: 4px;
+  padding-left: 22px;
+}
+
 .workflow-error-card {
   border: 1px solid var(--error);
   border-radius: 6px;
   padding: 12px;
   margin-top: 8px;
+}
+
+.workflow-error-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.workflow-error-icon {
+  font-size: 14px;
+}
+
+.workflow-error-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workflow-error-copy,
+.workflow-error-suggestions {
+  margin: 0 0 8px 22px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.workflow-error-suggestions-title {
+  font-size: 11px;
+}
+
+.workflow-error-suggestions-list {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+.workflow-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 22px;
+}
+
+.workflow-error-retry,
+.workflow-error-logs {
+  min-height: unset;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.workflow-error-retry {
+  border: 0;
+  background: var(--accent);
+  color: white;
+}
+
+.workflow-error-logs {
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-muted);
 }
 
 .cad-loading-overlay {
@@ -2932,6 +3187,177 @@ select:focus {
   align-items: center;
   justify-content: center;
   z-index: 10;
+  transition: opacity 0.5s ease-out;
+}
+
+.cad-loading-overlay--error {
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+
+.cad-loading-overlay--compact {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.cad-loading-overlay--full {
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
+}
+
+.cad-loading-overlay-error-icon {
+  margin-bottom: 8px;
+  font-size: 20px;
+}
+
+.cad-loading-overlay-error-title,
+.cad-loading-overlay-error-copy {
+  max-width: 260px;
+  text-align: center;
+}
+
+.cad-loading-overlay-error-title {
+  color: var(--error);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cad-loading-overlay-error-copy {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+.cad-loading-overlay-error-note {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+}
+
+.cad-loading-overlay-running {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.cad-loading-overlay-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: cad-overlay-spin 0.8s linear infinite;
+}
+
+.cad-loading-overlay-title {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cad-loading-overlay-copy {
+  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.cad-loading-overlay-progress {
+  margin-top: 8px;
+}
+
+.cad-loading-overlay-progress-compact {
+  width: 140px;
+  margin-top: 0;
+}
+
+.cad-loading-overlay-progress-full {
+  width: 160px;
+}
+
+.cad-loading-overlay-progress-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--border-default);
+}
+
+.cad-loading-overlay-progress-compact .cad-loading-overlay-progress-track {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.cad-loading-overlay-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.3s ease-out;
+}
+
+.cad-loading-skeleton > div {
+  background: var(--border-default);
+  animation: cad-overlay-pulse 2s ease-in-out infinite;
+}
+
+.cad-loading-skeleton-fuselage {
+  width: 120px;
+  height: 40px;
+  margin-bottom: 16px;
+  border-radius: 4px;
+}
+
+.cad-loading-skeleton-engine {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  animation-delay: 0.3s;
+}
+
+.cad-loading-skeleton-copy {
+  width: 160px;
+  height: 12px;
+  border-radius: 2px;
+  animation-delay: 0.6s;
+}
+
+.cad-loading-overlay-artifacts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  max-width: 280px;
+  margin-top: 12px;
+}
+
+.cad-loading-overlay-artifacts-compact {
+  max-width: 240px;
+  margin-top: 4px;
+}
+
+.cad-loading-overlay-artifact {
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 2px 8px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.cad-loading-overlay-artifacts-compact .cad-loading-overlay-artifact {
+  border-color: var(--accent-border);
+  border-radius: 3px;
+  padding-inline: 6px;
+  background: var(--accent-bg);
+  color: var(--accent-bright);
+  font-size: 10px;
+}
+
+@keyframes cad-overlay-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cad-overlay-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 /* =============================================
@@ -2994,5 +3420,8 @@ select:focus {
   gap: 8px;
   padding: 2px 0;
 }
+.agent-run-details .detail-section-title { margin-top: 6px; font-weight: 600; }
 .agent-run-details .detail-key { color: var(--text-muted); min-width: 100px; }
 .agent-run-details .detail-value { color: var(--text); }
+.agent-run-details .status-error .detail-key,
+.agent-run-details .status-error .detail-value { color: var(--error); }
