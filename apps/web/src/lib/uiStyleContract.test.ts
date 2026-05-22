@@ -104,5 +104,5 @@ test("deep design and graph cards use semantic class names", () => {
   assert.match(summary, /variant-summary-card/);
   assert.match(thumbnail, /variant-thumbnail/);
   assert.doesNotMatch(recommendation, /rgba\(100,120,255/);
-  assert.doesNotMatch(thumbnail, /rgba\(0,180,100|rgba\(220,50,50/);
+  assert.doesNotMatch(thumbnail, /rgba\(0,180,100|rgba\(220,50,50|rgba\(100,120,255/);
 });
