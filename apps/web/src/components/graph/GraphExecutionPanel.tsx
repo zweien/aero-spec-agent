@@ -49,16 +49,7 @@ export type GraphExecutionPanelProps = {
 // ---------------------------------------------------------------------------
 
 function stateClass(state: GraphNodeState): string {
-  switch (state) {
-    case "completed":
-      return "bg-green-500";
-    case "running":
-      return "bg-blue-500 animate-pulse";
-    case "failed":
-      return "bg-red-500";
-    default:
-      return "bg-gray-400";
-  }
+  return `graph-node-${state}`;
 }
 
 function stateLabel(state: GraphNodeState): string {
@@ -76,21 +67,20 @@ function stateLabel(state: GraphNodeState): string {
 
 export function GraphNodeTimeline({ nodes }: { nodes: GraphNode[] }): JSX.Element {
   return (
-    <div className="flex items-center gap-1 overflow-x-auto pb-2">
+    <div className="graph-node-timeline">
       {nodes.map((node, i) => (
-        <div key={node.name} className="flex items-center">
+        <div key={node.name} className="graph-node-step">
           <div
-            className={`flex flex-col items-center rounded border px-3 py-2 text-xs ${stateClass(node.state)}`}
-            style={{ minWidth: 80 }}
+            className={`graph-node-card ${stateClass(node.state)}`}
           >
-            <span className="font-medium text-white">{node.label}</span>
-            <span className="text-white/80">
+            <span className="graph-node-label">{node.label}</span>
+            <span className="graph-node-meta">
               {stateLabel(node.state)}
               {node.latencyMs != null ? ` ${node.latencyMs.toFixed(0)}ms` : ""}
             </span>
           </div>
           {i < nodes.length - 1 && (
-            <span className="mx-1 text-gray-400">&rarr;</span>
+            <span className="graph-node-arrow">&rarr;</span>
           )}
         </div>
       ))}
@@ -102,19 +92,8 @@ export function GraphNodeTimeline({ nodes }: { nodes: GraphNode[] }): JSX.Elemen
 // VariantRuntimeStatus
 // ---------------------------------------------------------------------------
 
-function variantStatusColor(status: VariantStatus): string {
-  switch (status) {
-    case "succeeded":
-      return "text-green-600";
-    case "running":
-      return "text-blue-600 animate-pulse";
-    case "failed":
-      return "text-red-600";
-    case "queued":
-      return "text-gray-500";
-    default:
-      return "text-gray-400";
-  }
+function variantStatusClass(status: VariantStatus): string {
+  return `graph-variant-${status}`;
 }
 
 export function VariantRuntimeStatus({
@@ -123,22 +102,22 @@ export function VariantRuntimeStatus({
   variants: VariantResult[];
 }): JSX.Element {
   return (
-    <table className="w-full text-sm">
+    <table className="graph-variant-table">
       <thead>
-        <tr className="border-b text-left text-xs text-gray-500">
-          <th className="py-1 pr-4">Variant</th>
-          <th className="py-1 pr-4">Status</th>
-          <th className="py-1 pr-4">Duration</th>
+        <tr>
+          <th>Variant</th>
+          <th>Status</th>
+          <th>Duration</th>
         </tr>
       </thead>
       <tbody>
         {variants.map((v) => (
-          <tr key={v.label} className="border-b border-gray-100">
-            <td className="py-1 pr-4 font-medium">{v.label}</td>
-            <td className={`py-1 pr-4 ${variantStatusColor(v.status)}`}>
+          <tr key={v.label}>
+            <td className="graph-variant-label">{v.label}</td>
+            <td className={variantStatusClass(v.status)}>
               {v.status}
             </td>
-            <td className="py-1 pr-4 text-gray-600">
+            <td className="graph-variant-duration">
               {v.durationMs != null ? `${v.durationMs.toFixed(0)}ms` : "-"}
             </td>
           </tr>
@@ -158,19 +137,19 @@ export function EventStreamViewer({
   events: StreamEvent[];
 }): JSX.Element {
   return (
-    <div className="max-h-48 overflow-y-auto rounded bg-gray-50 p-2 font-mono text-xs">
+    <div className="graph-event-stream">
       {events.length === 0 && (
-        <span className="text-gray-400">No events yet.</span>
+        <span className="graph-event-empty">No events yet.</span>
       )}
       {events.map((ev, i) => (
-        <div key={i} className="py-0.5">
-          <span className="text-gray-400">[{ev.timestamp}]</span>{" "}
-          <span className="font-medium">{ev.eventType}</span>
+        <div key={i} className="graph-event-row">
+          <span className="graph-event-time">[{ev.timestamp}]</span>{" "}
+          <span className="graph-event-type">{ev.eventType}</span>
           {ev.jobId && (
-            <span className="text-gray-500"> job={ev.jobId.slice(0, 8)}</span>
+            <span className="graph-event-detail"> job={ev.jobId.slice(0, 8)}</span>
           )}
           {ev.detail && (
-            <span className="text-gray-500"> {ev.detail}</span>
+            <span className="graph-event-detail"> {ev.detail}</span>
           )}
         </div>
       ))}
@@ -188,27 +167,27 @@ export function GraphExecutionPanel({
   events,
 }: GraphExecutionPanelProps): JSX.Element {
   return (
-    <div className="flex flex-col gap-4 rounded-lg border bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold text-gray-700">
+    <div className="panel graph-execution-panel">
+      <h3 className="graph-execution-title">
         Graph Execution Runtime
       </h3>
 
-      <section>
-        <h4 className="mb-1 text-xs font-medium text-gray-500">
+      <section className="graph-execution-section">
+        <h4 className="graph-execution-heading">
           Node Timeline
         </h4>
         <GraphNodeTimeline nodes={nodes} />
       </section>
 
-      <section>
-        <h4 className="mb-1 text-xs font-medium text-gray-500">
+      <section className="graph-execution-section">
+        <h4 className="graph-execution-heading">
           Variant Status
         </h4>
         <VariantRuntimeStatus variants={variants} />
       </section>
 
-      <section>
-        <h4 className="mb-1 text-xs font-medium text-gray-500">
+      <section className="graph-execution-section">
+        <h4 className="graph-execution-heading">
           Event Stream
         </h4>
         <EventStreamViewer events={events} />

@@ -76,13 +76,6 @@ export function VariantSummaryCard({
     onSwitchToParameters();
   };
 
-  const statusColor =
-    status === "succeeded"
-      ? "var(--success)"
-      : status === "failed"
-        ? "var(--error)"
-        : "var(--text-muted)";
-
   const statusLabel =
     status === "succeeded"
       ? "✓ 已完成"
@@ -93,89 +86,24 @@ export function VariantSummaryCard({
           : status;
 
   return (
-    <div
-      style={{
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius)",
-        padding: 12,
-      }}
-    >
+    <div className="variant-summary-card">
       {/* Header row */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          marginBottom: 8,
-        }}
-      >
+      <div className="variant-summary-header">
         <VariantThumbnail label={label} status={status as "succeeded" | "failed" | "running" | "queued"} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 6,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--text)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
+        <div className="variant-summary-main">
+          <div className="variant-summary-title-row">
+            <span className="variant-summary-name">
               {label}
             </span>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                color: statusColor,
-                background:
-                  status === "succeeded"
-                    ? "var(--success-bg)"
-                    : status === "failed"
-                      ? "var(--error-bg)"
-                      : "var(--bg-surface)",
-                border:
-                  status === "succeeded"
-                    ? "1px solid var(--success-border)"
-                    : status === "failed"
-                      ? "1px solid var(--error)"
-                      : "1px solid var(--border-default)",
-                borderRadius: "var(--radius-sm)",
-                padding: "1px 6px",
-                flexShrink: 0,
-              }}
-            >
+            <span className={`variant-status variant-status-${status}`}>
               {statusLabel}
             </span>
           </div>
-          <span
-            style={{
-              fontSize: 11,
-              color: "var(--text-dim)",
-            }}
-          >
+          <span className="variant-summary-version">
             v{versionNo}
             {trust && (
               <span
-                style={{
-                  marginLeft: 6,
-                  fontSize: 10,
-                  fontWeight: 500,
-                  padding: "1px 4px",
-                  borderRadius: "var(--radius-sm)",
-                  color: trust.confidence_level === "high" ? "var(--success)" : trust.confidence_level === "low" ? "var(--warning, #ca8a04)" : "var(--text-muted)",
-                  background: trust.confidence_level === "high" ? "var(--success-bg)" : trust.confidence_level === "low" ? "var(--warning-bg, #fef3c7)" : "var(--bg-surface)",
-                  border: "1px solid var(--border-default)",
-                }}
+                className={`trust-badge trust-confidence-${trust.confidence_level ?? "unknown"}`}
               >
                 {trust.confidence_level === "high" ? "高可信" : trust.confidence_level === "medium" ? "中可信" : "低可信"}
                 {trust.generated_by === "fake_cad" ? " · Fake CAD" : ""}
@@ -187,14 +115,7 @@ export function VariantSummaryCard({
 
       {/* Metrics grid */}
       {details && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "2px 12px",
-            marginBottom: 8,
-          }}
-        >
+        <div className="variant-summary-metrics">
           <MetricItem label="翼展" value={details.span} unit="m" />
           <MetricItem label="航程" value={details.rangeEst} unit="km" prefix="~" />
           <MetricItem label="L/D" value={details.ldCruise} />
@@ -204,7 +125,7 @@ export function VariantSummaryCard({
       )}
 
       {/* Action buttons */}
-      <div style={{ display: "flex", gap: 6 }}>
+      <div className="graph-card-actions">
         <SmallButton
           label="查看模型"
           onClick={async () => {
@@ -254,9 +175,9 @@ function MetricItem({
   if (value == null) return null;
   const display = `${prefix ?? ""}${typeof value === "number" ? value.toFixed(1) : value}${unit ?? ""}`;
   return (
-    <div style={{ display: "flex", gap: 4, alignItems: "baseline" }}>
-      <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{label}:</span>
-      <span style={{ fontSize: 12, color: "var(--text)", fontWeight: 500 }}>
+    <div className="variant-metric-item">
+      <span className="variant-metric-label">{label}:</span>
+      <span className="variant-metric-value">
         {display}
       </span>
     </div>
@@ -276,16 +197,7 @@ function SmallButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      style={{
-        fontSize: 11,
-        padding: "4px 8px",
-        background: "transparent",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-sm)",
-        color: disabled ? "var(--text-muted)" : "var(--text-dim)",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-      }}
+      className="toolbar-button graph-card-button"
     >
       {label}
     </button>

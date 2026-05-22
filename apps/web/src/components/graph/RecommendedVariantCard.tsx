@@ -49,73 +49,32 @@ export function RecommendedVariantCard({
   if (!recommended) return <></>;
 
   return (
-    <div
-      style={{
-        background: "var(--accent-bg)",
-        border: "1px solid var(--accent-border)",
-        borderRadius: "var(--radius)",
-        padding: 12,
-        boxShadow: "0 0 12px rgba(100,120,255,0.15), 0 0 4px rgba(100,120,255,0.1)",
-      }}
-    >
+    <div className="recommended-variant-card">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 6,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "var(--accent-bright)",
-            }}
-          >
+      <div className="recommended-variant-header">
+        <div className="recommended-variant-title">
+          <span className="recommended-variant-name">
             推荐方案: {recommended.label}
           </span>
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              color: "#fff",
-              background: "var(--accent)",
-              borderRadius: 3,
-              padding: "1px 5px",
-              letterSpacing: "0.5px",
-              textTransform: "uppercase",
-            }}
-          >
+          <span className="recommended-variant-badge">
             AI 推荐
           </span>
         </div>
-        <span
-          style={{
-            fontSize: 10,
-            color: "var(--accent)",
-            background: "var(--accent-bg)",
-            border: "1px solid var(--accent-border)",
-            borderRadius: "var(--radius-sm)",
-            padding: "1px 6px",
-          }}
-        >
+        <span className="pill recommended-variant-version">
           v{recommended.versionNo}
         </span>
       </div>
 
       {/* Structured reasons */}
       {reasons.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", display: "block", marginBottom: 3 }}>
+        <div className="recommended-variant-reasons">
+          <span className="recommended-variant-reasons-title">
             推荐原因：
           </span>
           {reasons.map((r, i) => (
-            <div key={i} style={{ display: "flex", gap: 4, alignItems: "baseline", marginBottom: 1 }}>
-              <span style={{ fontSize: 11, color: "var(--success)" }}>✓</span>
-              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{r}</span>
+            <div key={i} className="recommended-variant-reason">
+              <span className="recommended-variant-check">✓</span>
+              <span>{r}</span>
             </div>
           ))}
         </div>
@@ -123,48 +82,23 @@ export function RecommendedVariantCard({
 
       {/* Fallback single-line reason if no structured reasons */}
       {reasons.length === 0 && reason && (
-        <p
-          style={{
-            fontSize: 12,
-            color: "var(--text-dim)",
-            margin: "0 0 8px 0",
-            lineHeight: 1.5,
-          }}
-        >
+        <p className="recommended-variant-summary">
           {reason}
         </p>
       )}
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 6 }}>
+      <div className="graph-card-actions">
         <button
           onClick={handleView}
-          style={{
-            fontSize: 11,
-            padding: "4px 8px",
-            background: "transparent",
-            border: "1px solid var(--accent-border)",
-            borderRadius: "var(--radius-sm)",
-            color: "var(--accent)",
-            cursor: "pointer",
-          }}
+          className="toolbar-button recommended-variant-view"
         >
           查看模型
         </button>
         <button
           onClick={handleApply}
           disabled={applying}
-          style={{
-            fontSize: 11,
-            padding: "4px 10px",
-            background: "var(--accent)",
-            border: "none",
-            borderRadius: "var(--radius-sm)",
-            color: "#fff",
-            cursor: applying ? "wait" : "pointer",
-            opacity: applying ? 0.7 : 1,
-            fontWeight: 500,
-          }}
+          className={`toolbar-button button-primary${applying ? " recommended-variant-applying" : ""}`}
         >
           {applying ? "应用中..." : "应用此方案"}
         </button>

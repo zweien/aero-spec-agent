@@ -6,37 +6,25 @@ export type VariantThumbnailProps = {
   status?: "succeeded" | "failed" | "running" | "queued";
 };
 
-const STATUS_OVERLAY: Record<string, { icon: string; color: string; bg: string }> = {
-  succeeded: { icon: "✓", color: "var(--success)", bg: "rgba(0,180,100,0.15)" },
-  failed: { icon: "✕", color: "var(--error)", bg: "rgba(220,50,50,0.15)" },
-  running: { icon: "⟳", color: "var(--accent)", bg: "rgba(100,120,255,0.12)" },
+const STATUS_ICON: Record<string, string> = {
+  succeeded: "✓",
+  failed: "✕",
+  running: "⟳",
 };
 
 export function VariantThumbnail({ label, status }: VariantThumbnailProps): JSX.Element {
-  const overlay = status ? STATUS_OVERLAY[status] : null;
+  const overlayIcon = status ? STATUS_ICON[status] : null;
 
   return (
     <div
-      style={{
-        width: 120,
-        height: 80,
-        background: "var(--bg-surface)",
-        borderRadius: "var(--radius-sm)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        position: "relative",
-        overflow: "hidden",
-        flexShrink: 0,
-      }}
+      className={`variant-thumbnail${status ? ` variant-thumbnail-${status}` : ""}`}
     >
       {/* Aircraft top-down silhouette */}
       <svg
         viewBox="0 0 120 80"
         width={120}
         height={80}
-        style={{ position: "absolute", top: 0, left: 0 }}
+        className="variant-thumbnail-aircraft"
         xmlns="http://www.w3.org/2000/svg"
       >
         {/* Fuselage */}
@@ -84,45 +72,16 @@ export function VariantThumbnail({ label, status }: VariantThumbnailProps): JSX.
       </svg>
 
       {/* Status overlay */}
-      {overlay && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: overlay.bg,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 24,
-              color: overlay.color,
-              fontWeight: 700,
-              lineHeight: 1,
-              animation: status === "running" ? "pulse 1.5s ease-in-out infinite" : "none",
-            }}
-          >
-            {overlay.icon}
+      {overlayIcon && (
+        <div className="variant-thumbnail-overlay">
+          <span className="variant-thumbnail-status-icon">
+            {overlayIcon}
           </span>
         </div>
       )}
 
       {label && (
-        <span
-          style={{
-            position: "absolute",
-            bottom: 3,
-            left: 0,
-            right: 0,
-            textAlign: "center",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            lineHeight: 1,
-            pointerEvents: "none",
-          }}
-        >
+        <span className="variant-thumbnail-label">
           {label}
         </span>
       )}

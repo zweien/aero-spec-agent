@@ -29,36 +29,6 @@ export type DeepDesignPanelProps = {
 };
 
 // ---------------------------------------------------------------------------
-// Style constants
-// ---------------------------------------------------------------------------
-
-const sectionStyle: React.CSSProperties = {
-  padding: "12px",
-  background: "var(--bg-elevated)",
-  borderRadius: "var(--radius)",
-  border: "1px solid var(--border-default)",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "12px",
-  fontWeight: 500,
-  color: "var(--text-dim)",
-  marginBottom: "4px",
-};
-
-const textareaStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px",
-  borderRadius: "var(--radius-sm)",
-  border: "1px solid var(--border-strong)",
-  background: "var(--bg-base)",
-  color: "var(--text)",
-  fontSize: "13px",
-  resize: "vertical",
-};
-
-// ---------------------------------------------------------------------------
 // Exploration depth config
 // ---------------------------------------------------------------------------
 
@@ -205,26 +175,26 @@ export function DeepDesignPanel({
   const variantDesignId = stream.ddDesignId ?? designId;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div className="deep-design-panel">
       {/* ---- Idle: no spec notice ---- */}
       {hasNoSpec && (
-        <div style={sectionStyle}>
-          <div style={{ fontSize: "13px", color: "var(--text)", marginBottom: "8px" }}>
+        <div className="deep-design-section notice notice-info deep-design-empty-notice">
+          <div className="deep-design-notice-title">
             请先生成或加载一个基础设计，再进行深度设计探索。
           </div>
-          <div style={{ fontSize: "11px", color: "var(--text-dim)" }}>
+          <div className="deep-design-note">
             提示：在左侧对话框中描述你的设计需求，AI 将为你生成初始方案。或手动输入 JSON 规格。
           </div>
         </div>
       )}
 
       {/* ---- Input form ---- */}
-      <div style={sectionStyle}>
+      <div className="deep-design-section deep-design-form">
         {/* Description */}
-        <div style={{ marginBottom: "10px" }}>
-          <label style={labelStyle}>设计需求描述</label>
+        <div className="deep-design-field">
+          <label className="field-label">设计需求描述</label>
           <textarea
-            style={textareaStyle}
+            className="deep-design-prompt"
             rows={2}
             placeholder="e.g. 设计一架 300km 航程的长航时无人机"
             value={description}
@@ -234,21 +204,13 @@ export function DeepDesignPanel({
         </div>
 
         {/* Strategy checkboxes (2x2 grid) */}
-        <div style={{ marginBottom: "10px" }}>
-          <label style={labelStyle}>优化策略</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 12px" }}>
+        <div className="deep-design-field">
+          <label className="field-label">优化策略</label>
+          <div className="deep-design-strategies">
             {STRATEGY_OPTIONS.map((opt) => (
               <label
                 key={opt.key}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "12px",
-                  color: "var(--text)",
-                  cursor: isRunning ? "not-allowed" : "pointer",
-                  opacity: isRunning ? 0.6 : 1,
-                }}
+                className="deep-design-choice deep-design-strategy"
               >
                 <input
                   type="checkbox"
@@ -263,9 +225,9 @@ export function DeepDesignPanel({
         </div>
 
         {/* Exploration depth radio buttons */}
-        <div style={{ marginBottom: "10px" }}>
-          <label style={labelStyle}>探索深度</label>
-          <div style={{ display: "flex", gap: "12px" }}>
+        <div className="deep-design-field">
+          <label className="field-label">探索深度</label>
+          <div className="deep-design-depth-controls">
             {(["quick", "standard", "deep"] as const).map((depth) => {
               const labels: Record<string, string> = {
                 quick: `快速探索 (${DEPTH_MAP.quick})`,
@@ -275,15 +237,7 @@ export function DeepDesignPanel({
               return (
                 <label
                   key={depth}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    fontSize: "12px",
-                    color: "var(--text)",
-                    cursor: isRunning ? "not-allowed" : "pointer",
-                    opacity: isRunning ? 0.6 : 1,
-                  }}
+                  className="deep-design-choice deep-design-depth"
                 >
                   <input
                     type="radio"
@@ -300,29 +254,18 @@ export function DeepDesignPanel({
         </div>
 
         {/* Advanced: Base Spec JSON (collapsible) */}
-        <div style={{ marginBottom: "10px" }}>
+        <div className="deep-design-field">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            style={{
-              fontSize: "11px",
-              color: "var(--text-muted)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "4px 0",
-            }}
+            className="toolbar-button deep-design-disclosure"
           >
             {showAdvanced ? "▼ 高级选项" : "▶ 高级选项"}
           </button>
           {showAdvanced && (
-            <div style={{ marginTop: "4px" }}>
-              <label style={labelStyle}>Base Spec (JSON)</label>
+            <div className="deep-design-advanced">
+              <label className="field-label">Base Spec (JSON)</label>
               <textarea
-                style={{
-                  ...textareaStyle,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "11px",
-                }}
+                className="deep-design-prompt deep-design-spec-input"
                 rows={4}
                 placeholder="{}"
                 value={specJson}
@@ -334,16 +277,17 @@ export function DeepDesignPanel({
         </div>
 
         {/* Submit / Cancel */}
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="deep-design-actions">
           <button
             onClick={handleSubmit}
             disabled={isRunning || !description.trim()}
+            className="button-primary"
           >
             {isRunning ? "运行中..." : "开始探索"}
           </button>
           {isRunning && (
             <button
-              style={{ background: "var(--bg-surface)", color: "var(--text-dim)" }}
+              className="deep-design-cancel"
               onClick={stream.stop}
             >
               取消
@@ -355,18 +299,11 @@ export function DeepDesignPanel({
       {/* ---- Running: status bar ---- */}
       {isRunning && (
         <>
-          <div
-            style={{
-              padding: "12px",
-              background: "var(--accent-bg)",
-              borderRadius: "var(--radius)",
-              border: "1px solid var(--accent-border)",
-            }}
-          >
-            <div style={{ fontSize: "13px", color: "var(--accent-bright)" }}>
+          <div className="deep-design-section deep-design-status">
+            <div className="deep-design-status-title">
               AI 正在探索设计方案...
             </div>
-            <div style={{ fontSize: "11px", color: "var(--text-dim)", marginTop: "4px" }}>
+            <div className="deep-design-status-meta">
               {currentStageLabel && `当前阶段：${currentStageLabel}`}
               {runningVariantCount > 0 && ` · 已完成 ${runningVariantCount} 个方案`}
             </div>
@@ -376,34 +313,15 @@ export function DeepDesignPanel({
           <UnifiedWorkflowTimeline nodes={stream.nodes} mode="deep-design" />
 
           {/* Collapsible runtime details */}
-          <div style={{ borderTop: "1px solid var(--border-default)", paddingTop: "8px" }}>
+          <div className="deep-design-runtime">
             <button
               onClick={toggleRuntimeDetails}
-              style={{
-                fontSize: "11px",
-                color: "var(--text-muted)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "4px 0",
-              }}
+              className="toolbar-button deep-design-disclosure"
             >
               {showRuntimeDetails ? "▼ 隐藏运行细节" : "▶ 查看运行细节"}
             </button>
             {showRuntimeDetails && (
-              <div
-                style={{
-                  maxHeight: "200px",
-                  overflow: "auto",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "10px",
-                  color: "var(--text-dim)",
-                  background: "var(--bg-base)",
-                  borderRadius: "var(--radius-sm)",
-                  padding: "8px",
-                  marginTop: "4px",
-                }}
-              >
+              <div className="deep-design-runtime-log">
                 {stream.events.map((e, i) => (
                   <div key={i}>
                     [{e.timestamp}] {e.eventType} {e.detail ?? ""}
@@ -456,34 +374,19 @@ export function DeepDesignPanel({
 
           {/* Report with markdown */}
           {stream.report && (
-            <div style={sectionStyle}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "8px",
-                }}
-              >
-                <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", margin: 0 }}>
+            <div className="deep-design-section deep-design-report">
+              <div className="deep-design-report-header">
+                <h4 className="deep-design-heading">
                   设计探索报告
                 </h4>
                 <button
                   onClick={handleExport}
-                  style={{
-                    fontSize: "11px",
-                    padding: "3px 8px",
-                    background: "var(--bg-surface)",
-                    border: "1px solid var(--border-default)",
-                    borderRadius: "var(--radius-sm)",
-                    color: "var(--text-dim)",
-                    cursor: "pointer",
-                  }}
+                  className="toolbar-button"
                 >
                   导出 .md
                 </button>
               </div>
-              <div style={{ fontSize: "12px", color: "var(--text-dim)", lineHeight: 1.6 }}>
+              <div className="deep-design-report-body">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {stream.report}
                 </ReactMarkdown>
@@ -492,25 +395,11 @@ export function DeepDesignPanel({
           )}
 
           {/* Next steps suggestion */}
-          <div style={sectionStyle}>
-            <h4
-              style={{
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "var(--text)",
-                marginBottom: "8px",
-              }}
-            >
+          <div className="deep-design-section deep-design-next-steps">
+            <h4 className="deep-design-heading">
               下一步建议
             </h4>
-            <ul
-              style={{
-                fontSize: "11px",
-                color: "var(--text-dim)",
-                margin: 0,
-                paddingLeft: "16px",
-              }}
-            >
+            <ul className="deep-design-suggestions">
               <li>选择推荐方案后，在参数面板中进一步优化翼载和发动机参数</li>
               <li>使用 VSPAERO 分析工具验证气动性能</li>
               <li>尝试不同尾翼布局（T-tail / V-tail）的方案对比</li>

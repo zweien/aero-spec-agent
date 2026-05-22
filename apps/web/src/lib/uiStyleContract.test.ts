@@ -92,3 +92,17 @@ test("compare drawer and metric rows expose dialog and table semantics", () => {
   assert.match(drawer, /event\.key === "Escape"/);
   assert.match(table, /<th scope="row" className="compare-metric-label">/);
 });
+
+test("deep design and graph cards use semantic class names", () => {
+  const deepDesign = source("components/graph/DeepDesignPanel.tsx");
+  const recommendation = source("components/graph/RecommendedVariantCard.tsx");
+  const summary = source("components/graph/VariantSummaryCard.tsx");
+  const thumbnail = source("components/graph/VariantThumbnail.tsx");
+
+  assert.match(deepDesign, /deep-design-panel/);
+  assert.match(recommendation, /recommended-variant-card/);
+  assert.match(summary, /variant-summary-card/);
+  assert.match(thumbnail, /variant-thumbnail/);
+  assert.doesNotMatch(recommendation, /rgba\(100,120,255/);
+  assert.doesNotMatch(thumbnail, /rgba\(0,180,100|rgba\(220,50,50/);
+});
