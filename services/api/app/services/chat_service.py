@@ -40,6 +40,10 @@ _CHAT_GENERATION_EXECUTOR = ThreadPoolExecutor(
 # ---------------------------------------------------------------------------
 
 from services.api.app.services.spec_defaults import ensure_required_defaults  # noqa: E402
+from services.api.app.services.tool_fallback import (  # noqa: E402
+    detect_generation_intent,
+    is_fallback_enabled,
+)
 
 
 def _flat_args_to_spec(args: dict[str, Any]) -> AircraftSpec:
@@ -397,6 +401,43 @@ class ChatService:
         state.messages.append(assistant_msg)
 
         if not tool_calls_collected:
+            if is_fallback_enabled():
+                intent = detect_generation_intent(
+                    user_message=message,
+                    assistant_text=collected_content,
+                    has_current_design=state.current_spec is not None,
+                    selected_part=state.selected_refs[0] if state.selected_refs else None,
+                )
+                if intent:
+                    logger.info(
+                        "no-tool-call fallback: tool=%s confidence=%.2f msg=%.60s",
+                        intent.tool_name,
+                        intent.confidence,
+                        message,
+                    )
+                    yield _sse_event("fallback_tool_detected", {
+                        "tool_name": intent.tool_name,
+                        "confidence": intent.confidence,
+                        "source": intent.source,
+                    })
+                    yield _sse_event("tool_call", {
+                        "name": intent.tool_name,
+                        "arguments": json.dumps(intent.args, ensure_ascii=False),
+                    })
+                    handler_map = {
+                        "generate_design": self._handle_generate_design,
+                        "modify_design": self._handle_modify_design,
+                        "modify_selected_part": self._handle_modify_selected_part,
+                    }
+                    handler = handler_map.get(intent.tool_name)
+                    if handler:
+                        async for event in handler(
+                            state,
+                            intent.args,
+                            f"fallback-{intent.tool_name}",
+                            background_tasks=background_tasks,
+                        ):
+                            yield event
             self._save_state(state)
             return
 

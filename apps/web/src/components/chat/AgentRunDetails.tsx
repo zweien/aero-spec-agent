@@ -3,6 +3,7 @@
 import { type JSX, useEffect, useRef, useState } from "react";
 import type { WorkflowRuntimeStage } from "@/hooks/useWorkflowRuntime";
 import { DefaultedFieldsNotice, type DefaultedField } from "@/components/runtime/DefaultedFieldsNotice";
+import { FallbackToolNotice } from "@/components/chat/FallbackToolNotice";
 
 export type AgentRunDetailsProps = {
   id?: string;
@@ -13,6 +14,8 @@ export type AgentRunDetailsProps = {
   artifacts: string[];
   errorMessage?: string;
   defaultedFields?: DefaultedField[];
+  fallbackToolName?: string;
+  fallbackConfidence?: number;
 };
 
 function formatDuration(ms: number | null): string {
@@ -35,6 +38,8 @@ export function AgentRunDetails({
   artifacts,
   errorMessage,
   defaultedFields,
+  fallbackToolName,
+  fallbackConfidence,
 }: AgentRunDetailsProps): JSX.Element {
   const STORAGE_KEY = "agent-run-details-open";
   const [isOpen, setIsOpen] = useState<boolean>(() => {
@@ -133,6 +138,10 @@ export function AgentRunDetails({
 
         {defaultedFields && defaultedFields.length > 0 && (
           <DefaultedFieldsNotice fields={defaultedFields} />
+        )}
+
+        {fallbackToolName && fallbackConfidence != null && (
+          <FallbackToolNotice toolName={fallbackToolName} confidence={fallbackConfidence} />
         )}
       </div>
     </details>

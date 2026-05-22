@@ -26,3 +26,20 @@ test("createChatSseParser parses FastAPI chat events across chunks", () => {
     { type: "error", data: { content: "bad" } },
   ]);
 });
+
+test("createChatSseParser parses fallback_tool_detected event", () => {
+  const parser = createChatSseParser();
+  const result = parser.push(
+    'event: fallback_tool_detected\ndata: {"tool_name":"generate_design","confidence":0.85,"source":"no_tool_call_fallback"}\n\n',
+  );
+  assert.deepEqual(result, [
+    {
+      type: "fallback_tool_detected",
+      data: {
+        tool_name: "generate_design",
+        confidence: 0.85,
+        source: "no_tool_call_fallback",
+      },
+    },
+  ]);
+});

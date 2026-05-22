@@ -53,6 +53,8 @@ type ToolPart = {
   runtimeStartedAt?: number;
   runtimeArtifacts?: string[];
   runtimeError?: string | null;
+  fallbackSource?: string;
+  fallbackConfidence?: number;
 };
 
 type ChatMessage = {
@@ -122,6 +124,7 @@ type StreamCallbacks = {
   updateRuntimeEvent: (id: string, event: WorkflowStageEvent) => void;
   updateRuntimeArtifacts: (id: string, artifacts: string[]) => void;
   notifyGenerationStage: (stage: string | null, progress: number, isGenerating: boolean, extras?: { artifacts?: string[]; error?: string | null }) => void;
+  markFallbackTool: (id: string, toolName: string, confidence: number) => void;
   apiBaseUrl: string;
 };
 
@@ -306,6 +309,12 @@ async function handleLegacyStream(
         if (output?.version_no) {
           cb.completeLatestTool(assistantId, output as unknown as GenerationCompleteData);
         }
+        break;
+      }
+      case "fallback-tool-detected": {
+        const toolName = event.tool_name as string;
+        const confidence = event.confidence as number;
+        cb.markFallbackTool(assistantId, toolName, confidence);
         break;
       }
     }
@@ -731,6 +740,21 @@ export function ChatPanel({
           updateRuntimeEvent,
           updateRuntimeArtifacts,
           notifyGenerationStage: onGenerationStage ?? (() => {}),
+          markFallbackTool: (messageId: string, toolName: string, confidence: number) => {
+            setMessages((prev) =>
+              prev.map((msg) => {
+                if (msg.id !== messageId) return msg;
+                return {
+                  ...msg,
+                  parts: msg.parts.map((p) => {
+                    if (p.type !== "tool") return p;
+                    if (p.state !== "running") return p;
+                    return { ...p, fallbackSource: "no_tool_call_fallback", fallbackConfidence: confidence };
+                  }),
+                };
+              }),
+            );
+          },
           apiBaseUrl,
         };
 
@@ -1018,6 +1042,8 @@ export function ChatPanel({
 	                      artifacts={toolPart.runtimeArtifacts ?? (((!toolPart || toolPart.state === "done") && result?.files) ? result.files : [])}
 	                      errorMessage={toolPart.runtimeError ?? (result?.status === "failed" ? result?.error_message ?? result?.error : undefined)}
 	                      defaultedFields={result?.defaulted_fields}
+	                      fallbackToolName={toolPart.fallbackSource ? toolPart.toolName : undefined}
+	                      fallbackConfidence={toolPart.fallbackConfidence}
 	                    />
                   );
                 })()}

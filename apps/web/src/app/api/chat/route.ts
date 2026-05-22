@@ -263,6 +263,19 @@ async function legacyProxy(body: Record<string, unknown>) {
               output.push(writeTextDelta(`\n\n❌ **错误**: ${errMsg}\n\n`));
               break;
             }
+            case "fallback_tool_detected": {
+              const toolLabel: Record<string, string> = {
+                generate_design: "生成设计",
+                modify_design: "修改设计",
+                modify_selected_part: "修改选中部件",
+              };
+              const label = toolLabel[String(data.tool_name)] ?? String(data.tool_name);
+              const conf = typeof data.confidence === "number" ? (data.confidence * 100).toFixed(0) : "?";
+              output.push(writeTextDelta(
+                `\n\n> ⚙️ 模型未调用工具，系统自动识别为「${label}」任务（置信度 ${conf}%）\n\n`,
+              ));
+              break;
+            }
           }
         } catch {
           // skip

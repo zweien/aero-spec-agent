@@ -5,7 +5,8 @@ export type ChatSseEventType =
   | "generation_complete"
   | "workflow_stage"
   | "artifact_generated"
-  | "error";
+  | "error"
+  | "fallback_tool_detected";
 
 export type ChatSseEvent = {
   type: ChatSseEventType;
@@ -20,6 +21,7 @@ const CHAT_EVENT_TYPES = new Set<string>([
   "workflow_stage",
   "artifact_generated",
   "error",
+  "fallback_tool_detected",
 ]);
 
 export function createChatSseParser() {
