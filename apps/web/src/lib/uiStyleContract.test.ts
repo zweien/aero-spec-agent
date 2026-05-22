@@ -95,14 +95,33 @@ test("compare drawer and metric rows expose dialog and table semantics", () => {
 
 test("deep design and graph cards use semantic class names", () => {
   const deepDesign = source("components/graph/DeepDesignPanel.tsx");
+  const execution = source("components/graph/GraphExecutionPanel.tsx");
   const recommendation = source("components/graph/RecommendedVariantCard.tsx");
   const summary = source("components/graph/VariantSummaryCard.tsx");
   const thumbnail = source("components/graph/VariantThumbnail.tsx");
+  const css = source("app/globals.css");
+  const oldGraphUtilityClass =
+    /className=(?:\{`|")[^"`\n]*\b(?:bg-(?:blue|green|red|gray|white)(?:-\d+)?|text-(?:blue|green|red|gray|white)(?:-\d+|\/\d+)?|flex(?:-\w+)?|items-center|gap-\d+|overflow-x-auto|pb-\d+|rounded(?:-\w+)?|border(?:-\w+)?|px-\d+|py-\d+|shadow-sm)\b/;
 
   assert.match(deepDesign, /deep-design-panel/);
+  assert.match(execution, /graph-execution-panel/);
+  assert.match(execution, /graph-node-timeline/);
+  assert.match(execution, /<table className="graph-variant-table">/);
   assert.match(recommendation, /recommended-variant-card/);
   assert.match(summary, /variant-summary-card/);
   assert.match(thumbnail, /variant-thumbnail/);
+  for (const graphSource of [deepDesign, execution, recommendation, summary, thumbnail]) {
+    assert.doesNotMatch(graphSource, /style=\{\{/);
+  }
+  assert.doesNotMatch(execution, oldGraphUtilityClass);
   assert.doesNotMatch(recommendation, /rgba\(100,120,255/);
   assert.doesNotMatch(thumbnail, /rgba\(0,180,100|rgba\(220,50,50|rgba\(100,120,255/);
+  assert.match(css, /\.deep-design-panel \{/);
+  assert.match(css, /\.deep-design-section,/);
+  assert.match(css, /\.graph-node-timeline \{/);
+  assert.match(css, /\.graph-node-card \{/);
+  assert.match(css, /\.graph-node-running \{/);
+  assert.match(css, /\.graph-variant-table \{/);
+  assert.match(css, /\.graph-variant-running \{/);
+  assert.match(css, /\.recommended-variant-applying:disabled \{[^}]*background:\s*var\(--accent-solid\);/);
 });

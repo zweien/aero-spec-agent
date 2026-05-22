@@ -2566,6 +2566,13 @@ select:focus {
   opacity: 0.7;
 }
 
+.recommended-variant-applying:disabled {
+  border-color: var(--accent-border);
+  background: var(--accent-solid);
+  color: #fff;
+  cursor: wait;
+}
+
 .variant-summary-header {
   gap: 10px;
   margin-bottom: 8px;
