@@ -1,37 +1,44 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
-
 /* =============================================
    VARIABLES
    ============================================= */
 
 :root {
-  --bg-base: #080b12;
-  --bg-panel: #0d1219;
-  --bg-elevated: #141b27;
-  --bg-surface: #1a2332;
-  --bg-hover: #1f2b3d;
-  --border: rgba(148, 163, 184, 0.08);
-  --border-default: rgba(148, 163, 184, 0.14);
-  --border-strong: rgba(148, 163, 184, 0.22);
-  --text: #e2e8f0;
-  --text-dim: #94a3b8;
-  --text-muted: #546178;
-  --accent: #06b6d4;
-  --accent-bright: #22d3ee;
-  --accent-bg: rgba(6, 182, 212, 0.08);
-  --accent-border: rgba(6, 182, 212, 0.25);
-  --success: #34d399;
-  --success-bg: rgba(52, 211, 153, 0.06);
-  --success-border: rgba(52, 211, 153, 0.2);
-  --warning: #fbbf24;
-  --warning-bg: rgba(251, 191, 36, 0.08);
-  --error: #f87171;
-  --error-bg: rgba(248, 113, 113, 0.06);
-  --user-bg: #172554;
+  --bg-base: #08090a;
+  --bg-panel: #0f1011;
+  --bg-elevated: #141516;
+  --bg-surface: rgba(255, 255, 255, 0.04);
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --bg-overlay: rgba(0, 0, 0, 0.85);
+  --border: rgba(255, 255, 255, 0.05);
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #f7f8f8;
+  --text-dim: #d0d6e0;
+  --text-muted: #8a8f98;
+  --text-subtle: #62666d;
+  --accent: #7170ff;
+  --accent-bright: #828fff;
+  --accent-solid: #5e6ad2;
+  --accent-bg: rgba(113, 112, 255, 0.14);
+  --accent-border: rgba(130, 143, 255, 0.32);
+  --success: #27a644;
+  --success-bg: rgba(39, 166, 68, 0.12);
+  --success-border: rgba(39, 166, 68, 0.28);
+  --warning: #f3c969;
+  --warning-bg: rgba(243, 201, 105, 0.12);
+  --warning-border: rgba(243, 201, 105, 0.24);
+  --error: #f97068;
+  --error-bg: rgba(249, 112, 104, 0.12);
+  --error-border: rgba(249, 112, 104, 0.24);
+  --info-bg: rgba(113, 112, 255, 0.1);
+  --info-border: rgba(130, 143, 255, 0.24);
+  --user-bg: rgba(94, 106, 210, 0.2);
+  --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.32);
+  --shadow-soft: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 12px 32px rgba(0, 0, 0, 0.24);
   --radius: 8px;
   --radius-sm: 6px;
-  --font: "Outfit", "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-mono: "SF Mono", "Fira Code", Consolas, monospace;
+  --font: var(--font-inter), "Inter Variable", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Berkeley Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 /* =============================================
@@ -52,26 +59,40 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+body {
+  font-feature-settings: "cv01", "ss03";
+}
+
 button, input, textarea, select {
   font: inherit;
   color: inherit;
 }
 
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 button {
   min-height: 38px;
   padding: 0 14px;
-  border: 0;
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: #fff;
+  background: var(--bg-surface);
+  color: var(--text-dim);
   cursor: pointer;
   font-weight: 600;
   font-size: 13px;
-  transition: filter 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
-button:hover:not(:disabled) { filter: brightness(1.1); }
-button:active:not(:disabled) { filter: brightness(0.95); }
+button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+button:active:not(:disabled) { background: var(--bg-elevated); }
 
 button:disabled {
   background: var(--bg-surface);
@@ -79,20 +100,22 @@ button:disabled {
   cursor: not-allowed;
 }
 
-textarea {
-  resize: vertical;
+input:not([type="checkbox"]), textarea, select {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
-  background: var(--bg-elevated);
+  background: var(--bg-surface);
   color: var(--text);
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-textarea:focus {
+textarea {
+  resize: vertical;
+}
+
+input:not([type="checkbox"]):focus, textarea:focus, select:focus {
   border-color: var(--accent-border);
-  box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
 /* =============================================
