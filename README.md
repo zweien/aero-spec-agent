@@ -228,6 +228,19 @@ CAD_BACKEND=openvsp .venv/bin/python -m uvicorn services.api.app.main:app --host
 
 You can also switch backends at runtime from the Settings panel in the UI.
 
+### Using Models Without Function Calling
+
+Some local models (e.g., MiniMax-M2.5 on VLLM) may not support function calling / tool use. AeroSpec includes a **no-tool-call fallback** that uses rule-based intent detection to automatically identify design tasks from plain text responses.
+
+The fallback is enabled by default and works transparently:
+- When the LLM returns text without tool calls, the system checks if the message matches a design intent (generate, modify, or part-level change)
+- If matched, it constructs tool arguments and routes through the same generation pipeline
+- Concept questions, export commands, and other non-design requests are filtered out
+
+To disable: `NO_TOOL_CALL_FALLBACK=false`
+
+The fallback confidence threshold can be tuned via `NO_TOOL_CALL_FALLBACK_MIN_CONFIDENCE` (default: 0.6). See [No-Tool-Call Fallback QA](docs/no-tool-call-fallback-qa.md) for details.
+
 ## Usage
 
 ### Chat-driven Design
