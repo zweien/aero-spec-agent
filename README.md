@@ -14,7 +14,7 @@ Describe an aircraft in plain language — get parametric CAD models, aerodynami
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-2.0+-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 [![OpenVSP](https://img.shields.io/badge/OpenVSP-3.50-1E88E5?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHRleHQgZmlsbD0id2hpdGUiIGZvbnQtc2l6ZT0iMTIiIHk9IjE2IiB4PSIyIj5WU1A8L3RleHQ+PC9zdmc+)](http://openvsp.org/)
-[![Tests](https://img.shields.io/badge/tests-443%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-528%20passing-brightgreen)]()
 
 [Report Bug](https://github.com/zweien/aero-spec-agent/issues) · [Request Feature](https://github.com/zweien/aero-spec-agent/issues) · [View Demo](#quick-start)
 
@@ -48,7 +48,7 @@ Go beyond a single design. The **Deep Design** panel uses a LangGraph pipeline t
 
 ### Compare View
 
-After generating multiple variants, use **Compare View** to compare up to 5 designs side by side. Add versions from the version panel or Deep Design variants, then view a structured comparison table with metrics (wingspan, L/D, range, aspect ratio, risk level, defaulted parameters). Best values are highlighted, and trust indicators flag designs with many system-defaulted parameters.
+After generating multiple variants, use **Compare View** to compare up to 5 designs side by side. Add versions from the version panel or Deep Design variants, then view a structured comparison table with metrics (wingspan, L/D, range, aspect ratio, risk level, defaulted parameters). Best values are highlighted, and trust indicators flag designs with many system-defaulted parameters. Export comparison reports as Markdown with metric tables and confidence disclaimers.
 
 ### Interactive 3D Preview
 
@@ -223,10 +223,16 @@ Once the server is running:
 If you have [OpenVSP 3.50.2](http://openvsp.org/) with Python bindings installed:
 
 ```bash
+# Check environment
+.venv/bin/python scripts/check_openvsp_env.py
+
+# Run with OpenVSP backend
 CAD_BACKEND=openvsp .venv/bin/python -m uvicorn services.api.app.main:app --host "$API_HOST" --port "$API_PORT"
 ```
 
 You can also switch backends at runtime from the Settings panel in the UI.
+
+See [OpenVSP Environment Check](docs/openvsp-env-check.md) for detailed setup instructions and troubleshooting.
 
 ### Using Models Without Function Calling
 
@@ -347,10 +353,10 @@ storage/designs/{design_id}/
 ## Testing
 
 ```bash
-# Backend tests — 412 tests (fake backend, no OpenVSP needed)
+# Backend tests — 528 tests (fake backend, no OpenVSP needed)
 CAD_BACKEND=fake .venv/bin/python -m pytest tests/ -q
 
-# Frontend component tests — 31 tests
+# Frontend component tests — 65 tests
 cd apps/web && npx tsx --test src/components/**/*.test.ts* && cd ../..
 
 # Frontend production build
@@ -388,6 +394,8 @@ aero-spec-agent/
 │       ├── components/
 │       │   ├── cad-viewer/            # Three.js 3D preview
 │       │   ├── chat/                  # Chat panel + SSE + job polling
+│       │   ├── compare/               # Compare View + export + metrics
+│       │   ├── metrics/               # DesignMetricsCard component
 │       │   ├── graph/                 # Deep design exploration UI
 │       │   │   ├── DeepDesignPanel    # Exploration form + results
 │       │   │   ├── GraphTimeline      # Chinese-labeled progress
@@ -436,7 +444,7 @@ aero-spec-agent/
 │           └── vspaero_analysis.py    # Panel method sweep
 │
 ├── packages/aircraft-schema/          # Spec YAML definitions & examples
-├── tests/api/                         # 412 backend tests
+├── tests/api/                         # 528 backend tests
 ├── storage/                           # Generated design artifacts (gitignored)
 └── pyproject.toml                     # Python project config
 ```

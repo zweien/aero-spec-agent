@@ -1,17 +1,28 @@
 "use client";
 
 import { type JSX } from "react";
+import type { CompareMetricSource, MetricConfidence } from "./types";
+import { SOURCE_LABELS } from "./metricExtractors";
 
 export type CompareMetricCellProps = {
   value?: number | string | null;
   unit?: string;
   isBest?: boolean;
   isRisk?: boolean;
+  source?: CompareMetricSource;
+  confidence?: MetricConfidence;
 };
 
-export function CompareMetricCell({ value, unit, isBest, isRisk }: CompareMetricCellProps): JSX.Element {
-  if (value == null) {
-    return <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: 12 }}>暂无</span>;
+export function CompareMetricCell({ value, unit, isBest, isRisk, source, confidence }: CompareMetricCellProps): JSX.Element {
+  if (value == null || source === "missing") {
+    return (
+      <span
+        style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: 12 }}
+        title={source ? SOURCE_LABELS[source] : undefined}
+      >
+        暂无
+      </span>
+    );
   }
 
   const display = typeof value === "number"
@@ -20,12 +31,21 @@ export function CompareMetricCell({ value, unit, isBest, isRisk }: CompareMetric
 
   const bg = isBest
     ? "rgba(34,197,94,0.08)"
-    : isRisk
+    : isRisk || confidence === "low"
       ? "rgba(234,179,8,0.08)"
       : "transparent";
 
+  const color = isBest
+    ? "var(--success, #16a34a)"
+    : isRisk || confidence === "low"
+      ? "var(--warning, #ca8a04)"
+      : "var(--text)";
+
+  const sourceTitle = source ? SOURCE_LABELS[source] : undefined;
+
   return (
     <span
+      title={sourceTitle}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -35,7 +55,7 @@ export function CompareMetricCell({ value, unit, isBest, isRisk }: CompareMetric
         background: bg,
         fontSize: 12,
         fontWeight: isBest ? 600 : 400,
-        color: isBest ? "var(--success, #16a34a)" : isRisk ? "var(--warning, #ca8a04)" : "var(--text)",
+        color,
       }}
     >
       {display}

@@ -1,7 +1,7 @@
 "use client";
 
 import { type JSX } from "react";
-import type { CompareItem, CompareMetrics } from "./types";
+import type { CompareItem, CompareMetrics, CompareMetricSource, MetricConfidence } from "./types";
 import { extractCompareMetrics } from "./metricExtractors";
 import { isBest } from "./bestValue";
 import { CompareMetricCell } from "./CompareMetricCell";
@@ -147,8 +147,12 @@ function MetricGroup({
           {items.map((_, i) => {
             const m = metricsMap[i];
             const raw = m?.[row.key];
+            const cellValue = typeof raw === "number" || typeof raw === "string" ? raw : undefined;
             const best = isBest(row.key, i, metricsMap);
             const isRisk = row.key === "risk_level" && raw === "medium" || raw === "high";
+            const metricSources = m?.metric_sources as Record<string, CompareMetricSource> | undefined;
+            const source = metricSources?.[row.key] as CompareMetricSource | undefined;
+            const confidence = m?.confidence as MetricConfidence | undefined;
 
             return (
               <td
@@ -160,10 +164,12 @@ function MetricGroup({
                 }}
               >
                 <CompareMetricCell
-                  value={raw}
+                  value={cellValue}
                   unit={row.unit}
                   isBest={best}
                   isRisk={!!isRisk}
+                  source={source}
+                  confidence={confidence}
                 />
               </td>
             );

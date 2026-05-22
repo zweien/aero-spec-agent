@@ -8,6 +8,14 @@ export type DefaultedField = {
   reason: string;
 };
 
+export type CompareMetricSource =
+  | "backend_design_metrics"
+  | "performance_estimate"
+  | "client_heuristic"
+  | "missing";
+
+export type MetricConfidence = "high" | "medium" | "low";
+
 export type CompareMetrics = {
   wingspan_m?: number;
   fuselage_length_m?: number;
@@ -20,6 +28,9 @@ export type CompareMetrics = {
   risk_level?: "low" | "medium" | "high" | "unknown";
   defaulted_fields_count?: number;
   missing_metrics_count?: number;
+  metric_sources?: Record<string, CompareMetricSource>;
+  confidence?: MetricConfidence;
+  warnings?: string[];
 };
 
 export type CompareItem = {

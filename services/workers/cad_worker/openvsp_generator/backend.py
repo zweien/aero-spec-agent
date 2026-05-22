@@ -85,6 +85,7 @@ class OpenVspBackend:
 
     def generate(self, spec: AircraftSpec, output_dir: Path, *, on_progress: ProgressCallback | None = None) -> CadArtifacts:
         output_dir.mkdir(parents=True, exist_ok=True)
+        fail_stage = os.getenv("OPENVSP_FAIL_STAGE", "").strip()
         adapter = OpenVspAdapter(module=self._vsp_module)
         adapter.clear_model()
 
@@ -92,12 +93,20 @@ class OpenVspBackend:
             create_fuselage(adapter, spec),
         ]
         if on_progress: on_progress("fuselage_created", 62)
+        if fail_stage == "creating_fuselage":
+            raise RuntimeError(f"OpenVSP failure injection at stage: creating_fuselage")
         build_results.append(create_main_wing(adapter, spec))
         if on_progress: on_progress("wing_created", 68)
+        if fail_stage == "creating_wing":
+            raise RuntimeError(f"OpenVSP failure injection at stage: creating_wing")
         build_results.extend(create_tail(adapter, spec))
         if on_progress: on_progress("tail_created", 72)
+        if fail_stage == "creating_tail":
+            raise RuntimeError(f"OpenVSP failure injection at stage: creating_tail")
         build_results.extend(create_engine_nacelles(adapter, spec))
         if on_progress: on_progress("engine_created", 76)
+        if fail_stage == "creating_engine":
+            raise RuntimeError(f"OpenVSP failure injection at stage: creating_engine")
 
         adapter.update()
 
@@ -107,6 +116,8 @@ class OpenVspBackend:
         glb = output_dir / "aircraft.glb"
         adapter.write_vsp_file(vsp3)
         if on_progress: on_progress("vsp_model_saved", 82)
+        if fail_stage == "saving_vsp3":
+            raise RuntimeError(f"OpenVSP failure injection at stage: saving_vsp3")
 
         vspaero_data: dict[str, Any] = {}
         if _vspaero_enabled():
@@ -125,9 +136,13 @@ class OpenVspBackend:
                     vspaero_data = {"status": "failed", "error_message": str(exc)}
         adapter.export_file(step, "EXPORT_STEP")
         if on_progress: on_progress("step_exported", 86)
+        if fail_stage == "exporting_step":
+            raise RuntimeError(f"OpenVSP failure injection at stage: exporting_step")
         adapter.export_file(obj, "EXPORT_OBJ")
         self._obj_to_glb(obj, glb)
         if on_progress: on_progress("glb_exported", 92)
+        if fail_stage == "exporting_glb":
+            raise RuntimeError(f"OpenVSP failure injection at stage: exporting_glb")
 
         applied_parameters = _stable_applied_parameters(build_results)
         if on_progress: on_progress("preview_ready", 96)

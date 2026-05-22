@@ -1,9 +1,10 @@
 "use client";
 
-import { type JSX } from "react";
+import { type JSX, useCallback } from "react";
 import type { CompareItem } from "./types";
 import { CompareItemCard } from "./CompareItemCard";
 import { CompareTable } from "./CompareTable";
+import { exportCompareReport, getExportFilename } from "./exportCompareReport";
 
 export type CompareDrawerProps = {
   open: boolean;
@@ -27,6 +28,20 @@ export function CompareDrawer({
   if (!open) return null;
 
   const hasMinItems = items.length >= 2;
+
+  const handleExport = useCallback(() => {
+    const md = exportCompareReport(items);
+    if (!md) return;
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = getExportFilename();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [items]);
 
   return (
     <div
@@ -74,6 +89,22 @@ export function CompareDrawer({
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={handleExport}
+            disabled={!hasMinItems}
+            style={{
+              fontSize: 11,
+              padding: "4px 10px",
+              background: hasMinItems ? "var(--bg-surface)" : "transparent",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-sm)",
+              color: hasMinItems ? "var(--text)" : "var(--text-muted)",
+              cursor: hasMinItems ? "pointer" : "not-allowed",
+              opacity: hasMinItems ? 1 : 0.5,
+            }}
+          >
+            导出对比报告
+          </button>
           {items.length > 0 && (
             <button
               onClick={onClear}
@@ -120,6 +151,22 @@ export function CompareDrawer({
           />
         ) : (
           <>
+            {/* Disclaimer notice */}
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                background: "rgba(59,130,246,0.04)",
+                border: "1px solid rgba(59,130,246,0.12)",
+                borderRadius: 6,
+                padding: "8px 12px",
+                marginBottom: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              当前指标为概念设计阶段估算，用于方案初筛，不代表高保真气动或结构分析结果。
+            </div>
+
             {/* Defaulted fields trust notice */}
             {items.some((i) => (i.defaultedFields?.length ?? 0) >= 3) && (
               <div
