@@ -110,6 +110,10 @@ button:disabled {
   color: var(--error);
 }
 
+.toolbar-button-danger:hover:not(:disabled) {
+  color: var(--error);
+}
+
 input:not([type]),
 input[type="text"],
 input[type="password"],
@@ -195,7 +199,8 @@ select:focus {
   font-weight: 500;
 }
 
-.topbar-compare-active {
+.topbar-compare-active,
+.topbar-compare-active:hover:not(:disabled) {
   border-color: var(--accent-border);
   background: var(--accent-bg);
   color: var(--accent-bright);
@@ -1374,8 +1379,12 @@ select:focus {
   gap: 4px;
 }
 
-.settings-profile-select,
 .settings-field-input {
+  flex: 1;
+  font-size: 11px;
+}
+
+.settings-row .settings-profile-select {
   flex: 1;
   font-size: 11px;
 }
@@ -1535,10 +1544,12 @@ select:focus {
   color: #fff;
 }
 
-.button-primary:hover:not(:disabled) {
+.button-primary:hover:not(:disabled),
+.chat-input-row button:hover:not(:disabled),
+.apply-changes-pending:hover:not(:disabled) {
   border-color: var(--accent-border);
   background: var(--accent-solid);
-  color: var(--accent-bright);
+  color: #fff;
 }
 
 .apply-changes-btn:disabled {

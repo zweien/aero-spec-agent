@@ -29,6 +29,10 @@ test("workspace settings and metrics use semantic UI classes", () => {
   const page = source("app/page.tsx");
   const settings = source("components/settings-panel/SettingsPanel.tsx");
   const metrics = source("components/metrics/DesignMetricsCard.tsx");
+  const css = source("app/globals.css");
+  const activeCompareRule = css.match(
+    /\.topbar-compare-active,[^}]*\.topbar-compare-active:hover:not\(:disabled\) \{[^}]*}/,
+  )?.[0];
 
   assert.match(page, /className=\{`topbar-compare/);
   assert.doesNotMatch(page, /background: compareState\.items\.length/);
@@ -40,4 +44,14 @@ test("workspace settings and metrics use semantic UI classes", () => {
   assert.match(metrics, /design-metrics-card/);
   assert.match(metrics, /risk-level-\$\{riskLevel\}/);
   assert.doesNotMatch(metrics, /style=\{\{/);
+
+  assert.ok(activeCompareRule);
+  assert.match(activeCompareRule, /border-color:\s*var\(--accent-border\);/);
+  assert.match(activeCompareRule, /background:\s*var\(--accent-bg\);/);
+  assert.match(activeCompareRule, /color:\s*var\(--accent-bright\);/);
+  assert.match(css, /\.toolbar-button-danger:hover:not\(:disabled\) \{[^}]*color:\s*var\(--error\);/);
+  assert.match(css, /\.settings-row \.settings-profile-select \{[^}]*font-size:\s*11px;/);
+  assert.match(css, /\.settings-preset \{/);
+  assert.match(css, /\.design-metrics-card \{/);
+  assert.match(css, /\.risk-level-high \{\s*color:\s*var\(--error\);/);
 });
