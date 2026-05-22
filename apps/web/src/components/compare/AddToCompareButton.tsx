@@ -16,19 +16,10 @@ export function AddToCompareButton({ isAdded, onAdd, disabled, maxReached }: Add
 
   return (
     <button
+      className={`toolbar-button add-to-compare${isAdded ? " add-to-compare-added" : ""}`}
       onClick={onAdd}
       disabled={isDisabled}
       title={title}
-      style={{
-        fontSize: 11,
-        padding: "4px 8px",
-        background: isAdded ? "var(--bg-surface)" : "transparent",
-        border: isAdded ? "1px solid var(--success)" : "1px solid var(--border-default)",
-        borderRadius: "var(--radius-sm)",
-        color: isAdded ? "var(--success)" : isDisabled ? "var(--text-muted)" : "var(--text-dim)",
-        cursor: isDisabled ? "default" : "pointer",
-        opacity: isDisabled && !isAdded ? 0.5 : 1,
-      }}
     >
       {label}
     </button>

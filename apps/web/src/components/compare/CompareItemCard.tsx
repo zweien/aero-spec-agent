@@ -10,77 +10,51 @@ export type CompareItemCardProps = {
   onSetCurrent?: (item: CompareItem) => void;
 };
 
-const SOURCE_LABELS: Record<CompareSource, { text: string; color: string; bg: string }> = {
-  version: { text: "Version", color: "var(--text-dim)", bg: "var(--bg-surface)" },
-  "deep-design-variant": { text: "Deep Design", color: "var(--accent)", bg: "var(--accent-bg)" },
-  recommended: { text: "推荐方案", color: "var(--accent-bright)", bg: "var(--accent-bg)" },
+const SOURCE_LABELS: Record<CompareSource, string> = {
+  version: "Version",
+  "deep-design-variant": "Deep Design",
+  recommended: "推荐方案",
 };
 
 export function CompareItemCard({ item, onRemove, onViewModel, onSetCurrent }: CompareItemCardProps): JSX.Element {
-  const src = SOURCE_LABELS[item.source] ?? SOURCE_LABELS.version;
+  const sourceLabel = SOURCE_LABELS[item.source] ?? SOURCE_LABELS.version;
   const dfCount = item.defaultedFields?.length ?? 0;
 
   return (
-    <div
-      style={{
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius)",
-        padding: 10,
-        background: "var(--bg-elevated)",
-        minWidth: 0,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+    <div className="compare-item-card">
+      <div className="compare-item-card-header">
+        <span className="compare-item-name">
           {item.name ?? `v${item.versionNo}`}
         </span>
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 600,
-            color: src.color,
-            background: src.bg,
-            border: item.source === "recommended" ? "none" : "1px solid var(--border-default)",
-            borderRadius: 3,
-            padding: "1px 5px",
-            letterSpacing: 0.3,
-            flexShrink: 0,
-          }}
-        >
-          {src.text}
+        <span className={`compare-source-pill compare-source-${item.source}`}>
+          {sourceLabel}
         </span>
-        <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>
+        <span className="compare-item-version">
           v{item.versionNo}
         </span>
       </div>
 
       {/* Defaulted fields hint */}
       {dfCount > 0 && (
-        <div
-          style={{
-            fontSize: 11,
-            color: dfCount >= 3 ? "var(--warning)" : "var(--text-muted)",
-            marginBottom: 6,
-          }}
-        >
+        <div className={`compare-defaulted-hint${dfCount >= 3 ? " compare-defaulted-warning" : ""}`}>
           {dfCount >= 3 ? `默认补全较多 ${dfCount} 项` : `默认补全 ${dfCount} 项`}
         </div>
       )}
       {dfCount === 0 && (
-        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>
+        <div className="compare-defaulted-hint">
           无默认补全
         </div>
       )}
 
       {/* Risk badge */}
       {item.metrics?.risk_level && (
-        <div style={{ marginBottom: 8 }}>
+        <div className="compare-risk-row">
           <RiskBadge level={item.metrics.risk_level} />
         </div>
       )}
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+      <div className="compare-item-actions">
         {onViewModel && (
           <SmallBtn label="查看模型" onClick={() => onViewModel(item)} />
         )}
@@ -94,25 +68,16 @@ export function CompareItemCard({ item, onRemove, onViewModel, onSetCurrent }: C
 }
 
 function RiskBadge({ level }: { level: string }): JSX.Element {
-  const cfg: Record<string, { bg: string; color: string; text: string }> = {
-    low: { bg: "var(--success-bg)", color: "var(--success)", text: "风险：低" },
-    medium: { bg: "var(--warning-bg)", color: "var(--warning)", text: "风险：中" },
-    high: { bg: "var(--error-bg)", color: "var(--error)", text: "风险：高" },
-    unknown: { bg: "var(--bg-surface)", color: "var(--text-muted)", text: "风险：未知" },
+  const labels: Record<string, string> = {
+    low: "风险：低",
+    medium: "风险：中",
+    high: "风险：高",
+    unknown: "风险：未知",
   };
-  const c = cfg[level] ?? cfg.unknown;
+  const riskLevel = level in labels ? level : "unknown";
   return (
-    <span
-      style={{
-        fontSize: 10,
-        fontWeight: 500,
-        color: c.color,
-        background: c.bg,
-        borderRadius: 3,
-        padding: "1px 6px",
-      }}
-    >
-      {c.text}
+    <span className={`compare-risk-badge risk-level risk-level-${riskLevel}`}>
+      {labels[riskLevel]}
     </span>
   );
 }
@@ -120,16 +85,8 @@ function RiskBadge({ level }: { level: string }): JSX.Element {
 function SmallBtn({ label, onClick }: { label: string; onClick: () => void }): JSX.Element {
   return (
     <button
+      className="toolbar-button compare-item-button"
       onClick={onClick}
-      style={{
-        fontSize: 10,
-        padding: "3px 7px",
-        background: "transparent",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-sm)",
-        color: "var(--text-dim)",
-        cursor: "pointer",
-      }}
     >
       {label}
     </button>

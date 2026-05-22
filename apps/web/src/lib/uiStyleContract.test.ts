@@ -55,3 +55,17 @@ test("workspace settings and metrics use semantic UI classes", () => {
   assert.match(css, /\.design-metrics-card \{/);
   assert.match(css, /\.risk-level-high \{\s*color:\s*var\(--error\);/);
 });
+
+test("compare view uses drawer and table class semantics", () => {
+  const drawer = source("components/compare/CompareDrawer.tsx");
+  const table = source("components/compare/CompareTable.tsx");
+  const card = source("components/compare/CompareItemCard.tsx");
+
+  assert.match(drawer, /compare-drawer/);
+  assert.match(drawer, /notice notice-info/);
+  assert.match(table, /compare-table-scroll/);
+  assert.match(card, /compare-item-card/);
+  assert.doesNotMatch(drawer, /style=\{\{/);
+  assert.doesNotMatch(table, /style=\{\{/);
+  assert.doesNotMatch(card, /style=\{\{/);
+});
