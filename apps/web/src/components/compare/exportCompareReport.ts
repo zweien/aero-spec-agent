@@ -1,6 +1,5 @@
 import type { CompareItem } from "./types";
-import { extractCompareMetrics } from "./metricExtractors";
-import { SOURCE_LABELS } from "./metricExtractors";
+import { extractCompareMetrics, SOURCE_LABELS } from "./metricExtractors.ts";
 import type { CompareMetricSource, CompareMetrics } from "./types";
 
 type MetricRow = {
