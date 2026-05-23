@@ -1,10 +1,12 @@
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 
 const APP_PORT = Number(process.env.TASK6_QA_PORT ?? 3910);
 const APP_URL = process.env.TASK6_QA_URL ?? `http://127.0.0.1:${APP_PORT}`;
-const CHROME_PORT = Number(process.env.TASK6_QA_CHROME_PORT ?? 9224);
 const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
 
 function assert(condition, message) {
@@ -40,6 +42,32 @@ async function waitForJson(url, timeoutMs) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.once("listening", () => {
+      const address = server.address();
+      server.close(() => {
+        if (address && typeof address === "object") resolve(address.port);
+        else reject(new Error("Failed to allocate a Chrome debugging port"));
+      });
+    });
+    server.listen(0, "127.0.0.1");
+  });
+}
+
 function startNextDev() {
   if (process.env.TASK6_QA_URL) return null;
 
@@ -55,7 +83,7 @@ function startNextDev() {
   return child;
 }
 
-function startChrome() {
+function startChrome({ port, userDataDir }) {
   const chrome = command("google-chrome") || command("chromium") || command("chromium-browser");
   assert(chrome, "Chrome or Chromium is required for Task 6 browser QA");
 
@@ -63,8 +91,8 @@ function startChrome() {
     "--headless=new",
     "--no-sandbox",
     "--disable-gpu",
-    `--remote-debugging-port=${CHROME_PORT}`,
-    "--user-data-dir=/tmp/aero-spec-agent-task6-browser-qa",
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
     "about:blank",
   ], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -80,6 +108,18 @@ function stopProcessGroup(child) {
     try {
       child.kill("SIGTERM");
     } catch {}
+  }
+}
+
+async function removeDirectoryWithRetry(path) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt === 9) throw error;
+      await delay(100);
+    }
   }
 }
 
@@ -152,9 +192,9 @@ class CdpPage {
   }
 }
 
-async function openCdpPage(url) {
+async function openCdpPage(url, port) {
   const target = await fetch(
-    `http://127.0.0.1:${CHROME_PORT}/json/new?${encodeURIComponent(url)}`,
+    `http://127.0.0.1:${port}/json/new?${encodeURIComponent(url)}`,
     { method: "PUT" },
   ).then((response) => response.json());
   const ws = new WebSocket(target.webSocketDebuggerUrl);
@@ -677,15 +717,31 @@ async function qaFixture(page) {
 }
 
 async function main() {
-  const next = startNextDev();
-  const chrome = startChrome();
+  let next = null;
+  let chrome = null;
+  let userDataDir = null;
   try {
+    const chromePort = process.env.TASK6_QA_CHROME_PORT
+      ? Number(process.env.TASK6_QA_CHROME_PORT)
+      : await getFreePort();
+    assert(Number.isInteger(chromePort) && chromePort > 0, "TASK6_QA_CHROME_PORT must be a positive integer");
+    if (process.env.TASK6_QA_CHROME_PORT) {
+      assert(
+        await isPortAvailable(chromePort),
+        `Chrome debugging port ${chromePort} is already in use`,
+      );
+    }
+
+    userDataDir = mkdtempSync(join(tmpdir(), "aero-spec-agent-task6-browser-qa-"));
+    next = startNextDev();
+    chrome = startChrome({ port: chromePort, userDataDir });
+
     await Promise.all([
       waitForHttp(APP_URL, 30000),
-      waitForJson(`http://127.0.0.1:${CHROME_PORT}/json/version`, 30000),
+      waitForJson(`http://127.0.0.1:${chromePort}/json/version`, 30000),
     ]);
 
-    const { page, targetId } = await openCdpPage(APP_URL);
+    const { page, targetId } = await openCdpPage(APP_URL, chromePort);
     try {
       const realApp = await qaRealApp(page);
       const fixture = await qaFixture(page);
@@ -703,6 +759,9 @@ async function main() {
   } finally {
     stopProcessGroup(next);
     stopProcessGroup(chrome);
+    if (userDataDir) {
+      await removeDirectoryWithRetry(userDataDir);
+    }
   }
 }
 
