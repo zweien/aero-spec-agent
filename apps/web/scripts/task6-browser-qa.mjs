@@ -252,7 +252,147 @@ async function qaRealApp(page) {
   assert(compareEmpty.open, "Compare empty drawer did not open");
   assert(compareEmpty.role === "dialog" && compareEmpty.modal === "true", "Compare drawer dialog semantics missing");
   assert(compareEmpty.empty && compareEmpty.title === "还没有加入对比的方案", "Compare empty state missing");
-  return { emptyWorkspace, settings, compareEmpty };
+
+  await page.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+  });
+  await page.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+  });
+  await delay(250);
+  await page.evaluate(() => {
+    [...document.querySelectorAll(".right-panel-tab")]
+      .find((element) => element.textContent?.includes("深度设计"))
+      ?.click();
+    return true;
+  });
+  await delay(250);
+  const deepDesignForm = await page.evaluate(() => {
+    const form = document.querySelector(".deep-design-form");
+    const prompt = document.querySelector(".deep-design-prompt");
+    const primaryAction = [...document.querySelectorAll(".deep-design-actions .button-primary")]
+      .find((element) => element.textContent?.includes("开始探索"));
+    const visible = (element) => {
+      if (!element) return false;
+      const box = element.getBoundingClientRect();
+      return box.width > 0 && box.height > 0;
+    };
+    const overflowingControls = [...document.querySelectorAll(
+      ".deep-design-form button, .deep-design-form label, .deep-design-form textarea",
+    )].filter((element) => element.scrollWidth > element.clientWidth + 2);
+    return {
+      activeTab: document.querySelector(".right-panel-tab.active")?.textContent?.trim(),
+      formVisible: visible(form),
+      promptVisible: visible(prompt),
+      promptPlaceholder: prompt?.getAttribute("placeholder") ?? "",
+      strategies: document.querySelectorAll(".deep-design-strategy input[type='checkbox']").length,
+      depths: document.querySelectorAll(".deep-design-depth input[type='radio']").length,
+      checkedDepth: document.querySelector(".deep-design-depth input[type='radio']:checked")
+        ?.closest(".deep-design-depth")
+        ?.textContent
+        ?.trim(),
+      primaryActionVisible: visible(primaryAction),
+      primaryActionDisabled: primaryAction?.disabled ?? null,
+      overflowingControls: overflowingControls.map((element) => element.textContent?.trim()),
+      horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 2,
+    };
+  });
+  assert(deepDesignForm.activeTab === "深度设计", "Deep Design tab is not active on desktop");
+  assert(deepDesignForm.formVisible, "Deep Design form is not visible");
+  assert(deepDesignForm.promptVisible, "Deep Design prompt textarea is not visible");
+  assert(deepDesignForm.promptPlaceholder.includes("无人机"), "Deep Design prompt placeholder is missing");
+  assert(deepDesignForm.strategies === 4, "Deep Design strategy controls missing");
+  assert(deepDesignForm.depths === 3, "Deep Design depth controls missing");
+  assert(deepDesignForm.checkedDepth?.includes("标准探索"), "Deep Design default depth is not selected");
+  assert(deepDesignForm.primaryActionVisible, "Deep Design primary action is not visible");
+  assert(deepDesignForm.primaryActionDisabled === true, "Deep Design primary action should be disabled with empty prompt");
+  assert(deepDesignForm.overflowingControls.length === 0, `Deep Design form controls overflow: ${JSON.stringify(deepDesignForm.overflowingControls)}`);
+  assert(!deepDesignForm.horizontalOverflow, "Deep Design form creates desktop horizontal overflow");
+
+  await page.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  await page.send("Page.navigate", { url: APP_URL });
+  await delay(1200);
+  const mobileRightPanelInitial = await page.evaluate(() => {
+    const visible = (element) => {
+      if (!element) return false;
+      const box = element.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && box.bottom >= 0 && box.top <= window.innerHeight;
+    };
+    const tabs = [...document.querySelectorAll(".right-panel-tab")];
+    return {
+      tabsVisible: visible(document.querySelector(".right-panel-tabs")),
+      labels: tabs.map((tab) => tab.textContent?.trim()),
+      visibleTabs: tabs.filter(visible).length,
+      active: document.querySelector(".right-panel-tab.active")?.textContent?.trim(),
+      overflowingTabs: tabs
+        .filter((tab) => tab.scrollWidth > tab.clientWidth + 2)
+        .map((tab) => tab.textContent?.trim()),
+      horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 2,
+    };
+  });
+  assert(mobileRightPanelInitial.tabsVisible, "right-panel tabs are not visible at 390px");
+  assert(mobileRightPanelInitial.visibleTabs === 2, "both right-panel tabs are not visible at 390px");
+  assert(mobileRightPanelInitial.labels.includes("参数编辑") && mobileRightPanelInitial.labels.includes("深度设计"), "right-panel tab labels missing at 390px");
+  assert(mobileRightPanelInitial.active === "参数编辑", "parameters tab is not active by default at 390px");
+  assert(mobileRightPanelInitial.overflowingTabs.length === 0, `right-panel tab text overflows at 390px: ${JSON.stringify(mobileRightPanelInitial.overflowingTabs)}`);
+  assert(!mobileRightPanelInitial.horizontalOverflow, "real app has page-level horizontal overflow at 390px");
+
+  await page.evaluate(() => {
+    [...document.querySelectorAll(".right-panel-tab")]
+      .find((element) => element.textContent?.includes("深度设计"))
+      ?.click();
+    return true;
+  });
+  await delay(250);
+  const mobileRightPanelDeepDesign = await page.evaluate(() => ({
+    active: document.querySelector(".right-panel-tab.active")?.textContent?.trim(),
+    formVisible: !!document.querySelector(".deep-design-form"),
+    horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 2,
+  }));
+  assert(mobileRightPanelDeepDesign.active === "深度设计", "Deep Design tab does not become active at 390px");
+  assert(mobileRightPanelDeepDesign.formVisible, "Deep Design form is not visible after mobile tab switch");
+  assert(!mobileRightPanelDeepDesign.horizontalOverflow, "Deep Design mobile tab creates horizontal overflow");
+
+  await page.evaluate(() => {
+    [...document.querySelectorAll(".right-panel-tab")]
+      .find((element) => element.textContent?.includes("参数编辑"))
+      ?.click();
+    return true;
+  });
+  await delay(250);
+  const mobileRightPanelParameters = await page.evaluate(() => ({
+    active: document.querySelector(".right-panel-tab.active")?.textContent?.trim(),
+    contentVisible: !!document.querySelector(".right-panel-content"),
+    overflowingButtons: [...document.querySelectorAll(".right-panel button")]
+      .filter((button) => button.scrollWidth > button.clientWidth + 2)
+      .map((button) => button.textContent?.trim()),
+    horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 2,
+  }));
+  assert(mobileRightPanelParameters.active === "参数编辑", "Parameters tab does not become active again at 390px");
+  assert(mobileRightPanelParameters.contentVisible, "right-panel content is not visible after mobile tab switch");
+  assert(mobileRightPanelParameters.overflowingButtons.length === 0, `right-panel button text overflows at 390px: ${JSON.stringify(mobileRightPanelParameters.overflowingButtons)}`);
+  assert(!mobileRightPanelParameters.horizontalOverflow, "Parameters mobile tab creates horizontal overflow");
+
+  return {
+    emptyWorkspace,
+    settings,
+    compareEmpty,
+    deepDesignForm,
+    mobileRightPanelInitial,
+    mobileRightPanelDeepDesign,
+    mobileRightPanelParameters,
+  };
 }
 
 function fixtureHtml() {
