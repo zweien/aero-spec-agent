@@ -3054,7 +3054,7 @@ select:focus {
 .workflow-timeline {
   display: flex;
   flex-direction: column;
-  margin-top: 8px;
+  margin: 8px 0 0;
   padding: 0;
   list-style: none;
 }
