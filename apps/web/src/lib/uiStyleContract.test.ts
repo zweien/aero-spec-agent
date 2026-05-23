@@ -172,3 +172,19 @@ test("runtime notices and cad overlays use shared state classes", () => {
   assert.match(css, /\.cad-loading-overlay-error-title \{/);
   assert.match(css, /\.workflow-error-retry:hover:not\(:disabled\) \{/);
 });
+
+test("frontend style sources do not retain legacy cyan or blue fallbacks", () => {
+  const files = [
+    "app/globals.css",
+    "components/chat/FallbackToolNotice.tsx",
+    "components/runtime/DefaultedFieldsNotice.tsx",
+    "components/cad-viewer/CADLoadingOverlay.tsx",
+    "components/graph/RecommendedVariantCard.tsx",
+    "components/graph/VariantThumbnail.tsx",
+  ];
+  const legacyPalette = /#06b6d4|#22d3ee|#3b82f6|#60a5fa|rgba\(6, 182, 212/;
+
+  for (const file of files) {
+    assert.doesNotMatch(source(file), legacyPalette, file);
+  }
+});

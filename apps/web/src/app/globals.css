@@ -861,7 +861,7 @@ select:focus {
   display: inline-block;
   width: 2px;
   height: 1em;
-  background: var(--accent, #3b82f6);
+  background: var(--accent);
   margin-left: 2px;
   vertical-align: text-bottom;
   animation: cursor-blink 0.8s ease-in-out infinite;
@@ -1011,7 +1011,7 @@ select:focus {
   height: 100%;
   min-height: 220px;
   border-radius: var(--radius-sm);
-  background: radial-gradient(circle at 50% 35%, rgba(6, 182, 212, 0.12), transparent 50%);
+  background: radial-gradient(circle at 50% 35%, var(--info-bg), transparent 50%);
   cursor: grab;
 }
 
@@ -1090,8 +1090,8 @@ select:focus {
 }
 
 .preview-wing {
-  fill: rgba(6, 182, 212, 0.5);
-  stroke: rgba(34, 211, 238, 0.6);
+  fill: var(--accent-bg);
+  stroke: var(--accent-border);
   stroke-width: 0.035;
 }
 
@@ -1847,7 +1847,7 @@ select:focus {
   transition: all 0.15s;
 }
 .compare-btn:hover {
-  background: rgba(6, 182, 212, 0.15);
+  background: var(--accent-bg);
   color: var(--accent-bright);
 }
 
