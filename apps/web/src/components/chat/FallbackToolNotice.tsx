@@ -1,6 +1,6 @@
 "use client";
 
-import { type JSX, useState } from "react";
+import { type JSX, useId, useState } from "react";
 
 const TOOL_LABELS: Record<string, string> = {
   generate_design: "生成设计",
@@ -15,21 +15,25 @@ export type FallbackToolNoticeProps = {
 
 export function FallbackToolNotice({ toolName, confidence }: FallbackToolNoticeProps): JSX.Element {
   const [open, setOpen] = useState(false);
+  const detailsId = useId();
   const label = TOOL_LABELS[toolName] ?? toolName;
   const pct = (confidence * 100).toFixed(0);
 
   return (
     <div className="runtime-notice runtime-notice-info">
       <button
+        type="button"
         onClick={() => setOpen(!open)}
         className="runtime-notice-toggle"
+        aria-expanded={open}
+        aria-controls={detailsId}
       >
         <span className="runtime-notice-icon">&#9432;</span>
         模型未调用工具，系统自动识别并执行
         <span className="runtime-notice-caret">{open ? "▾" : "▸"}</span>
       </button>
       {open && (
-        <p className="runtime-notice-copy">
+        <p id={detailsId} className="runtime-notice-copy">
           当前模型未原生支持工具调用（function calling）。系统通过规则引擎识别用户意图，
           并自动映射为「{label}」操作。置信度: {pct}%。
         </p>

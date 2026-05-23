@@ -138,9 +138,29 @@ test("runtime notices and cad overlays use shared state classes", () => {
 
   assert.match(fallbackNotice, /runtime-notice runtime-notice-info/);
   assert.match(defaultedNotice, /runtime-notice runtime-notice-info/);
+  for (const noticeSource of [fallbackNotice, defaultedNotice]) {
+    assert.match(noticeSource, /type="button"/);
+    assert.match(noticeSource, /aria-expanded=\{open\}/);
+    assert.match(noticeSource, /aria-controls=\{detailsId\}/);
+    assert.match(noticeSource, /id=\{detailsId\}/);
+  }
+  assert.match(defaultedNotice, /<th scope="col">参数<\/th>/);
   assert.match(workflowError, /workflow-error-card runtime-notice status-error/);
+  assert.match(workflowError, /workflow-error-retry/);
   assert.match(cadOverlay, /cad-loading-overlay/);
+  assert.match(cadOverlay, /cad-loading-overlay--error/);
+  assert.match(cadOverlay, /cad-loading-overlay--compact/);
+  assert.match(cadOverlay, /cad-loading-overlay--full/);
   assert.match(cadOverlay, /cad-loading-overlay-progress-fill/);
+  const workflowTimeline = source("components/chat/WorkflowTimeline.tsx");
+  const unifiedTimeline = source("components/runtime/UnifiedWorkflowTimeline.tsx");
+  for (const timelineSource of [workflowTimeline, unifiedTimeline]) {
+    assert.match(timelineSource, /<ol className=\{/);
+    assert.match(timelineSource, /<li\s+[\s\S]*?key=/);
+    assert.match(timelineSource, /aria-label=\{.*statusText/);
+    assert.match(timelineSource, /aria-hidden="true"/);
+    assert.match(timelineSource, /workflow-stage-running status-running/);
+  }
   for (const migratedSource of [fallbackNotice, defaultedNotice, cadOverlay]) {
     assert.doesNotMatch(migratedSource, /#3b82f6|rgba\(59,\s*130,\s*246|#60a5fa/);
   }
@@ -150,4 +170,5 @@ test("runtime notices and cad overlays use shared state classes", () => {
   assert.match(css, /\.runtime-notice \{/);
   assert.match(css, /\.runtime-notice-info \{/);
   assert.match(css, /\.cad-loading-overlay-error-title \{/);
+  assert.match(css, /\.workflow-error-retry:hover:not\(:disabled\) \{/);
 });

@@ -47,6 +47,15 @@ function stageIcon(status: string): string {
   }
 }
 
+function statusText(status: string): string {
+  switch (status) {
+    case "completed": return "已完成";
+    case "running": return "运行中";
+    case "failed": return "失败";
+    default: return "等待中";
+  }
+}
+
 function formatDuration(ms: number | null): string {
   if (ms === null || ms === 0) return "";
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -87,17 +96,21 @@ export function UnifiedWorkflowTimeline({ stages: stagesProp, nodes, mode = "nor
 
   if (stages.length === 0) return <div />;
 
-  return (
-    <div className={`workflow-timeline workflow-timeline-${mode}`}>
+  const timeline = (
+    <ol className={`workflow-timeline workflow-timeline-${mode}`}>
       {stages.map((item, i) => {
         const isLast = i === stages.length - 1;
         const duration = formatDuration(item.durationMs);
         const statusClass = STATUS_CLASSES[item.status] ?? "workflow-stage-pending";
 
         return (
-          <div key={item.stage} className={`workflow-stage ${statusClass}`}>
+          <li
+            key={item.stage}
+            className={`workflow-stage ${statusClass}`}
+            aria-label={`${item.label}，状态：${statusText(item.status)}`}
+          >
             <div className="workflow-stage-row">
-              <span className="workflow-stage-indicator">
+              <span className="workflow-stage-indicator" aria-hidden="true">
                 {stageIcon(item.status)}
               </span>
               <span className="workflow-stage-label">
@@ -110,16 +123,22 @@ export function UnifiedWorkflowTimeline({ stages: stagesProp, nodes, mode = "nor
               )}
             </div>
             {!isLast && (
-              <div className="workflow-stage-rail" />
+              <div className="workflow-stage-rail" aria-hidden="true" />
             )}
-          </div>
+          </li>
         );
       })}
+    </ol>
+  );
+
+  return (
+    <>
+      {timeline}
       {elapsedTime != null && elapsedTime > 0 && (
-        <div className="workflow-elapsed-time">
+        <div className="workflow-elapsed-time" aria-live="polite">
           已运行：{formatElapsed(elapsedTime)}
         </div>
       )}
-    </div>
+    </>
   );
 }

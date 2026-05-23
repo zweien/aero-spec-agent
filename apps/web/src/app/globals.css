@@ -3055,6 +3055,8 @@ select:focus {
   display: flex;
   flex-direction: column;
   margin-top: 8px;
+  padding: 0;
+  list-style: none;
 }
 
 .workflow-stage-row {
@@ -3167,6 +3169,12 @@ select:focus {
 .workflow-error-retry {
   border: 0;
   background: var(--accent);
+  color: white;
+}
+
+.workflow-error-retry:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--accent-solid);
   color: white;
 }
 

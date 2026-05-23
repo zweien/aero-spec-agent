@@ -38,6 +38,19 @@ function circleIcon(state: StepState): string {
   }
 }
 
+function statusText(state: StepState): string {
+  switch (state) {
+    case "completed":
+      return "已完成";
+    case "running":
+      return "运行中";
+    case "failed":
+      return "失败";
+    default:
+      return "等待中";
+  }
+}
+
 function inferStepStates(stages: WorkflowStage[]): Array<{ step: string; state: StepState }> {
   // Find the highest pipeline step index we've seen — all steps before it are completed
   let highWaterMark = -1;
@@ -76,27 +89,32 @@ export function WorkflowTimeline({ stages }: WorkflowTimelineProps): JSX.Element
   const steps = inferStepStates(stages);
 
   return (
-    <div className="workflow-timeline">
+    <ol className={"workflow-timeline"}>
       {steps.map((item, i) => {
         const isLast = i === steps.length - 1;
+        const label = getStepLabel(item.step);
 
         return (
-          <div key={item.step} className={`workflow-stage ${STATE_CLASSES[item.state]}`}>
+          <li
+            key={item.step}
+            className={`workflow-stage ${STATE_CLASSES[item.state]}`}
+            aria-label={`${label}，状态：${statusText(item.state)}`}
+          >
             <div className="workflow-stage-row">
-              <span className="workflow-stage-indicator workflow-stage-indicator-large">
+              <span className="workflow-stage-indicator workflow-stage-indicator-large" aria-hidden="true">
                 {circleIcon(item.state)}
               </span>
               <span className="workflow-stage-label">
-                {getStepLabel(item.step)}
+                {label}
               </span>
             </div>
 
             {!isLast && (
-              <div className="workflow-stage-rail workflow-stage-rail-large" />
+              <div className="workflow-stage-rail workflow-stage-rail-large" aria-hidden="true" />
             )}
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }
