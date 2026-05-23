@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -100,7 +100,28 @@ function startChrome({ port, userDataDir }) {
   });
 }
 
-function stopProcessGroup(child) {
+function waitForExit(child, timeoutMs) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeoutMs);
+    const done = () => {
+      cleanup();
+      resolve(true);
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.off("exit", done);
+      child.off("close", done);
+    };
+    child.once("exit", done);
+    child.once("close", done);
+  });
+}
+
+async function stopProcessGroup(child) {
   if (!child?.pid) return;
   try {
     process.kill(-child.pid, "SIGTERM");
@@ -109,13 +130,24 @@ function stopProcessGroup(child) {
       child.kill("SIGTERM");
     } catch {}
   }
+  if (await waitForExit(child, 5000)) return;
+
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    try {
+      child.kill("SIGKILL");
+    } catch {}
+  }
+  await waitForExit(child, 5000);
 }
 
 async function removeDirectoryWithRetry(path) {
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
       rmSync(path, { recursive: true, force: true });
-      return;
+      if (!existsSync(path)) return;
+      throw new Error(`Directory still exists after removal: ${path}`);
     } catch (error) {
       if (attempt === 9) throw error;
       await delay(100);
@@ -757,8 +789,8 @@ async function main() {
       await closeTarget(page, targetId);
     }
   } finally {
-    stopProcessGroup(next);
-    stopProcessGroup(chrome);
+    await stopProcessGroup(next);
+    await stopProcessGroup(chrome);
     if (userDataDir) {
       await removeDirectoryWithRetry(userDataDir);
     }
