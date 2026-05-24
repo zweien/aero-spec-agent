@@ -95,8 +95,8 @@ class OpenVspBackend:
 
         # Fuselage (not for flying_wing; BWB uses flat_body instead)
         if layout == "blended_wing_body" and spec.body is not None:
-            # TODO: Task 9 - import and call create_flat_body when create_body.py is ready
-            pass
+            from services.workers.cad_worker.openvsp_generator.create_body import create_flat_body
+            build_results.append(create_flat_body(adapter, spec))
         elif layout != "flying_wing":
             build_results.append(create_fuselage(adapter, spec))
         if on_progress: on_progress("fuselage_created", 62)

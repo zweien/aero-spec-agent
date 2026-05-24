@@ -64,6 +64,18 @@ class OpenVspAdapter:
             xsec_id = self._vsp.GetXSec(xsec_surf_id, xsec_index)
             self._vsp.SetXSecWidthHeight(xsec_id, diameter, diameter)
 
+    def set_fuselage_cross_section(self, geom_id: str, width: float, height: float) -> None:
+        """Set fuselage cross-section with independent width and height."""
+        xsec_surf_id = self._vsp.GetXSecSurf(geom_id, 0)
+        num_xsecs = self._vsp.GetNumXSec(xsec_surf_id)
+        if num_xsecs <= 0:
+            raise CadGenerationError("OpenVSP fuselage has no cross sections")
+        start_index = 1 if num_xsecs > 2 else 0
+        end_index = num_xsecs - 1 if num_xsecs > 2 else num_xsecs
+        for xsec_index in range(start_index, end_index):
+            xsec_id = self._vsp.GetXSec(xsec_surf_id, xsec_index)
+            self._vsp.SetXSecWidthHeight(xsec_id, width, height)
+
     def export_file(
         self,
         path: Path,
