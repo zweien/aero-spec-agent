@@ -133,6 +133,127 @@ def test_bwb_full_pipeline(client: TestClient):
     assert "width" in spec_response.text
 
 
+# ─── Canard layout ───
+
+
+def test_canard_full_pipeline(client: TestClient):
+    job = _generate_and_wait(client, "canard-e2e", "packages/aircraft-schema/examples/canard_uav.yaml")
+    version = _get_version(client, "canard-e2e", job["version_no"])
+
+    assert "aircraft_spec.yaml" in version["files"]
+    assert "aircraft.glb" in version["files"]
+
+    spec_response = client.get(f"/api/designs/canard-e2e/versions/{job['version_no']}/files/aircraft_spec.yaml")
+    assert spec_response.status_code == 200
+    assert "canard" in spec_response.text
+    assert "canard:" in spec_response.text
+
+
+# ─── Three-surface layout ───
+
+
+def test_three_surface_full_pipeline(client: TestClient):
+    job = _generate_and_wait(client, "3surf-e2e", "packages/aircraft-schema/examples/three_surface_uav.yaml")
+    version = _get_version(client, "3surf-e2e", job["version_no"])
+
+    assert "aircraft_spec.yaml" in version["files"]
+    assert "aircraft.glb" in version["files"]
+
+    spec_response = client.get(f"/api/designs/3surf-e2e/versions/{job['version_no']}/files/aircraft_spec.yaml")
+    assert spec_response.status_code == 200
+    assert "three_surface" in spec_response.text
+
+
+# ─── Tandem wing layout ───
+
+
+def test_tandem_wing_full_pipeline(client: TestClient):
+    job = _generate_and_wait(client, "tandem-e2e", "packages/aircraft-schema/examples/tandem_wing_uav.yaml")
+    version = _get_version(client, "tandem-e2e", job["version_no"])
+
+    assert "aircraft_spec.yaml" in version["files"]
+    assert "aircraft.glb" in version["files"]
+
+    spec_response = client.get(f"/api/designs/tandem-e2e/versions/{job['version_no']}/files/aircraft_spec.yaml")
+    assert spec_response.status_code == 200
+    assert "tandem_wing" in spec_response.text
+
+
+# ─── Biplane layout ───
+
+
+def test_biplane_full_pipeline(client: TestClient):
+    job = _generate_and_wait(client, "biplane-e2e", "packages/aircraft-schema/examples/biplane_uav.yaml")
+    version = _get_version(client, "biplane-e2e", job["version_no"])
+
+    assert "aircraft_spec.yaml" in version["files"]
+    assert "aircraft.glb" in version["files"]
+
+    spec_response = client.get(f"/api/designs/biplane-e2e/versions/{job['version_no']}/files/aircraft_spec.yaml")
+    assert spec_response.status_code == 200
+    assert "biplane" in spec_response.text
+
+
+# ─── Joined wing layout ───
+
+
+def test_joined_wing_full_pipeline(client: TestClient):
+    job = _generate_and_wait(client, "joined-e2e", "packages/aircraft-schema/examples/joined_wing_uav.yaml")
+    version = _get_version(client, "joined-e2e", job["version_no"])
+
+    assert "aircraft_spec.yaml" in version["files"]
+    assert "aircraft.glb" in version["files"]
+
+    spec_response = client.get(f"/api/designs/joined-e2e/versions/{job['version_no']}/files/aircraft_spec.yaml")
+    assert spec_response.status_code == 200
+    assert "joined_wing" in spec_response.text
+
+
+# ─── Box wing layout ───
+
+
+def test_box_wing_full_pipeline(client: TestClient):
+    job = _generate_and_wait(client, "boxwing-e2e", "packages/aircraft-schema/examples/box_wing_uav.yaml")
+    version = _get_version(client, "boxwing-e2e", job["version_no"])
+
+    assert "aircraft_spec.yaml" in version["files"]
+    assert "aircraft.glb" in version["files"]
+
+    spec_response = client.get(f"/api/designs/boxwing-e2e/versions/{job['version_no']}/files/aircraft_spec.yaml")
+    assert spec_response.status_code == 200
+    assert "box_wing" in spec_response.text
+
+
+# ─── Multi-fuselage layout ───
+
+
+def test_multi_fuselage_full_pipeline(client: TestClient):
+    job = _generate_and_wait(client, "mfuse-e2e", "packages/aircraft-schema/examples/multi_fuselage_uav.yaml")
+    version = _get_version(client, "mfuse-e2e", job["version_no"])
+
+    assert "aircraft_spec.yaml" in version["files"]
+    assert "aircraft.glb" in version["files"]
+
+    spec_response = client.get(f"/api/designs/mfuse-e2e/versions/{job['version_no']}/files/aircraft_spec.yaml")
+    assert spec_response.status_code == 200
+    assert "multi_fuselage" in spec_response.text
+
+
+# ─── Delta wing planform ───
+
+
+def test_delta_wing_full_pipeline(client: TestClient):
+    job = _generate_and_wait(client, "delta-e2e", "packages/aircraft-schema/examples/delta_wing_uav.yaml")
+    version = _get_version(client, "delta-e2e", job["version_no"])
+
+    assert "aircraft_spec.yaml" in version["files"]
+    assert "aircraft.glb" in version["files"]
+
+    spec_response = client.get(f"/api/designs/delta-e2e/versions/{job['version_no']}/files/aircraft_spec.yaml")
+    assert spec_response.status_code == 200
+    assert "delta" in spec_response.text
+
+
 # ─── Multi-version generation ───
 
 

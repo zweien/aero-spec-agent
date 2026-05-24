@@ -118,3 +118,77 @@ def test_sections_none_returns_single():
     adapter = _make_adapter()
     result = create_main_wing(adapter, _wing_spec(sections=None))
     assert result.name == "main_wing"
+
+
+# ─── Delta / Ogee planform tests ───
+
+
+def _wing_spec_with_planform(planform: str | None = None):
+    class S:
+        def __init__(self, v):
+            self.value = v
+
+    class Wing:
+        def __init__(self):
+            self.position = S("mid")
+            self.span = S(5.0)
+            self.root_chord = S(3.0)
+            self.tip_chord = S(0.8)
+            self.sweep = S(30.0)
+            self.dihedral = S(0.0)
+            self.sections = None
+            self.inner_sweep = None
+            self.inner_dihedral = None
+            self.planform = S(planform) if planform else None
+
+    class Fuselage:
+        def __init__(self):
+            self.length = S(3.0)
+            self.max_diameter = S(0.5)
+
+    class Spec:
+        def __init__(self):
+            self.wing = Wing()
+            self.fuselage = Fuselage()
+
+    return Spec()
+
+
+def test_delta_planform_enforces_min_sweep():
+    adapter = _make_adapter()
+    result = create_main_wing(adapter, _wing_spec_with_planform("delta"))
+    assert result.applied_parameters["sweep"] >= 50.0
+
+
+def test_delta_planform_enforces_small_tip_chord():
+    adapter = _make_adapter()
+    result = create_main_wing(adapter, _wing_spec_with_planform("delta"))
+    root = 3.0
+    assert result.applied_parameters["tip_chord"] <= root * 0.2
+
+
+def test_ogee_planform_enforces_min_sweep():
+    adapter = _make_adapter()
+    result = create_main_wing(adapter, _wing_spec_with_planform("ogee"))
+    assert result.applied_parameters["sweep"] >= 45.0
+
+
+def test_ogee_planform_enforces_tip_chord_ratio():
+    adapter = _make_adapter()
+    result = create_main_wing(adapter, _wing_spec_with_planform("ogee"))
+    root = 3.0
+    assert result.applied_parameters["tip_chord"] <= root * 0.25
+
+
+def test_conventional_planform_no_constraints():
+    adapter = _make_adapter()
+    result = create_main_wing(adapter, _wing_spec_with_planform("conventional"))
+    assert result.applied_parameters["sweep"] == 30.0
+    assert result.applied_parameters["tip_chord"] == 0.8
+
+
+def test_no_planform_no_constraints():
+    adapter = _make_adapter()
+    result = create_main_wing(adapter, _wing_spec_with_planform(None))
+    assert result.applied_parameters["sweep"] == 30.0
+    assert result.applied_parameters["tip_chord"] == 0.8

@@ -42,7 +42,11 @@ class Aircraft(BaseModel):
 
     name: str
     type: Literal["fixed_wing_uav"]
-    layout: Literal["conventional", "twin_boom", "flying_wing", "blended_wing_body"]
+    layout: Literal[
+        "conventional", "twin_boom", "flying_wing", "blended_wing_body",
+        "canard", "three_surface", "tandem_wing", "biplane",
+        "joined_wing", "box_wing", "multi_fuselage",
+    ]
 
 
 class Mission(BaseModel):
@@ -73,6 +77,7 @@ class Wing(BaseModel):
     sections: IntegerScalar | None = None
     inner_sweep: NumericScalar | None = None
     inner_dihedral: NumericScalar | None = None
+    planform: TextScalar | None = None
 
 
 class Tail(BaseModel):
@@ -93,6 +98,50 @@ class Body(BaseModel):
 
     width: NumericScalar
     height: NumericScalar
+
+
+class Canard(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    span: NumericScalar
+    chord: NumericScalar
+    sweep: NumericScalar | None = None
+    x_position_ratio: NumericScalar | None = None
+
+
+class RearWing(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    span: NumericScalar
+    chord: NumericScalar
+    sweep: NumericScalar | None = None
+    x_position_ratio: NumericScalar | None = None
+    gap: NumericScalar | None = None
+
+
+class SecondWing(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    span: NumericScalar
+    chord: NumericScalar
+    sweep: NumericScalar | None = None
+    dihedral: NumericScalar | None = None
+    gap: NumericScalar
+    stagger: NumericScalar | None = None
+
+
+class MultiFuselageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    spacing: NumericScalar
+    fuselage_count: IntegerScalar | None = None
+
+
+class BoxWingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    gap: NumericScalar
+    endplate_chord: NumericScalar | None = None
 
 
 class Engine(BaseModel):
@@ -117,3 +166,8 @@ class AircraftSpec(BaseModel):
     engine: Engine
     boom: Boom | None = None
     body: Body | None = None
+    canard: Canard | None = None
+    rear_wing: RearWing | None = None
+    second_wing: SecondWing | None = None
+    multi_fuselage: MultiFuselageConfig | None = None
+    box_wing_config: BoxWingConfig | None = None

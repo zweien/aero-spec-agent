@@ -37,3 +37,38 @@ def test_twin_boom_layout_with_boom():
 def test_bwb_layout_accepted():
     spec = _spec_with_layout("blended_wing_body")
     assert spec.aircraft.layout == "blended_wing_body"
+
+
+def test_canard_layout_accepted():
+    spec = _spec_with_layout("canard")
+    assert spec.aircraft.layout == "canard"
+
+
+def test_three_surface_layout_accepted():
+    spec = _spec_with_layout("three_surface")
+    assert spec.aircraft.layout == "three_surface"
+
+
+def test_tandem_wing_layout_accepted():
+    spec = _spec_with_layout("tandem_wing")
+    assert spec.aircraft.layout == "tandem_wing"
+
+
+def test_biplane_layout_accepted():
+    spec = _spec_with_layout("biplane")
+    assert spec.aircraft.layout == "biplane"
+
+
+def test_joined_wing_layout_accepted():
+    spec = _spec_with_layout("joined_wing")
+    assert spec.aircraft.layout == "joined_wing"
+
+
+def test_box_wing_layout_accepted():
+    spec = _spec_with_layout("box_wing")
+    assert spec.aircraft.layout == "box_wing"
+
+
+def test_multi_fuselage_layout_accepted():
+    spec = _spec_with_layout("multi_fuselage")
+    assert spec.aircraft.layout == "multi_fuselage"

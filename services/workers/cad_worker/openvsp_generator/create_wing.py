@@ -34,6 +34,30 @@ def _get_num_sections(spec: Any) -> int:
         return 1
 
 
+def _get_planform(spec: Any) -> str | None:
+    """Return wing planform type if specified."""
+    planform_attr = getattr(spec.wing, "planform", None)
+    if planform_attr is None:
+        return None
+    try:
+        return str(planform_attr.value).lower()
+    except (AttributeError, ValueError, TypeError):
+        return None
+
+
+def _apply_planform_constraints(
+    planform: str | None, sweep: float, tip_chord: float, root_chord: float,
+) -> tuple[float, float]:
+    """Apply geometric constraints for special planform types."""
+    if planform == "delta":
+        sweep = max(sweep, 50.0)
+        tip_chord = min(tip_chord, root_chord * 0.2)
+    elif planform == "ogee":
+        sweep = max(sweep, 45.0)
+        tip_chord = min(tip_chord, root_chord * 0.25)
+    return sweep, tip_chord
+
+
 def _create_single_section(adapter: Any, spec: Any) -> GeometryBuildResult:
     """Create a single-section wing (original behavior)."""
     geom_id = adapter.add_geom("WING")
@@ -42,6 +66,8 @@ def _create_single_section(adapter: Any, spec: Any) -> GeometryBuildResult:
     tip_chord = _value(spec.wing.tip_chord)
     sweep = _value(spec.wing.sweep, 0.0)
     dihedral = _value(spec.wing.dihedral, 0.0)
+    planform = _get_planform(spec)
+    sweep, tip_chord = _apply_planform_constraints(planform, sweep, tip_chord, root_chord)
     fuselage_length = _value(spec.fuselage.length)
     fuselage_diameter = _value(spec.fuselage.max_diameter, 0.75)
     position = str(spec.wing.position.value).lower()
@@ -80,6 +106,8 @@ def _create_multi_section_wing(
     tip_chord = _value(spec.wing.tip_chord)
     sweep = _value(spec.wing.sweep, 0.0)
     dihedral = _value(spec.wing.dihedral, 0.0)
+    planform = _get_planform(spec)
+    sweep, tip_chord = _apply_planform_constraints(planform, sweep, tip_chord, root_chord)
     fuselage_length = _value(spec.fuselage.length)
     fuselage_diameter = _value(spec.fuselage.max_diameter, 0.75)
     position = str(spec.wing.position.value).lower()

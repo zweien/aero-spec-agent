@@ -13,6 +13,7 @@ FLAT_FIELD_DEFS: dict[str, tuple[str, str | None, str]] = {
     "wing_dihedral": ("numeric", "deg", "wing.dihedral"),
     "wing_airfoil": ("text", None, "wing.airfoil"),
     "wing_position": ("text", None, "wing.position"),
+    "wing_planform": ("text", None, "wing.planform"),
     "fuselage_length": ("numeric", "m", "fuselage.length"),
     "fuselage_diameter": ("numeric", "m", "fuselage.max_diameter"),
     "engine_count": ("integer", None, "engine.count"),
@@ -24,6 +25,16 @@ FLAT_FIELD_DEFS: dict[str, tuple[str, str | None, str]] = {
     "cruise_speed": ("numeric", "km/h", "mission.cruise_speed"),
     "payload": ("numeric", "kg", "mission.payload"),
     "priority": ("text", None, "mission.priority"),
+    "canard_span": ("numeric", "m", "canard.span"),
+    "canard_chord": ("numeric", "m", "canard.chord"),
+    "canard_sweep": ("numeric", "deg", "canard.sweep"),
+    "rear_wing_span": ("numeric", "m", "rear_wing.span"),
+    "rear_wing_chord": ("numeric", "m", "rear_wing.chord"),
+    "second_wing_span": ("numeric", "m", "second_wing.span"),
+    "second_wing_chord": ("numeric", "m", "second_wing.chord"),
+    "second_wing_gap": ("numeric", "m", "second_wing.gap"),
+    "multi_fuselage_spacing": ("numeric", "m", "multi_fuselage.spacing"),
+    "box_wing_gap": ("numeric", "m", "box_wing_config.gap"),
 }
 
 FIELD_TO_SPEC_PATH: dict[str, str] = {
@@ -36,6 +47,7 @@ FIELD_TO_SPEC_PATH: dict[str, str] = {
     "wing_dihedral": "wing.dihedral.value",
     "wing_airfoil": "wing.airfoil.value",
     "wing_position": "wing.position.value",
+    "wing_planform": "wing.planform.value",
     "fuselage_length": "fuselage.length.value",
     "fuselage_diameter": "fuselage.max_diameter.value",
     "engine_count": "engine.count.value",
@@ -47,10 +59,21 @@ FIELD_TO_SPEC_PATH: dict[str, str] = {
     "cruise_speed": "mission.cruise_speed.value",
     "payload": "mission.payload.value",
     "priority": "mission.priority.value",
+    "canard_span": "canard.span.value",
+    "canard_chord": "canard.chord.value",
+    "canard_sweep": "canard.sweep.value",
+    "rear_wing_span": "rear_wing.span.value",
+    "rear_wing_chord": "rear_wing.chord.value",
+    "second_wing_span": "second_wing.span.value",
+    "second_wing_chord": "second_wing.chord.value",
+    "second_wing_gap": "second_wing.gap.value",
+    "multi_fuselage_spacing": "multi_fuselage.spacing.value",
+    "box_wing_gap": "box_wing_config.gap.value",
 }
 
 FIELD_DEFAULT_UNIT: dict[str, str | None] = {
     "aircraft_layout": None,
+    "wing_planform": None,
     "wing_span": "m",
     "wing_root_chord": "m",
     "wing_tip_chord": "m",
@@ -65,11 +88,22 @@ FIELD_DEFAULT_UNIT: dict[str, str | None] = {
     "engine_z_offset": "m",
     "cruise_speed": "km/h",
     "payload": "kg",
+    "canard_span": "m",
+    "canard_chord": "m",
+    "canard_sweep": "deg",
+    "rear_wing_span": "m",
+    "rear_wing_chord": "m",
+    "second_wing_span": "m",
+    "second_wing_chord": "m",
+    "second_wing_gap": "m",
+    "multi_fuselage_spacing": "m",
+    "box_wing_gap": "m",
 }
 
 SUPPORTED_FIELD_VALUES: dict[str, set[str]] = {
     "tail_type": {"conventional", "t_tail", "v_tail", "inverted_v", "cruciform"},
     "engine_position": {"nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher", "push_pull"},
+    "wing_planform": {"conventional", "delta", "ogee"},
 }
 
 GENERATE_DESIGN_TOOL: dict[str, Any] = {
@@ -94,6 +128,11 @@ GENERATE_DESIGN_TOOL: dict[str, Any] = {
                 "wing_sweep": {"type": "number", "description": "机翼后掠角 (deg)"},
                 "wing_dihedral": {"type": "number", "description": "机翼上反角 (deg)"},
                 "wing_airfoil": {"type": "string", "description": "翼型，如 NACA4412"},
+                "wing_planform": {
+                    "type": "string",
+                    "enum": ["conventional", "delta", "ogee"],
+                    "description": "机翼平面形状",
+                },
                 "aircraft_layout": {
                     "type": "string",
                     "enum": [
@@ -121,6 +160,16 @@ GENERATE_DESIGN_TOOL: dict[str, Any] = {
                     "enum": ["endurance", "speed", "payload", "range"],
                     "description": "设计优先级",
                 },
+                "canard_span": {"type": "number", "description": "鸭翼翼展 (m)，canard/three_surface 布局使用"},
+                "canard_chord": {"type": "number", "description": "鸭翼弦长 (m)"},
+                "canard_sweep": {"type": "number", "description": "鸭翼后掠角 (deg)"},
+                "rear_wing_span": {"type": "number", "description": "后翼翼展 (m)，tandem_wing/joined_wing 布局使用"},
+                "rear_wing_chord": {"type": "number", "description": "后翼弦长 (m)"},
+                "second_wing_span": {"type": "number", "description": "下翼翼展 (m)，biplane 布局使用"},
+                "second_wing_chord": {"type": "number", "description": "下翼弦长 (m)"},
+                "second_wing_gap": {"type": "number", "description": "上下翼间距 (m)"},
+                "multi_fuselage_spacing": {"type": "number", "description": "双机身间距 (m)"},
+                "box_wing_gap": {"type": "number", "description": "箱式翼上下翼间距 (m)"},
                 "inferred_fields": {
                     "type": "array",
                     "items": {"type": "string"},
