@@ -1,6 +1,6 @@
 """Tests for extended tail configurations: v_tail, inverted_v, cruciform."""
 
-from tests.api.test_openvsp_geometry_builders import FakeOpenVspModule, make_adapter
+from tests.api.test_openvsp_geometry_builders import make_adapter
 from services.workers.cad_worker.openvsp_generator.create_tail import create_tail
 
 
@@ -38,39 +38,32 @@ def _make_spec(
     return Spec(tail_type)
 
 
-def test_v_tail_creates_two_surfaces():
+def test_v_tail_creates_single_surface():
     adapter, _ = make_adapter()
     results = create_tail(adapter, _make_spec("v_tail"))
-    assert len(results) == 2
-    names = {r.name for r in results}
-    assert "v_tail_left" in names
-    assert "v_tail_right" in names
+    assert len(results) == 1
+    assert results[0].name == "v_tail"
 
 
-def test_v_tail_rotation_angles():
+def test_v_tail_rotation_angle():
     adapter, _ = make_adapter()
     results = create_tail(adapter, _make_spec("v_tail"))
-    left = next(r for r in results if r.name == "v_tail_left")
-    right = next(r for r in results if r.name == "v_tail_right")
-    assert left.applied_parameters.get("x_rel_rotation") == 45.0
-    assert right.applied_parameters.get("x_rel_rotation") == -45.0
+    assert results[0].applied_parameters.get("x_rel_rotation") == 45.0
 
 
-def test_inverted_v_rotation_angles():
+def test_inverted_v_rotation_angle():
     adapter, _ = make_adapter()
     results = create_tail(adapter, _make_spec("inverted_v"))
-    left = next(r for r in results if r.name == "inverted_v_left")
-    right = next(r for r in results if r.name == "inverted_v_right")
-    assert left.applied_parameters.get("x_rel_rotation") == -45.0
-    assert right.applied_parameters.get("x_rel_rotation") == 45.0
+    assert len(results) == 1
+    assert results[0].name == "inverted_v_tail"
+    assert results[0].applied_parameters.get("x_rel_rotation") == -45.0
 
 
-def test_cruciform_has_three_surfaces():
+def test_cruciform_has_two_surfaces():
     adapter, _ = make_adapter()
     results = create_tail(adapter, _make_spec("cruciform"))
-    assert len(results) == 3
+    assert len(results) == 2
     names = {r.name for r in results}
-    assert "horizontal_tail" in names
     assert "vertical_tail" in names
     assert "cruciform_htail" in names
 

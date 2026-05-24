@@ -119,23 +119,15 @@ def _create_v_tail(
 ) -> list[GeometryBuildResult]:
     v_tail_chord = root_chord * 0.50
     v_tail_span = h_tail_span * 0.85
-    left = _create_tail_surface(
+    result = _create_tail_surface(
         adapter,
-        name="v_tail_left",
+        name="v_tail",
         span=v_tail_span,
         chord=v_tail_chord,
         x_rel_location=tail_x,
         x_rel_rotation=45.0,
     )
-    right = _create_tail_surface(
-        adapter,
-        name="v_tail_right",
-        span=v_tail_span,
-        chord=v_tail_chord,
-        x_rel_location=tail_x,
-        x_rel_rotation=-45.0,
-    )
-    return [left, right]
+    return [result]
 
 
 def _create_inverted_v(
@@ -146,23 +138,15 @@ def _create_inverted_v(
 ) -> list[GeometryBuildResult]:
     v_tail_chord = root_chord * 0.50
     v_tail_span = h_tail_span * 0.85
-    left = _create_tail_surface(
+    result = _create_tail_surface(
         adapter,
-        name="inverted_v_left",
+        name="inverted_v_tail",
         span=v_tail_span,
         chord=v_tail_chord,
         x_rel_location=tail_x,
         x_rel_rotation=-45.0,
     )
-    right = _create_tail_surface(
-        adapter,
-        name="inverted_v_right",
-        span=v_tail_span,
-        chord=v_tail_chord,
-        x_rel_location=tail_x,
-        x_rel_rotation=45.0,
-    )
-    return [left, right]
+    return [result]
 
 
 def _create_cruciform(
@@ -180,13 +164,6 @@ def _create_cruciform(
         x_rel_location=tail_x,
         x_rel_rotation=90.0,
     )
-    horizontal_tail = _create_tail_surface(
-        adapter,
-        name="horizontal_tail",
-        span=h_tail_span,
-        chord=root_chord * 0.45,
-        x_rel_location=tail_x,
-    )
     cruciform_htail = _create_tail_surface(
         adapter,
         name="cruciform_htail",
@@ -195,4 +172,4 @@ def _create_cruciform(
         x_rel_location=tail_x,
         z_rel_location=v_tail_span * 0.50,
     )
-    return [vertical_tail, horizontal_tail, cruciform_htail]
+    return [vertical_tail, cruciform_htail]
