@@ -89,12 +89,21 @@ class OpenVspBackend:
         adapter = OpenVspAdapter(module=self._vsp_module)
         adapter.clear_model()
 
-        build_results: list[GeometryBuildResult] = [
-            create_fuselage(adapter, spec),
-        ]
+        layout = str(spec.aircraft.layout).lower()
+
+        build_results: list[GeometryBuildResult] = []
+
+        # Fuselage (not for flying_wing; BWB uses flat_body instead)
+        if layout == "blended_wing_body" and spec.body is not None:
+            # TODO: Task 9 - import and call create_flat_body when create_body.py is ready
+            pass
+        elif layout != "flying_wing":
+            build_results.append(create_fuselage(adapter, spec))
         if on_progress: on_progress("fuselage_created", 62)
         if fail_stage == "creating_fuselage":
             raise RuntimeError(f"OpenVSP failure injection at stage: creating_fuselage")
+
+        # Wing creation (all layouts)
         wing_result = create_main_wing(adapter, spec)
         if isinstance(wing_result, list):
             build_results.extend(wing_result)
@@ -103,10 +112,23 @@ class OpenVspBackend:
         if on_progress: on_progress("wing_created", 68)
         if fail_stage == "creating_wing":
             raise RuntimeError(f"OpenVSP failure injection at stage: creating_wing")
-        build_results.extend(create_tail(adapter, spec))
+
+        # Booms (twin_boom layout only)
+        if layout == "twin_boom" and spec.boom is not None:
+            # TODO: Task 7 - import and call create_booms when create_boom.py is ready
+            pass
+        if on_progress: on_progress("booms_created", 70)
+        if fail_stage == "creating_booms":
+            raise RuntimeError(f"OpenVSP failure injection at stage: creating_booms")
+
+        # Tail (not for flying_wing or BWB)
+        if layout not in ("flying_wing", "blended_wing_body"):
+            build_results.extend(create_tail(adapter, spec))
         if on_progress: on_progress("tail_created", 72)
         if fail_stage == "creating_tail":
             raise RuntimeError(f"OpenVSP failure injection at stage: creating_tail")
+
+        # Engines
         build_results.extend(create_engine_nacelles(adapter, spec))
         if on_progress: on_progress("engine_created", 76)
         if fail_stage == "creating_engine":
@@ -201,10 +223,22 @@ def _stable_applied_parameters(
     build_results: list[GeometryBuildResult],
 ) -> dict[str, object]:
     applied: dict[str, object] = {}
+
+    _ALL_WING_NAMES = {
+        "main_wing", "inner_wing", "outer_wing", "outer_wing_2", "mid_wing",
+    }
+    _ALL_ENGINE_NAMES = {
+        "center_engine", "left_engine", "right_engine",
+        "left_inner_engine", "left_outer_engine",
+        "right_inner_engine", "right_outer_engine",
+    }
+    _ALL_BOOM_NAMES = {"left_boom", "right_boom"}
+    _BODY_NAMES = {"flat_body"}
+
     for result in build_results:
         if result.name == "fuselage":
             _copy_parameters(applied, "fuselage", result, ["length", "max_diameter"])
-        elif result.name == "main_wing":
+        elif result.name in _ALL_WING_NAMES:
             _copy_parameters(
                 applied,
                 "wing",
@@ -218,7 +252,7 @@ def _stable_applied_parameters(
                     "z_rel_location",
                 ],
             )
-        elif result.name in {"center_engine", "left_engine", "right_engine"}:
+        elif result.name in _ALL_ENGINE_NAMES:
             if "engine.count" in result.applied_parameters:
                 applied["engine.count"] = result.applied_parameters["engine.count"]
             for key in (
@@ -251,6 +285,20 @@ def _stable_applied_parameters(
                     "diameter",
                     "fineness_ratio",
                 ],
+            )
+        elif result.name in _ALL_BOOM_NAMES:
+            _copy_parameters(
+                applied,
+                result.name,
+                result,
+                list(result.applied_parameters),
+            )
+        elif result.name in _BODY_NAMES:
+            _copy_parameters(
+                applied,
+                result.name,
+                result,
+                list(result.applied_parameters),
             )
         else:
             _copy_parameters(
