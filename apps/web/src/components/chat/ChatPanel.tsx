@@ -254,15 +254,17 @@ async function handleAiSdkStream(
         if (delta) cb.appendAssistantText(assistantId, delta);
         break;
       }
-      case "tool-call": {
-        const toolName = event.toolName as string;
-        const args = (event.args ?? {}) as Record<string, unknown>;
+      case "tool-call":
+      case "tool-input-available": {
+        const toolName = (event.toolName ?? event.tool_name) as string;
+        const args = (event.args ?? event.input ?? {}) as Record<string, unknown>;
         cb.appendToolCall(assistantId, toolName, args);
         cb.runtimeTransitionToReal();
         break;
       }
-      case "tool-result": {
-        const result = event.result as Record<string, unknown>;
+      case "tool-result":
+      case "tool-output-available": {
+        const result = (event.result ?? event.output) as Record<string, unknown>;
         const jobId = result?.job_id as string | undefined;
         if (jobId && result?.status === "started") {
           jobStreams.push(startJobStreaming(jobId, assistantId, cb));
