@@ -26,6 +26,7 @@ class FakeOpenVspModule:
             ("Dihedral", "XSec_1"),
             ("X_Rel_Location", "XForm"),
             ("X_Rel_Rotation", "XForm"),
+            ("Y_Rel_Location", "XForm"),
             ("Z_Rel_Location", "XForm"),
         },
         "POD": {

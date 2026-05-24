@@ -95,7 +95,11 @@ class OpenVspBackend:
         if on_progress: on_progress("fuselage_created", 62)
         if fail_stage == "creating_fuselage":
             raise RuntimeError(f"OpenVSP failure injection at stage: creating_fuselage")
-        build_results.append(create_main_wing(adapter, spec))
+        wing_result = create_main_wing(adapter, spec)
+        if isinstance(wing_result, list):
+            build_results.extend(wing_result)
+        else:
+            build_results.append(wing_result)
         if on_progress: on_progress("wing_created", 68)
         if fail_stage == "creating_wing":
             raise RuntimeError(f"OpenVSP failure injection at stage: creating_wing")
