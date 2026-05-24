@@ -382,8 +382,8 @@ def test_generate_design_tool_has_no_defs():
     props = GENERATE_DESIGN_TOOL["function"]["parameters"]["properties"]
     assert "wing_span" in props
     assert "wing.position" not in props
-    assert props["tail_type"]["enum"] == ["conventional"]
-    assert props["engine_position"]["enum"] == ["under_wing"]
+    assert set(props["tail_type"]["enum"]) == {"conventional", "t_tail", "v_tail", "inverted_v", "cruciform"}
+    assert set(props["engine_position"]["enum"]) == {"nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher"}
 
 
 def test_modify_design_tool_has_field_enum():
@@ -658,7 +658,7 @@ async def test_modify_design_rejects_unsupported_engine_position(tmp_path):
     events = [
         e async for e in svc._handle_modify_design(
             state,
-            {"changes": [{"field": "engine_position", "value": "rear_fuselage"}]},
+            {"changes": [{"field": "engine_position", "value": "invalid_position"}]},
             "tc-engine-position-modify",
         )
     ]

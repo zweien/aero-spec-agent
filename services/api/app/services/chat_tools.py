@@ -65,8 +65,8 @@ FIELD_DEFAULT_UNIT: dict[str, str | None] = {
 }
 
 SUPPORTED_FIELD_VALUES: dict[str, set[str]] = {
-    "tail_type": {"conventional"},
-    "engine_position": {"under_wing"},
+    "tail_type": {"conventional", "t_tail", "v_tail", "inverted_v", "cruciform"},
+    "engine_position": {"nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher"},
 }
 
 GENERATE_DESIGN_TOOL: dict[str, Any] = {
@@ -91,15 +91,20 @@ GENERATE_DESIGN_TOOL: dict[str, Any] = {
                 "wing_sweep": {"type": "number", "description": "机翼后掠角 (deg)"},
                 "wing_dihedral": {"type": "number", "description": "机翼上反角 (deg)"},
                 "wing_airfoil": {"type": "string", "description": "翼型，如 NACA4412"},
+                "aircraft_layout": {
+                    "type": "string",
+                    "enum": ["conventional", "twin_boom", "flying_wing", "blended_wing_body"],
+                    "description": "气动布局类型",
+                },
                 "tail_type": {
                     "type": "string",
-                    "enum": ["conventional"],
+                    "enum": ["conventional", "t_tail", "v_tail", "inverted_v", "cruciform"],
                     "description": "尾翼类型",
                 },
                 "engine_count": {"type": "integer", "description": "发动机数量"},
                 "engine_position": {
                     "type": "string",
-                    "enum": ["under_wing"],
+                    "enum": ["nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher"],
                     "description": "发动机位置",
                 },
                 "cruise_speed": {"type": "number", "description": "巡航速度 (km/h)"},
