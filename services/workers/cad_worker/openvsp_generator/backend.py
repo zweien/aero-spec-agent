@@ -115,8 +115,8 @@ class OpenVspBackend:
 
         # Booms (twin_boom layout only)
         if layout == "twin_boom" and spec.boom is not None:
-            # TODO: Task 7 - import and call create_booms when create_boom.py is ready
-            pass
+            from services.workers.cad_worker.openvsp_generator.create_boom import create_booms
+            build_results.extend(create_booms(adapter, spec))
         if on_progress: on_progress("booms_created", 70)
         if fail_stage == "creating_booms":
             raise RuntimeError(f"OpenVSP failure injection at stage: creating_booms")

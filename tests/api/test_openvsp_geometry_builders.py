@@ -85,6 +85,9 @@ class FakeOpenVspModule:
     _ALLOWED_PARAMETERS = {
         "FUSELAGE": {
             ("Length", "Design"),
+            ("X_Rel_Location", "XForm"),
+            ("Y_Rel_Location", "XForm"),
+            ("Z_Rel_Location", "XForm"),
         },
         "WING": {
             ("TotalSpan", "WingGeom"),
