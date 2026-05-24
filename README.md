@@ -14,7 +14,7 @@ Describe an aircraft in plain language — get parametric CAD models, aerodynami
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-2.0+-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 [![OpenVSP](https://img.shields.io/badge/OpenVSP-3.50-1E88E5?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHRleHQgZmlsbD0id2hpdGUiIGZvbnQtc2l6ZT0iMTIiIHk9IjE2IiB4PSIyIj5WU1A8L3RleHQ+PC9zdmc+)](http://openvsp.org/)
-[![Tests](https://img.shields.io/badge/tests-700%2B%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-579%2B%20passing-brightgreen)]()
 
 [Report Bug](https://github.com/zweien/aero-spec-agent/issues) · [Request Feature](https://github.com/zweien/aero-spec-agent/issues) · [View Demo](#quick-start)
 
@@ -325,12 +325,12 @@ storage/designs/{design_id}/
 
 | Area | Supported | Not yet exposed |
 |------|-----------|-----------------|
-| Aircraft layout | Fixed-wing UAV | Multirotor, rotorcraft, blended-wing body |
+| Aircraft layout | `conventional`, `twin_boom`, `flying_wing`, `blended_wing_body` | Multirotor, rotorcraft |
 | Wing position | `high`, `mid`, `low` | Custom multi-wing layouts |
-| Tail type | `conventional` | `t-tail`, `v-tail` |
-| Engine count | `1`, `2` | More than two engines |
-| Engine position | `under_wing` | `on_fuselage`, `wing_tip`, `rear_fuselage` |
-| Selectable parts | `part:fuselage`, `part:main_wing`, `part:tail`, `part:left_engine`, `part:right_engine` | Arbitrary OpenVSP sub-geometry |
+| Wing sections | 1 (single), 2 (inner+outer), 3 (inner+mid+outer) | Continuous airfoil transition |
+| Tail type | `conventional`, `t_tail`, `v_tail`, `inverted_v`, `cruciform` | `butterfly` |
+| Engine count | `1`, `2`, `3`, `4` | More than four engines |
+| Engine position | `nose`, `tail`, `rear_fuselage`, `under_wing`, `wing_tip`, `over_wing`, `pusher` | `on_fuselage` |
 
 ## API Reference
 
@@ -367,7 +367,7 @@ storage/designs/{design_id}/
 ## Testing
 
 ```bash
-# Backend tests — 548+ tests (fake backend, no OpenVSP needed)
+# Backend tests — 579+ tests (fake backend, no OpenVSP needed)
 CAD_BACKEND=fake .venv/bin/python -m pytest tests/ -q
 
 # Frontend component tests — 159 tests
@@ -387,7 +387,7 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 
 | Component | Status | Backend | Tests |
 |-----------|--------|---------|-------|
-| Fake CAD pipeline | Pass | fake | 548+ |
+| Fake CAD pipeline | Pass | fake | 579+ |
 | OpenVSP env check | Script ready | N/A | -- |
 | OpenVSP single/twin engine | Pass | openvsp | validate script |
 | OpenVSP failure injection | Pass | fake | 12 |
@@ -397,6 +397,12 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 | Compare View export | Pass | any | 7 |
 | Demo seed script | Pass | fake | manual |
 | Frontend build | Pass | -- | 159 |
+| V-tail / inverted_v / cruciform | Pass | fake | 6 |
+| Multi-section wing (1-3) | Pass | fake | 8 |
+| 3-4 engine config | Pass | fake | 5 |
+| Twin boom layout | Pass | fake | 2 |
+| Flying wing layout | Pass | fake | 4 |
+| BWB flat body | Pass | fake | 6 |
 
 Run `python scripts/summarize_qa_status.py` for detailed QA doc status.
 
@@ -475,7 +481,7 @@ aero-spec-agent/
 │           └── vspaero_analysis.py    # Panel method sweep
 │
 ├── packages/aircraft-schema/          # Spec YAML definitions & examples
-├── tests/api/                         # 548 backend tests
+├── tests/api/                         # 579 backend tests
 ├── storage/                           # Generated design artifacts (gitignored)
 └── pyproject.toml                     # Python project config
 ```
