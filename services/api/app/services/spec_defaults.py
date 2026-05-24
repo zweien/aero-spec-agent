@@ -53,6 +53,13 @@ REQUIRED_DEFAULTS: dict[str, dict[str, Any]] = {
         "label": "尾翼类型",
         "reason": "LLM 未提供，系统按规则补全",
     },
+    "wing.sections": {
+        "value": 1,
+        "source": "rule_default",
+        "confidence": 0.5,
+        "label": "机翼段数",
+        "reason": "LLM 未提供，系统按规则补全",
+    },
 }
 
 # Keys that go into the actual spec (exclude display-only metadata)

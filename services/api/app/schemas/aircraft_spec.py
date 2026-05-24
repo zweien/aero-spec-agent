@@ -42,7 +42,7 @@ class Aircraft(BaseModel):
 
     name: str
     type: Literal["fixed_wing_uav"]
-    layout: Literal["conventional"]
+    layout: Literal["conventional", "twin_boom", "flying_wing", "blended_wing_body"]
 
 
 class Mission(BaseModel):
@@ -70,12 +70,29 @@ class Wing(BaseModel):
     sweep: NumericScalar | None = None
     dihedral: NumericScalar | None = None
     airfoil: TextScalar | None = None
+    sections: IntegerScalar | None = None
+    inner_sweep: NumericScalar | None = None
+    inner_dihedral: NumericScalar | None = None
 
 
 class Tail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: TextScalar
+
+
+class Boom(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    length: NumericScalar
+    span: NumericScalar
+
+
+class Body(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    width: NumericScalar
+    height: NumericScalar
 
 
 class Engine(BaseModel):
@@ -98,3 +115,5 @@ class AircraftSpec(BaseModel):
     wing: Wing
     tail: Tail
     engine: Engine
+    boom: Boom | None = None
+    body: Body | None = None

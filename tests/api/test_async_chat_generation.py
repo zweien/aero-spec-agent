@@ -149,6 +149,7 @@ def test_spec_defaults_no_defaults_when_all_provided():
             "span": {"value": 12.0, "source": "user", "confidence": 1.0},
             "root_chord": {"value": 1.0, "source": "user", "confidence": 1.0},
             "tip_chord": {"value": 0.5, "source": "user", "confidence": 1.0},
+            "sections": {"value": 1, "source": "user", "confidence": 1.0},
         },
         "tail": {"type": {"value": "conventional", "source": "user", "confidence": 1.0}},
     }
