@@ -17,6 +17,7 @@ from services.api.app.services.job_events import (
     get_job_event_bus,
 )
 from services.api.app.services.job_runner import JobRunner
+from services.api.app.services.spec_defaults import ensure_required_defaults
 from services.api.app.services.spec_patch import apply_patch
 from services.api.app.services.version_store import VersionStore
 from services.workers.cad_worker.openvsp_generator.backend_factory import get_cad_backend
@@ -47,6 +48,7 @@ async def generate_design(
     raw_body = await request.body()
     try:
         data = yaml.safe_load(raw_body.decode("utf-8"))
+        ensure_required_defaults(data)
         spec = AircraftSpec.model_validate(data)
         job = runner.enqueue_generate(design_id=design_id, spec=spec)
         background_tasks.add_task(runner.run_queued_job, job.id, spec)

@@ -82,6 +82,55 @@ def _resolve(spec_data: dict[str, Any], dotted_path: str) -> dict[str, Any] | No
     return target if isinstance(target, dict) else None
 
 
+def _layout_aware_defaults(spec_data: dict[str, Any]) -> None:
+    """Add layout-specific sections when the layout requires them but they are absent."""
+    layout = ""
+    aircraft = spec_data.get("aircraft")
+    if isinstance(aircraft, dict):
+        layout = str(aircraft.get("layout", "")).lower()
+
+    if not layout:
+        return
+
+    # Canard / three_surface → need canard section
+    if layout in ("canard", "three_surface") and "canard" not in spec_data:
+        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
+        spec_data["canard"] = {
+            "span": _spec_scalar({"value": round(span * 0.4, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+            "chord": _spec_scalar({"value": 0.5, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        }
+
+    # Tandem wing / joined wing → need rear_wing section
+    if layout in ("tandem_wing", "joined_wing") and "rear_wing" not in spec_data:
+        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
+        spec_data["rear_wing"] = {
+            "span": _spec_scalar({"value": round(span * 0.7, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+            "chord": _spec_scalar({"value": 0.6, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        }
+
+    # Biplane → need second_wing section
+    if layout == "biplane" and "second_wing" not in spec_data:
+        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
+        spec_data["second_wing"] = {
+            "span": _spec_scalar({"value": round(span * 0.85, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+            "chord": _spec_scalar({"value": 0.8, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+            "gap": _spec_scalar({"value": 1.2, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        }
+
+    # Multi-fuselage → need multi_fuselage section
+    if layout == "multi_fuselage" and "multi_fuselage" not in spec_data:
+        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
+        spec_data["multi_fuselage"] = {
+            "spacing": _spec_scalar({"value": round(span * 0.5, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        }
+
+    # Box wing → need box_wing_config section
+    if layout == "box_wing" and "box_wing_config" not in spec_data:
+        spec_data["box_wing_config"] = {
+            "gap": _spec_scalar({"value": 1.5, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        }
+
+
 def ensure_required_defaults(spec_data: dict[str, Any]) -> None:
     """Fill missing required fields with rule defaults (in-place)."""
     for dotted_path, default in REQUIRED_DEFAULTS.items():
@@ -92,6 +141,7 @@ def ensure_required_defaults(spec_data: dict[str, Any]) -> None:
         last_key = keys[-1]
         if last_key not in target or not target[last_key]:
             target[last_key] = _spec_scalar(default)
+    _layout_aware_defaults(spec_data)
 
 
 def collect_defaulted_fields(spec_data: dict[str, Any]) -> list[dict[str, Any]]:
