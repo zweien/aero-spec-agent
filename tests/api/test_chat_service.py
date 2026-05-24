@@ -383,7 +383,7 @@ def test_generate_design_tool_has_no_defs():
     assert "wing_span" in props
     assert "wing.position" not in props
     assert set(props["tail_type"]["enum"]) == {"conventional", "t_tail", "v_tail", "inverted_v", "cruciform"}
-    assert set(props["engine_position"]["enum"]) == {"nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher"}
+    assert set(props["engine_position"]["enum"]) == {"nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher", "push_pull"}
 
 
 def test_modify_design_tool_has_field_enum():

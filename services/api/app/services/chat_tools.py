@@ -5,6 +5,7 @@ from typing import Any
 
 FLAT_FIELD_DEFS: dict[str, tuple[str, str | None, str]] = {
     "name": ("text", None, "aircraft.name"),
+    "aircraft_layout": ("text", None, "aircraft.layout"),
     "wing_span": ("numeric", "m", "wing.span"),
     "wing_root_chord": ("numeric", "m", "wing.root_chord"),
     "wing_tip_chord": ("numeric", "m", "wing.tip_chord"),
@@ -27,6 +28,7 @@ FLAT_FIELD_DEFS: dict[str, tuple[str, str | None, str]] = {
 
 FIELD_TO_SPEC_PATH: dict[str, str] = {
     "name": "aircraft.name",
+    "aircraft_layout": "aircraft.layout",
     "wing_span": "wing.span.value",
     "wing_root_chord": "wing.root_chord.value",
     "wing_tip_chord": "wing.tip_chord.value",
@@ -48,6 +50,7 @@ FIELD_TO_SPEC_PATH: dict[str, str] = {
 }
 
 FIELD_DEFAULT_UNIT: dict[str, str | None] = {
+    "aircraft_layout": None,
     "wing_span": "m",
     "wing_root_chord": "m",
     "wing_tip_chord": "m",
@@ -66,7 +69,7 @@ FIELD_DEFAULT_UNIT: dict[str, str | None] = {
 
 SUPPORTED_FIELD_VALUES: dict[str, set[str]] = {
     "tail_type": {"conventional", "t_tail", "v_tail", "inverted_v", "cruciform"},
-    "engine_position": {"nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher"},
+    "engine_position": {"nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher", "push_pull"},
 }
 
 GENERATE_DESIGN_TOOL: dict[str, Any] = {
@@ -93,7 +96,11 @@ GENERATE_DESIGN_TOOL: dict[str, Any] = {
                 "wing_airfoil": {"type": "string", "description": "翼型，如 NACA4412"},
                 "aircraft_layout": {
                     "type": "string",
-                    "enum": ["conventional", "twin_boom", "flying_wing", "blended_wing_body"],
+                    "enum": [
+                        "conventional", "twin_boom", "flying_wing", "blended_wing_body",
+                        "canard", "three_surface", "tandem_wing", "biplane",
+                        "joined_wing", "box_wing", "multi_fuselage",
+                    ],
                     "description": "气动布局类型",
                 },
                 "tail_type": {
@@ -104,7 +111,7 @@ GENERATE_DESIGN_TOOL: dict[str, Any] = {
                 "engine_count": {"type": "integer", "description": "发动机数量"},
                 "engine_position": {
                     "type": "string",
-                    "enum": ["nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher"],
+                    "enum": ["nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher", "push_pull"],
                     "description": "发动机位置",
                 },
                 "cruise_speed": {"type": "number", "description": "巡航速度 (km/h)"},
