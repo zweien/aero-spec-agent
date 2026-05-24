@@ -105,6 +105,44 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
         base_z = wing_z - diameter * 0.6
 
     if engine_count == 2:
+        if engine_position == "push_pull":
+            # Push-pull: front and rear engines on centerline
+            front_x = fuselage_length * 0.15
+            rear_x = fuselage_length * 0.85
+            return [
+                _create_engine_nacelle(
+                    adapter,
+                    name="front_engine",
+                    engine_count=engine_count,
+                    x_offset=x_offset,
+                    y_delta=y_offset,
+                    z_offset=z_offset,
+                    base_x=front_x,
+                    base_y=0.0,
+                    base_z=0.0,
+                    x_rel_location=front_x + x_offset,
+                    y_offset=y_offset,
+                    z_rel_location=z_offset,
+                    length=length,
+                    diameter=diameter,
+                ),
+                _create_engine_nacelle(
+                    adapter,
+                    name="rear_engine",
+                    engine_count=engine_count,
+                    x_offset=x_offset,
+                    y_delta=y_offset,
+                    z_offset=z_offset,
+                    base_x=rear_x,
+                    base_y=0.0,
+                    base_z=0.0,
+                    x_rel_location=rear_x + x_offset,
+                    y_offset=y_offset,
+                    z_rel_location=z_offset,
+                    length=length,
+                    diameter=diameter,
+                ),
+            ]
         return [
             _create_engine_nacelle(
                 adapter,

@@ -101,3 +101,28 @@ def test_pusher_position():
     assert len(results) == 1
     assert results[0].name == "center_engine"
     assert results[0].applied_parameters["engine.count"] == 1
+
+
+def test_push_pull_creates_two_engines():
+    spec = _make_spec(2, position="push_pull")
+    adapter, _fake_vsp = make_adapter()
+
+    results = create_engine_nacelles(adapter, spec)
+
+    assert len(results) == 2
+    assert results[0].name == "front_engine"
+    assert results[1].name == "rear_engine"
+
+
+def test_push_pull_front_and_rear_positions():
+    spec = _make_spec(2, position="push_pull")
+    adapter, _fake_vsp = make_adapter()
+
+    results = create_engine_nacelles(adapter, spec)
+
+    fuselage_length = float(spec.fuselage.length.value)
+    front_x = results[0].applied_parameters["x_rel_location"]
+    rear_x = results[1].applied_parameters["x_rel_location"]
+    assert front_x == fuselage_length * 0.15
+    assert rear_x == fuselage_length * 0.85
+    assert front_x < rear_x
