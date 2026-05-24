@@ -21,7 +21,7 @@ def _engine_offset(spec: Any, attr: str) -> float:
 
 def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]:
     engine_count = int(spec.engine.count.value)
-    if engine_count not in (1, 2):
+    if engine_count not in (1, 2, 3, 4):
         raise UnsupportedGeometryError(
             f"Unsupported OpenVSP geometry for engine.count={engine_count}"
         )
@@ -38,6 +38,11 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
     wing_position = str(spec.wing.position.value).lower()
     wing_z = _wing_z(wing_position, fuselage_diameter)
 
+    engine_position = "under_wing"
+    pos_field = getattr(spec.engine, "position", None)
+    if pos_field is not None and hasattr(pos_field, "value"):
+        engine_position = str(pos_field.value).lower()
+
     x_offset = _engine_offset(spec, "x_offset")
     y_offset = _engine_offset(spec, "y_offset")
     z_offset = _engine_offset(spec, "z_offset")
@@ -46,9 +51,6 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
     diameter = fuselage_diameter * 0.5
 
     if engine_count == 1:
-        engine_position = (
-            spec.engine.position.value if spec.engine.position else "nose"
-        )
         if engine_position == "nose":
             base_x = fuselage_length * 0.5
             base_y = 0.0
@@ -61,6 +63,10 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             base_x = fuselage_length * 0.75
             base_y = 0.0
             base_z = fuselage_diameter * 0.5
+        elif engine_position == "pusher":
+            base_x = wing_x + root_chord * 0.75
+            base_y = 0.0
+            base_z = fuselage_diameter * 0.2
         else:
             base_x = wing_x + root_chord * 0.25
             base_y = 0.0
@@ -84,12 +90,75 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             ),
         ]
 
-    base_x = wing_x + root_chord * 0.25
-    base_y = wing_span * 0.25
-    base_z = wing_z - diameter * 0.6
+    # Dual engine position overrides
+    if engine_position == "wing_tip":
+        base_x = wing_x + root_chord * 0.25
+        base_y = wing_span * 0.48
+        base_z = wing_z
+    elif engine_position == "over_wing":
+        base_x = wing_x + root_chord * 0.25
+        base_y = wing_span * 0.25
+        base_z = wing_z + diameter * 0.8
+    else:
+        base_x = wing_x + root_chord * 0.25
+        base_y = wing_span * 0.25
+        base_z = wing_z - diameter * 0.6
 
-    return [
-        _create_engine_nacelle(
+    if engine_count == 2:
+        return [
+            _create_engine_nacelle(
+                adapter,
+                name="left_engine",
+                engine_count=engine_count,
+                x_offset=x_offset,
+                y_delta=y_offset,
+                z_offset=z_offset,
+                base_x=base_x,
+                base_y=base_y,
+                base_z=base_z,
+                x_rel_location=base_x + x_offset,
+                y_offset=-(base_y + y_offset),
+                z_rel_location=base_z + z_offset,
+                length=length,
+                diameter=diameter,
+            ),
+            _create_engine_nacelle(
+                adapter,
+                name="right_engine",
+                engine_count=engine_count,
+                x_offset=x_offset,
+                y_delta=y_offset,
+                z_offset=z_offset,
+                base_x=base_x,
+                base_y=base_y,
+                base_z=base_z,
+                x_rel_location=base_x + x_offset,
+                y_offset=base_y + y_offset,
+                z_rel_location=base_z + z_offset,
+                length=length,
+                diameter=diameter,
+            ),
+        ]
+
+    # 3 engines: center + left/right symmetric
+    if engine_count == 3:
+        center_result = _create_engine_nacelle(
+            adapter,
+            name="center_engine",
+            engine_count=engine_count,
+            x_offset=x_offset,
+            y_delta=y_offset,
+            z_offset=z_offset,
+            base_x=base_x,
+            base_y=0.0,
+            base_z=base_z,
+            x_rel_location=base_x + x_offset,
+            y_offset=y_offset,
+            z_rel_location=base_z + z_offset,
+            length=length,
+            diameter=diameter,
+        )
+        left_result = _create_engine_nacelle(
             adapter,
             name="left_engine",
             engine_count=engine_count,
@@ -104,8 +173,8 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             z_rel_location=base_z + z_offset,
             length=length,
             diameter=diameter,
-        ),
-        _create_engine_nacelle(
+        )
+        right_result = _create_engine_nacelle(
             adapter,
             name="right_engine",
             engine_count=engine_count,
@@ -117,6 +186,76 @@ def create_engine_nacelles(adapter: Any, spec: Any) -> list[GeometryBuildResult]
             base_z=base_z,
             x_rel_location=base_x + x_offset,
             y_offset=base_y + y_offset,
+            z_rel_location=base_z + z_offset,
+            length=length,
+            diameter=diameter,
+        )
+        return [center_result, left_result, right_result]
+
+    # 4 engines: inner + outer pairs, symmetric
+    inner_y = wing_span * 0.18
+    outer_y = wing_span * 0.38
+    return [
+        _create_engine_nacelle(
+            adapter,
+            name="left_inner_engine",
+            engine_count=engine_count,
+            x_offset=x_offset,
+            y_delta=y_offset,
+            z_offset=z_offset,
+            base_x=base_x,
+            base_y=inner_y,
+            base_z=base_z,
+            x_rel_location=base_x + x_offset,
+            y_offset=-(inner_y + y_offset),
+            z_rel_location=base_z + z_offset,
+            length=length,
+            diameter=diameter,
+        ),
+        _create_engine_nacelle(
+            adapter,
+            name="left_outer_engine",
+            engine_count=engine_count,
+            x_offset=x_offset,
+            y_delta=y_offset,
+            z_offset=z_offset,
+            base_x=base_x,
+            base_y=outer_y,
+            base_z=base_z,
+            x_rel_location=base_x + x_offset,
+            y_offset=-(outer_y + y_offset),
+            z_rel_location=base_z + z_offset,
+            length=length,
+            diameter=diameter,
+        ),
+        _create_engine_nacelle(
+            adapter,
+            name="right_inner_engine",
+            engine_count=engine_count,
+            x_offset=x_offset,
+            y_delta=y_offset,
+            z_offset=z_offset,
+            base_x=base_x,
+            base_y=inner_y,
+            base_z=base_z,
+            x_rel_location=base_x + x_offset,
+            y_offset=inner_y + y_offset,
+            z_rel_location=base_z + z_offset,
+            length=length,
+            diameter=diameter,
+        ),
+        _create_engine_nacelle(
+            adapter,
+            name="right_outer_engine",
+            engine_count=engine_count,
+            x_offset=x_offset,
+            y_delta=y_offset,
+            z_offset=z_offset,
+            base_x=base_x,
+            base_y=outer_y,
+            base_z=base_z,
+            x_rel_location=base_x + x_offset,
+            y_offset=outer_y + y_offset,
             z_rel_location=base_z + z_offset,
             length=length,
             diameter=diameter,

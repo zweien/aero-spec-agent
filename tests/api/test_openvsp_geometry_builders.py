@@ -322,7 +322,7 @@ def test_create_engine_nacelles_single_engine_creates_center_pod():
 
 def test_create_engine_nacelles_rejects_unsupported_engine_count():
     data = deepcopy(valid_spec_data())
-    data["engine"]["count"]["value"] = 3
+    data["engine"]["count"]["value"] = 5
     spec = load_aircraft_spec(data)
     adapter, _fake_vsp = make_adapter()
 
