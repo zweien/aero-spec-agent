@@ -18,6 +18,15 @@ def create_tail(adapter: Any, spec: Any) -> list[GeometryBuildResult]:
     if tail_type == "t_tail":
         return _create_t_tail(adapter, tail_x, h_tail_span, v_tail_span, root_chord)
 
+    if tail_type == "v_tail":
+        return _create_v_tail(adapter, tail_x, h_tail_span, root_chord)
+
+    if tail_type == "inverted_v":
+        return _create_inverted_v(adapter, tail_x, h_tail_span, root_chord)
+
+    if tail_type == "cruciform":
+        return _create_cruciform(adapter, tail_x, h_tail_span, v_tail_span, root_chord)
+
     # Default: conventional
     horizontal_tail = _create_tail_surface(
         adapter,
@@ -100,3 +109,90 @@ def _create_tail_surface(
         geom_id=geom_id,
         applied_parameters=applied_parameters,
     )
+
+
+def _create_v_tail(
+    adapter: Any,
+    tail_x: float,
+    h_tail_span: float,
+    root_chord: float,
+) -> list[GeometryBuildResult]:
+    v_tail_chord = root_chord * 0.50
+    v_tail_span = h_tail_span * 0.85
+    left = _create_tail_surface(
+        adapter,
+        name="v_tail_left",
+        span=v_tail_span,
+        chord=v_tail_chord,
+        x_rel_location=tail_x,
+        x_rel_rotation=45.0,
+    )
+    right = _create_tail_surface(
+        adapter,
+        name="v_tail_right",
+        span=v_tail_span,
+        chord=v_tail_chord,
+        x_rel_location=tail_x,
+        x_rel_rotation=-45.0,
+    )
+    return [left, right]
+
+
+def _create_inverted_v(
+    adapter: Any,
+    tail_x: float,
+    h_tail_span: float,
+    root_chord: float,
+) -> list[GeometryBuildResult]:
+    v_tail_chord = root_chord * 0.50
+    v_tail_span = h_tail_span * 0.85
+    left = _create_tail_surface(
+        adapter,
+        name="inverted_v_left",
+        span=v_tail_span,
+        chord=v_tail_chord,
+        x_rel_location=tail_x,
+        x_rel_rotation=-45.0,
+    )
+    right = _create_tail_surface(
+        adapter,
+        name="inverted_v_right",
+        span=v_tail_span,
+        chord=v_tail_chord,
+        x_rel_location=tail_x,
+        x_rel_rotation=45.0,
+    )
+    return [left, right]
+
+
+def _create_cruciform(
+    adapter: Any,
+    tail_x: float,
+    h_tail_span: float,
+    v_tail_span: float,
+    root_chord: float,
+) -> list[GeometryBuildResult]:
+    vertical_tail = _create_tail_surface(
+        adapter,
+        name="vertical_tail",
+        span=v_tail_span,
+        chord=root_chord * 0.55,
+        x_rel_location=tail_x,
+        x_rel_rotation=90.0,
+    )
+    horizontal_tail = _create_tail_surface(
+        adapter,
+        name="horizontal_tail",
+        span=h_tail_span,
+        chord=root_chord * 0.45,
+        x_rel_location=tail_x,
+    )
+    cruciform_htail = _create_tail_surface(
+        adapter,
+        name="cruciform_htail",
+        span=h_tail_span * 0.90,
+        chord=root_chord * 0.42,
+        x_rel_location=tail_x,
+        z_rel_location=v_tail_span * 0.50,
+    )
+    return [vertical_tail, horizontal_tail, cruciform_htail]
