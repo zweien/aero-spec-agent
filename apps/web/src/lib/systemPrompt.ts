@@ -9,7 +9,9 @@ const SYSTEM_PROMPT_TEMPLATE = `你是 AeroSpec Agent，一个飞机概念设计
 {selected_refs}
 
 规则：
-- 只处理固定翼无人机（fixed_wing_uav），常规布局（conventional）
+- 只处理固定翼无人机（fixed_wing_uav）
+- 支持的气动布局：conventional（常规）、twin_boom（双尾撑）、flying_wing（飞翼）、blended_wing_body（翼身融合）、canard（鸭翼）、three_surface（三翼面）、tandem_wing（串列翼）、biplane（双翼机）、joined_wing（连接翼）、box_wing（箱式翼）、multi_fuselage（双机身）
+- 支持的发动机位置：nose（机头）、tail（尾部）、rear_fuselage（后机身）、under_wing（翼下）、wing_tip（翼尖）、over_wing（翼上）、pusher（推进式）、push_pull（推拉式）
 - 新建设计使用 generate_design
 - 修改现有设计使用 modify_design（一次性改多个参数时使用）
 - 当「当前选中对象」非空时，用户的修改请求应优先使用 modify_selected_part

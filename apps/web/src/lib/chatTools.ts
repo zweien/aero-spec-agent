@@ -19,12 +19,24 @@ const generateDesignSchema = z.object({
   wing_sweep: z.number().optional().describe("机翼后掠角 (deg)"),
   wing_dihedral: z.number().optional().describe("机翼上反角 (deg)"),
   wing_airfoil: z.string().optional().describe("翼型，如 NACA4412"),
+  wing_planform: z
+    .enum(["conventional", "delta", "ogee"])
+    .optional()
+    .describe("机翼平面形状"),
+  aircraft_layout: z
+    .enum([
+      "conventional", "twin_boom", "flying_wing", "blended_wing_body",
+      "canard", "three_surface", "tandem_wing", "biplane",
+      "joined_wing", "box_wing", "multi_fuselage",
+    ])
+    .optional()
+    .describe("气动布局类型"),
   tail_type: z
-    .enum(["conventional"])
+    .enum(["conventional", "t_tail", "v_tail", "inverted_v", "cruciform"])
     .describe("尾翼类型"),
   engine_count: z.number().int().describe("发动机数量"),
   engine_position: z
-    .enum(["under_wing"])
+    .enum(["nose", "tail", "rear_fuselage", "under_wing", "wing_tip", "over_wing", "pusher", "push_pull"])
     .optional()
     .describe("发动机位置"),
   cruise_speed: z.number().optional().describe("巡航速度 (km/h)"),
@@ -33,6 +45,16 @@ const generateDesignSchema = z.object({
     .enum(["endurance", "speed", "payload", "range"])
     .optional()
     .describe("设计优先级"),
+  canard_span: z.number().optional().describe("鸭翼翼展 (m)，canard/three_surface 布局使用"),
+  canard_chord: z.number().optional().describe("鸭翼弦长 (m)"),
+  canard_sweep: z.number().optional().describe("鸭翼后掠角 (deg)"),
+  rear_wing_span: z.number().optional().describe("后翼翼展 (m)，tandem_wing/joined_wing 布局使用"),
+  rear_wing_chord: z.number().optional().describe("后翼弦长 (m)"),
+  second_wing_span: z.number().optional().describe("下翼翼展 (m)，biplane 布局使用"),
+  second_wing_chord: z.number().optional().describe("下翼弦长 (m)"),
+  second_wing_gap: z.number().optional().describe("上下翼间距 (m)"),
+  multi_fuselage_spacing: z.number().optional().describe("双机身间距 (m)"),
+  box_wing_gap: z.number().optional().describe("箱式翼上下翼间距 (m)"),
   inferred_fields: z
     .array(z.string())
     .optional()
@@ -48,6 +70,7 @@ const modifyDesignSchema = z.object({
         field: z
           .enum([
             "name",
+            "aircraft_layout",
             "wing_span",
             "wing_root_chord",
             "wing_tip_chord",
@@ -55,6 +78,7 @@ const modifyDesignSchema = z.object({
             "wing_dihedral",
             "wing_airfoil",
             "wing_position",
+            "wing_planform",
             "fuselage_length",
             "fuselage_diameter",
             "engine_count",
@@ -66,6 +90,16 @@ const modifyDesignSchema = z.object({
             "cruise_speed",
             "payload",
             "priority",
+            "canard_span",
+            "canard_chord",
+            "canard_sweep",
+            "rear_wing_span",
+            "rear_wing_chord",
+            "second_wing_span",
+            "second_wing_chord",
+            "second_wing_gap",
+            "multi_fuselage_spacing",
+            "box_wing_gap",
           ])
           .describe("要修改的参数名"),
         value: z.any().describe("新值"),
