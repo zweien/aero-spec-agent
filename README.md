@@ -14,7 +14,7 @@ Describe an aircraft in plain language — get parametric CAD models, aerodynami
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-2.0+-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 [![OpenVSP](https://img.shields.io/badge/OpenVSP-3.50-1E88E5?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHRleHQgZmlsbD0id2hpdGUiIGZvbnQtc2l6ZT0iMTIiIHk9IjE2IiB4PSIyIj5WU1A8L3RleHQ+PC9zdmc+)](http://openvsp.org/)
-[![Tests](https://img.shields.io/badge/tests-579%2B%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-585%2B%20passing-brightgreen)]()
 
 [Report Bug](https://github.com/zweien/aero-spec-agent/issues) · [Request Feature](https://github.com/zweien/aero-spec-agent/issues) · [View Demo](#quick-start)
 
@@ -56,7 +56,7 @@ Three.js viewer with GLB/OBJ model loading and a parameter-driven wireframe fall
 
 ### Parametric CAD Generation
 
-OpenVSP builds fuselage, wing, tail, and engine nacelles from the spec. Each generation exports `.vsp3`, `.step`, `.obj`, `.glb` artifacts per version.
+OpenVSP builds fuselage, wing, tail, engine nacelles, booms, and BWB flat bodies from the spec. Four aerodynamic layout types are supported with layout-aware geometry dispatch. Each generation exports `.vsp3`, `.step`, `.obj`, `.glb` artifacts per version.
 
 ### Aerodynamic Analysis
 
@@ -323,14 +323,68 @@ storage/designs/{design_id}/
 
 ### Supported Geometry Matrix
 
+#### Aerodynamic Layouts
+
+| Layout | Components | Description | Example Spec |
+|--------|-----------|-------------|-------------|
+| **Conventional** | fuselage + wing + tail + engine | Standard fixed-wing with separate fuselage, wing, and empennage | `twin_engine_uav.yaml` |
+| **Twin Boom** | fuselage + wing + tail + engine + booms | Two tail booms extending aft from the wing, pusher engine common | `twin_boom_pusher_uav.yaml` |
+| **Flying Wing** | wing + engine | No fuselage, no tail — all-in-one lifting body, multi-section wing optional | `flying_wing_uav.yaml` |
+| **BWB** | flat body + wing + engine | Blended wing body with non-circular fuselage cross-section (width >> height) | `bwb_uav.yaml` |
+
+Layout-aware dispatch automatically creates or skips geometry components:
+
+| Component | Conventional | Twin Boom | Flying Wing | BWB |
+|-----------|:---:|:---:|:---:|:---:|
+| Fuselage | ✅ | ✅ | — | — |
+| Flat Body (BWB) | — | — | — | ✅ |
+| Tail Surfaces | ✅ | ✅ | — | — |
+| Main Wing | ✅ | ✅ | ✅ | ✅ |
+| Booms | — | ✅ | — | — |
+| Engine Nacelles | ✅ | ✅ | ✅ | ✅ |
+
+#### Tail Configurations
+
+| Type | Surfaces | Description |
+|------|----------|-------------|
+| `conventional` | horizontal_tail + vertical_tail | Standard H+V empennage |
+| `t_tail` | vertical_tail + horizontal_tail (elevated) | Horizontal stabilizer on top of vertical fin |
+| `v_tail` | 1 surface at +45° (auto-mirrored by OpenVSP) | V-tail combining pitch and yaw control |
+| `inverted_v` | 1 surface at -45° (auto-mirrored) | Inverted V-tail |
+| `cruciform` | vertical_tail + elevated horizontal_tail | Horizontal stabilizer mounted partway up the fin |
+
+#### Engine Configurations
+
+| Count | Layout | Positioning |
+|------:|--------|-------------|
+| 1 | Center | `nose`, `tail`, `rear_fuselage`, `pusher`, `under_wing` |
+| 2 | Symmetric pair | `under_wing`, `wing_tip`, `over_wing` |
+| 3 | Center + symmetric pair | Same base positions, center at Y=0 |
+| 4 | Inner + outer symmetric pairs | Inner at 18% span, outer at 38% span |
+
+All engines support optional XYZ offsets (`engine.x_offset`, `engine.y_offset`, `engine.z_offset`) for fine-tuning nacelle placement.
+
+#### Multi-Section Wing
+
+| Sections | Result |
+|---------:|--------|
+| 1 | Single WING geometry (default) |
+| 2 | `inner_wing` + `outer_wing` with independent sweep/dihedral |
+| 3 | `inner_wing` + `mid_wing` + `outer_wing` |
+
+Multi-section wings allow inner and outer panels with different sweep and dihedral angles, controlled by `wing.inner_sweep` and `wing.inner_dihedral`.
+
+#### Full Parameter Matrix
+
 | Area | Supported | Not yet exposed |
 |------|-----------|-----------------|
 | Aircraft layout | `conventional`, `twin_boom`, `flying_wing`, `blended_wing_body` | Multirotor, rotorcraft |
 | Wing position | `high`, `mid`, `low` | Custom multi-wing layouts |
 | Wing sections | 1 (single), 2 (inner+outer), 3 (inner+mid+outer) | Continuous airfoil transition |
 | Tail type | `conventional`, `t_tail`, `v_tail`, `inverted_v`, `cruciform` | `butterfly` |
-| Engine count | `1`, `2`, `3`, `4` | More than four engines |
+| Engine count | 1, 2, 3, 4 | More than four engines |
 | Engine position | `nose`, `tail`, `rear_fuselage`, `under_wing`, `wing_tip`, `over_wing`, `pusher` | `on_fuselage` |
+| Mission priority | `endurance`, `speed`, `payload`, `range` | Multi-objective trade-off |
 
 ## API Reference
 
@@ -367,7 +421,7 @@ storage/designs/{design_id}/
 ## Testing
 
 ```bash
-# Backend tests — 579+ tests (fake backend, no OpenVSP needed)
+# Backend tests — 585+ tests (fake backend, no OpenVSP needed)
 CAD_BACKEND=fake .venv/bin/python -m pytest tests/ -q
 
 # Frontend component tests — 159 tests
@@ -387,9 +441,13 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 
 | Component | Status | Backend | Tests |
 |-----------|--------|---------|-------|
-| Fake CAD pipeline | Pass | fake | 579+ |
+| Fake CAD pipeline | Pass | fake | 585+ |
 | OpenVSP env check | Script ready | N/A | -- |
-| OpenVSP single/twin engine | Pass | openvsp | validate script |
+| OpenVSP conventional layout | Pass | openvsp | E2E |
+| OpenVSP twin_boom layout | Pass | openvsp | E2E |
+| OpenVSP flying_wing layout | Pass | openvsp | E2E |
+| OpenVSP BWB layout | Pass | openvsp | E2E |
+| Chat→Minimax LLM→OpenVSP E2E | Pass | openvsp | browser |
 | OpenVSP failure injection | Pass | fake | 12 |
 | Variant trust / confidence | Pass | fake | 8 |
 | DesignMetrics source/confidence | Pass | fake | 7 |
@@ -473,15 +531,17 @@ aero-spec-agent/
 │           ├── generate_aircraft.py   # Orchestration
 │           ├── backend_factory.py     # Fake/OpenVSP selection
 │           ├── create_fuselage.py     # Fuselage geometry
-│           ├── create_wing.py         # Wing geometry
-│           ├── create_tail.py         # Tail geometry
-│           ├── create_engine.py       # Engine nacelle geometry
+│           ├── create_wing.py         # Wing geometry (single/multi-section)
+│           ├── create_tail.py         # Tail geometry (5 types)
+│           ├── create_engine.py       # Engine nacelle geometry (1-4 engines)
+│           ├── create_boom.py         # Twin boom geometry
+│           ├── create_body.py         # BWB flat body geometry
 │           ├── design_rules.py        # Pass/warn/fail validation
 │           ├── performance_estimate.py # Range, L/D, wing loading
 │           └── vspaero_analysis.py    # Panel method sweep
 │
 ├── packages/aircraft-schema/          # Spec YAML definitions & examples
-├── tests/api/                         # 579 backend tests
+├── tests/api/                         # 585 backend tests
 ├── storage/                           # Generated design artifacts (gitignored)
 └── pyproject.toml                     # Python project config
 ```
