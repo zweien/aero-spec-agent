@@ -325,7 +325,7 @@ storage/designs/{design_id}/
 
 #### Aerodynamic Layouts
 
-> **Note:** These layouts are intended for concept design and geometric exploration. They do not represent engineering-validated configurations. Aerodynamic analysis results from VSPAERO are approximate (panel method) and should not be used as the basis for design decisions.
+> **Note:** These layouts are intended for concept design and geometric exploration. They do not represent engineering-validated configurations. Aerodynamic analysis results from VSPAERO are approximate (panel method) and should not be used as the basis for design decisions. For detailed per-layout maturity status, see [Layout Maturity Matrix](docs/layout-maturity-matrix.md).
 
 AeroSpec Agent supports 11 aerodynamic layout types via `aircraft.layout` in the spec:
 
