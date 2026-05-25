@@ -20,8 +20,10 @@ from services.workers.cad_worker.openvsp_generator.vspaero_analysis import (
     _compute_optimal_ld,
     _fit_cd0,
     _fit_cl_alpha,
+    build_analysis_geoms,
     fake_vspaero_results,
 )
+from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuildResult
 
 
 def _make_spec(**overrides) -> AircraftSpec:
@@ -233,3 +235,87 @@ class TestRunVspaeroHandlesError:
         spec = _make_spec()
         with pytest.raises(RuntimeError, match="VSPAERO not installed"):
             run_vspaero_analysis(FailAdapter(), spec, "wing-1")
+
+
+def _mock_results(names: list[str]) -> list[GeometryBuildResult]:
+    return [GeometryBuildResult(name=n, geom_id=f"id-{n}") for n in names]
+
+
+class TestBuildAnalysisGeoms:
+    def test_conventional_returns_main_wing_only(self):
+        spec = _make_spec()
+        results = _mock_results(["fuselage", "main_wing", "horizontal_tail", "vertical_tail"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing"]
+
+    def test_twin_boom_returns_main_wing_only(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="twin_boom"))
+        results = _mock_results(["fuselage", "main_wing", "horizontal_tail", "left_boom", "right_boom"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing"]
+
+    def test_flying_wing_returns_main_wing_only(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="flying_wing"))
+        results = _mock_results(["main_wing"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing"]
+
+    def test_blended_wing_body_returns_main_wing_only(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="blended_wing_body"))
+        results = _mock_results(["flat_body", "main_wing"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing"]
+
+    def test_canard_returns_main_wing_and_canard(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="canard"))
+        results = _mock_results(["fuselage", "main_wing", "canard", "horizontal_tail"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing", "id-canard"]
+
+    def test_three_surface_returns_main_wing_and_canard(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="three_surface"))
+        results = _mock_results(["fuselage", "main_wing", "canard", "horizontal_tail"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing", "id-canard"]
+
+    def test_tandem_wing_returns_main_wing_and_rear_wing(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="tandem_wing"))
+        results = _mock_results(["fuselage", "main_wing", "rear_wing"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing", "id-rear_wing"]
+
+    def test_joined_wing_returns_main_wing_and_rear_wing(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="joined_wing"))
+        results = _mock_results(["fuselage", "main_wing", "rear_wing"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing", "id-rear_wing"]
+
+    def test_biplane_returns_main_wing_and_lower_wing(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="biplane"))
+        results = _mock_results(["fuselage", "main_wing", "lower_wing", "horizontal_tail"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing", "id-lower_wing"]
+
+    def test_box_wing_returns_main_wing_and_box_lower_wing(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="box_wing"))
+        results = _mock_results(["fuselage", "main_wing", "box_lower_wing", "left_endplate", "right_endplate", "horizontal_tail"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing", "id-box_lower_wing"]
+
+    def test_multi_fuselage_returns_main_wing_only(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="multi_fuselage"))
+        results = _mock_results(["left_fuselage", "right_fuselage", "main_wing", "horizontal_tail"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing"]
+
+    def test_missing_component_skipped_gracefully(self):
+        spec = _make_spec(aircraft=Aircraft(name="t", type="fixed_wing_uav", layout="canard"))
+        results = _mock_results(["fuselage", "main_wing"])  # no canard
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing"]
+
+    def test_unknown_layout_returns_main_wing_only(self):
+        spec = _make_spec()  # conventional
+        results = _mock_results(["fuselage", "main_wing"])
+        geom_ids = build_analysis_geoms(spec, results)
+        assert geom_ids == ["id-main_wing"]

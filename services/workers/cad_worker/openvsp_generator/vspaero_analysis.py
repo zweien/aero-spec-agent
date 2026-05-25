@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
+from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuildResult
 from services.workers.cad_worker.openvsp_generator.openvsp_adapter import OpenVspAdapter
 
 
@@ -61,6 +62,38 @@ class VspaeroReport:
         if self.error_message is not None:
             d["error_message"] = self.error_message
         return d
+
+
+LAYOUT_ANALYSIS_NAMES: dict[str, list[str]] = {
+    "conventional": [],
+    "twin_boom": [],
+    "flying_wing": [],
+    "blended_wing_body": [],
+    "canard": ["canard"],
+    "three_surface": ["canard"],
+    "tandem_wing": ["rear_wing"],
+    "joined_wing": ["rear_wing"],
+    "biplane": ["lower_wing"],
+    "box_wing": ["box_lower_wing"],
+    "multi_fuselage": [],
+}
+
+
+def build_analysis_geoms(
+    spec: AircraftSpec,
+    build_results: list[GeometryBuildResult],
+) -> list[str]:
+    """Return geom IDs to include in VSPAERO analysis based on layout."""
+    layout = spec.aircraft.layout.lower()
+    extra_names = LAYOUT_ANALYSIS_NAMES.get(layout, [])
+    components = {r.name: r.geom_id for r in build_results}
+    geom_ids: list[str] = []
+    if "main_wing" in components:
+        geom_ids.append(components["main_wing"])
+    for name in extra_names:
+        if name in components:
+            geom_ids.append(components[name])
+    return geom_ids
 
 
 def _cruise_mach(spec: AircraftSpec) -> float:
