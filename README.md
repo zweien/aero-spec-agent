@@ -14,7 +14,7 @@ Describe an aircraft in plain language — get parametric CAD models, aerodynami
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1C3C3C?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-2.0+-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 [![OpenVSP](https://img.shields.io/badge/OpenVSP-3.50-1E88E5?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHRleHQgZmlsbD0id2hpdGUiIGZvbnQtc2l6ZT0iMTIiIHk9IjE2IiB4PSIyIj5WU1A8L3RleHQ+PC9zdmc+)](http://openvsp.org/)
-[![Tests](https://img.shields.io/badge/tests-585%2B%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-654%2B%20passing-brightgreen)]()
 
 [Report Bug](https://github.com/zweien/aero-spec-agent/issues) · [Request Feature](https://github.com/zweien/aero-spec-agent/issues) · [View Demo](#quick-start)
 
@@ -41,6 +41,7 @@ Describe your aircraft in natural language. The LLM parses requirements into a s
 Go beyond a single design. The **Deep Design** panel uses a LangGraph pipeline to automatically explore multiple design variants, compare aerodynamic metrics, and recommend the best option.
 
 - Choose exploration depth (quick / standard / deep) and optimization strategies (endurance, speed, payload, STOL)
+- Layout-aware variant generation: canard layouts vary canard.span, biplane layouts vary second_wing.gap, etc.
 - Watch progress with a Chinese-labeled timeline (解析设计目标 → 生成候选方案 → 分析方案差异 → 生成设计建议)
 - Review variant cards showing span, range, L/D ratio, aspect ratio, and wing loading
 - Accept the AI-recommended variant or pick any variant — it becomes the current design instantly
@@ -60,7 +61,7 @@ OpenVSP builds fuselage, wing, tail, engine nacelles, canard, booms, BWB flat bo
 
 ### Aerodynamic Analysis
 
-Optional VSPAERO panel-method sweep (CL/CD/CM vs alpha, optimal L/D, CL_alpha, CD0 estimate) with results in the bottom panel.
+Optional VSPAERO panel-method sweep (CL/CD/CM vs alpha, optimal L/D, CL_alpha, CD0 estimate) with results in the bottom panel. Multi-surface analysis includes all aerodynamic surfaces based on layout (e.g., canard + main wing for canard layouts).
 
 ### Version History
 
@@ -344,7 +345,7 @@ AeroSpec Agent supports 11 aerodynamic layout types via `aircraft.layout` in the
 | `multi_fuselage` | 2× fuselage + wing + tail + engine | **Stable** | `multi_fuselage: MultiFuselageConfig` | `multi_fuselage_uav.yaml` |
 
 **Maturity levels:**
-- **Stable** — Validated with real OpenVSP E2E (vsp3 + glb artifacts), spec defaults, and frontend 2D preview verification (11/11 pass via automated script)
+- **Stable** — Validated with real OpenVSP E2E (vsp3 + glb artifacts), spec defaults, frontend 2D preview verification (11/11 pass), multi-surface VSPAERO analysis, and layout-aware Deep Design strategies. See [Layout QA Report](docs/layout-openvsp-qa.md) for per-layout artifact verification.
 
 Layout-aware dispatch automatically creates or skips geometry components:
 
@@ -440,7 +441,7 @@ Multi-section wings allow inner and outer panels with different sweep and dihedr
 ## Testing
 
 ```bash
-# Backend tests — 585+ tests (fake backend, no OpenVSP needed)
+# Backend tests — 654+ tests (fake backend, no OpenVSP needed)
 CAD_BACKEND=fake .venv/bin/python -m pytest tests/ -q
 
 # Frontend component tests — 159 tests
@@ -460,12 +461,15 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 
 | Component | Status | Backend | Tests |
 |-----------|--------|---------|-------|
-| Fake CAD pipeline | Pass | fake | 585+ |
+| Fake CAD pipeline | Pass | fake | 654+ |
 | OpenVSP env check | Script ready | N/A | -- |
 | OpenVSP all 11 layouts | Pass | openvsp | E2E (8 tests) |
+| Layout QA validation (11 layouts) | Pass | fake/openvsp | script |
 | Frontend 2D preview (all 11 layouts) | Pass | — | manual |
 | Chat→Minimax LLM→OpenVSP E2E | Pass | openvsp | browser |
 | OpenVSP failure injection | Pass | fake | 12 |
+| VSPAERO multi-surface analysis | Pass | fake | 29 |
+| Deep Design layout-aware strategies | Pass | fake | 16 |
 | Variant trust / confidence | Pass | fake | 8 |
 | DesignMetrics source/confidence | Pass | fake | 7 |
 | DesignMetricsCard UI | Pass | any | manual |
@@ -550,12 +554,17 @@ aero-spec-agent/
 │           ├── create_engine.py       # Engine nacelle geometry (1-4 engines)
 │           ├── create_boom.py         # Twin boom geometry
 │           ├── create_body.py         # BWB flat body geometry
+│           ├── create_canard.py       # Canard geometry
+│           ├── create_tandem_wing.py  # Tandem / joined wing geometry
+│           ├── create_biplane.py      # Biplane lower wing geometry
+│           ├── create_box_wing.py     # Box wing lower + endplates
+│           ├── create_multi_fuselage.py # Multi-fuselage geometry
 │           ├── design_rules.py        # Pass/warn/fail validation
 │           ├── performance_estimate.py # Range, L/D, wing loading
 │           └── vspaero_analysis.py    # Panel method sweep
 │
 ├── packages/aircraft-schema/          # Spec YAML definitions & examples
-├── tests/api/                         # 585 backend tests
+├── tests/api/                         # 654 backend tests
 ├── storage/                           # Generated design artifacts (gitignored)
 └── pyproject.toml                     # Python project config
 ```
