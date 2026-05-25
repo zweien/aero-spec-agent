@@ -44,3 +44,42 @@ def test_openvsp_backend_generates_real_vsp3_and_validation_report(tmp_path: Pat
     assert result.validation_report["glb.exists"]["status"] == "pass"
     assert result.validation_report["wing.span"]["status"] == "pass"
     assert result.validation_report["engine.count"]["status"] == "pass"
+
+
+# ── Layout-specific OpenVSP integration tests ──
+
+_LAYOUT_SPECS = {
+    "canard": "canard_uav.yaml",
+    "three_surface": "three_surface_uav.yaml",
+    "tandem_wing": "tandem_wing_uav.yaml",
+    "biplane": "biplane_uav.yaml",
+    "joined_wing": "joined_wing_uav.yaml",
+    "box_wing": "box_wing_uav.yaml",
+    "multi_fuselage": "multi_fuselage_uav.yaml",
+}
+
+
+def _assert_valid_generation(result):
+    vsp3 = result.files["vsp3"]
+    glb = result.files["glb"]
+    assert vsp3.exists(), "vsp3 file missing"
+    assert vsp3.stat().st_size > 0, "vsp3 file is empty"
+    assert glb.exists(), "glb file missing"
+    assert glb.read_bytes()[:4] == b"glTF", "glb is not a valid glTF"
+    assert result.validation_report["backend"]["actual"] in {"openvsp", "OpenVspBackend"}
+    assert result.validation_report["vsp3.exists"]["status"] == "pass"
+    assert result.validation_report["glb.exists"]["status"] == "pass"
+    assert result.validation_report["wing.span"]["status"] == "pass"
+
+
+@pytest.mark.parametrize("layout_name,yaml_file", list(_LAYOUT_SPECS.items()))
+def test_openvsp_layout_generates_valid_artifacts(tmp_path, layout_name, yaml_file):
+    spec = load_aircraft_spec(Path(f"packages/aircraft-schema/examples/{yaml_file}"))
+    assert spec.aircraft.layout == layout_name
+
+    try:
+        result = generate_aircraft(spec, tmp_path, backend=OpenVspBackend())
+    except OpenVspUnavailableError as exc:
+        pytest.fail(str(exc))
+
+    _assert_valid_generation(result)

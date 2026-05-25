@@ -335,17 +335,16 @@ AeroSpec Agent supports 11 aerodynamic layout types via `aircraft.layout` in the
 | `twin_boom` | fuselage + wing + tail + engine + booms | **Stable** | `boom: Boom` | `twin_boom_pusher_uav.yaml` |
 | `flying_wing` | wing + engine (no fuselage, no tail) | **Stable** | — | `flying_wing_uav.yaml` |
 | `blended_wing_body` | flat body + wing + engine | **Stable** | `body: Body` | `bwb_uav.yaml` |
-| `canard` | fuselage + wing + tail + engine + canard | **Experimental** | `canard: Canard` | `canard_uav.yaml` |
-| `three_surface` | fuselage + wing + tail + engine + canard | **Experimental** | `canard: Canard` | `three_surface_uav.yaml` |
-| `tandem_wing` | fuselage + wing + rear_wing + engine | **Experimental** | `rear_wing: RearWing` | `tandem_wing_uav.yaml` |
-| `biplane` | fuselage + wing + lower_wing + tail + engine | **Experimental** | `second_wing: SecondWing` | `biplane_uav.yaml` |
-| `joined_wing` | fuselage + wing + rear_wing (forward-swept) + tail + engine | **Experimental** | `rear_wing: RearWing` | `joined_wing_uav.yaml` |
-| `box_wing` | fuselage + wing + lower_wing + endplates + tail + engine | **Experimental** | `box_wing_config: BoxWingConfig` | `box_wing_uav.yaml` |
-| `multi_fuselage` | 2× fuselage + wing + tail + engine | **Experimental** | `multi_fuselage: MultiFuselageConfig` | `multi_fuselage_uav.yaml` |
+| `canard` | fuselage + wing + tail + engine + canard | **Stable** | `canard: Canard` | `canard_uav.yaml` |
+| `three_surface` | fuselage + wing + tail + engine + canard | **Stable** | `canard: Canard` | `three_surface_uav.yaml` |
+| `tandem_wing` | fuselage + wing + rear_wing + engine | **Stable** | `rear_wing: RearWing` | `tandem_wing_uav.yaml` |
+| `biplane` | fuselage + wing + lower_wing + tail + engine | **Stable** | `second_wing: SecondWing` | `biplane_uav.yaml` |
+| `joined_wing` | fuselage + wing + rear_wing (forward-swept) + tail + engine | **Stable** | `rear_wing: RearWing` | `joined_wing_uav.yaml` |
+| `box_wing` | fuselage + wing + lower_wing + endplates + tail + engine | **Stable** | `box_wing_config: BoxWingConfig` | `box_wing_uav.yaml` |
+| `multi_fuselage` | 2× fuselage + wing + tail + engine | **Stable** | `multi_fuselage: MultiFuselageConfig` | `multi_fuselage_uav.yaml` |
 
 **Maturity levels:**
-- **Stable** — Validated with real OpenVSP E2E, fake CAD pipeline tests, and frontend 2D preview
-- **Experimental** — Geometry builders implemented, fake CAD E2E tests pass, frontend preview supported. Real OpenVSP generation works but has not been systematically verified across all configurations
+- **Stable** — Validated with real OpenVSP E2E (vsp3 + glb artifacts), fake CAD pipeline tests, and frontend 2D preview
 
 Layout-aware dispatch automatically creates or skips geometry components:
 
@@ -463,12 +462,7 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 |-----------|--------|---------|-------|
 | Fake CAD pipeline | Pass | fake | 585+ |
 | OpenVSP env check | Script ready | N/A | -- |
-| OpenVSP conventional layout | Pass | openvsp | E2E + browser |
-| OpenVSP twin_boom layout | Pass | openvsp | E2E |
-| OpenVSP flying_wing layout | Pass | openvsp | E2E |
-| OpenVSP BWB layout | Pass | openvsp | E2E |
-| OpenVSP canard layout | Pass | openvsp | browser |
-| canard / three_surface / tandem_wing / biplane / joined_wing / box_wing / multi_fuselage (fake) | Pass | fake | E2E (14 tests) |
+| OpenVSP all 11 layouts | Pass | openvsp | E2E (8 tests) |
 | Frontend 2D preview (all 11 layouts) | Pass | — | manual |
 | Chat→Minimax LLM→OpenVSP E2E | Pass | openvsp | browser |
 | OpenVSP failure injection | Pass | fake | 12 |
