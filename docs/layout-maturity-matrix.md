@@ -35,8 +35,8 @@ This document describes the maturity of each aerodynamic layout (`aircraft.layou
 | **OpenVSP E2E** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Frontend 2D preview** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **GLB 3D preview** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **VSPAERO** | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| **Deep Design** | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| **VSPAERO** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Deep Design** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Compare View** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Current maturity** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** |
 
@@ -103,23 +103,31 @@ Each layout has a dedicated or shared builder dispatched in `backend.py`:
 | box_wing | Lower wing + 2 endplate rects |
 | multi_fuselage | 2 auxiliary fuselage rects |
 
-### VSPAERO Analysis — ⚠️ Wing-only for all layouts
+### VSPAERO Analysis — ✅ All layouts (multi-surface)
 
-VSPAERO analysis runs on the **main wing only**, regardless of layout. This means:
+VSPAERO analysis includes **all aerodynamic surfaces** based on layout via `build_analysis_geoms()`:
 
-- Canard, rear wing, lower wing, booms are **not analyzed**
-- Flying wing layout: only the wing is analyzed (which is the entire aircraft)
-- Results are approximate (panel method) and should not be used for design decisions
-- For complex layouts (canard, biplane, box_wing), the aerodynamic interaction between surfaces is not captured
+| Layout | Surfaces analyzed |
+|--------|------------------|
+| conventional, twin_boom, flying_wing, blended_wing_body, multi_fuselage | main_wing only |
+| canard, three_surface | main_wing + canard |
+| tandem_wing, joined_wing | main_wing + rear_wing |
+| biplane | main_wing + lower_wing |
+| box_wing | main_wing + box_lower_wing |
 
-### Deep Design Compatibility — ⚠️ Layout-agnostic variant generation
+Results reflect combined multi-surface aerodynamics. `VspaeroReport.components_analyzed` lists which surfaces were included. Results are approximate (panel method) and should not be used for design decisions.
 
-The Deep Design pipeline modifies generic fields (primarily `wing.span`) when generating variants. It does **not** modify layout-specific fields (`canard.span`, `rear_wing.chord`, `second_wing.gap`, etc.).
+### Deep Design Compatibility — ✅ All layouts (layout-aware strategies)
 
-- Conventional layout: variants work well (wing span variation is meaningful)
-- Canard / biplane / tandem: variants only vary main wing — canard/rear/lower wing stays fixed
-- Flying wing: works correctly (wing is the only surface)
-- Multi-fuselage: spacing is not varied across variants
+The Deep Design pipeline varies layout-specific fields via `LAYOUT_STRATEGIES`:
+
+| Layout | Fields varied |
+|--------|--------------|
+| conventional, twin_boom, flying_wing, blended_wing_body, multi_fuselage | wing.span ±2m |
+| canard, three_surface | wing.span ±2m, canard.span ±0.5m |
+| tandem_wing, joined_wing | wing.span ±2m, rear_wing.span ±1m |
+| biplane | wing.span ±2m, second_wing.gap ±0.2m |
+| box_wing | wing.span ±2m, box_wing_config.gap ±0.3m |
 
 ### Compare View — ✅ All layouts
 
@@ -138,13 +146,12 @@ Generating a valid vsp3/glTF file confirms the geometry pipeline works. It does 
 
 ### VSPAERO limitations
 
-VSPAERO only analyzes the main wing panel. For multi-surface layouts:
-- **Canard / three_surface**: No canard-wing interaction analysis
-- **Biplane / box_wing**: No biplane interference drag estimate
-- **Tandem / joined_wing**: No tandem lift distribution
-- **Multi-fuselage**: No mutual interference between fuselages
+VSPAERO now analyzes all aerodynamic surfaces per layout. Remaining limitations:
+- Panel method is inherently approximate — results should not be used for design decisions
+- Per-surface aerodynamic reports are not available (VSPAERO outputs combined metrics only)
+- Non-wing geometries (fuselage, booms, body) are not included in analysis
 
-These require higher-fidelity tools (VLM, CFD) that are outside the current scope.
+Higher-fidelity tools (VLM, CFD) remain outside the current scope.
 
 ### LLM spec generation risks
 
@@ -157,9 +164,9 @@ When an LLM generates a spec for experimental layouts, it may:
 
 | Risk | Layouts | Reason |
 |------|---------|--------|
-| Unvalidated aero interaction | canard, three_surface, biplane, box_wing | Multi-surface interference not analyzed |
-| Spec default gaps | twin_boom, blended_wing_body | Missing auto-fill for boom/body fields |
-| Deep Design blind spots | all experimental | Variants only vary main wing span |
+| Unvalidated aero interaction | canard, three_surface, biplane, box_wing | Multi-surface interference captured but approximate |
+| Spec default gaps | — | All gaps fixed |
+| Deep Design blind spots | — | All layouts now have layout-aware strategies |
 
 ---
 
@@ -189,8 +196,8 @@ For each layout to graduate from Experimental to Stable, the following should be
 
 ### Spec default gaps to fix
 
-1. `twin_boom`: Add `boom.length` and `boom.diameter` defaults
-2. `blended_wing_body`: Add `body.width` and `body.height` defaults
+1. ~~`twin_boom`: Add `boom.length` and `boom.diameter` defaults~~ ✅ Fixed
+2. ~~`blended_wing_body`: Add `body.width` and `body.height` defaults~~ ✅ Fixed
 3. `flying_wing`: Verify no fuselage/tail fields leak into generated specs
 
 ---
@@ -204,4 +211,4 @@ For each layout to graduate from Experimental to Stable, the following should be
 | Prototype | — | 0 |
 | Planned | — | 0 |
 
-All 11 layouts have working geometry generation (OpenVSP E2E 8/8 pass), complete spec defaults, and verified 2D preview rendering (11/11 pass). Remaining gaps are VSPAERO wing-only analysis and Deep Design layout-agnostic variants, which apply uniformly across all layouts.
+All 11 layouts have working geometry generation (OpenVSP E2E 8/8 pass), complete spec defaults, verified 2D preview rendering (11/11 pass), multi-surface VSPAERO analysis, and layout-aware Deep Design variant strategies.
