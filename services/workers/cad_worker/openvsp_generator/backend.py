@@ -174,15 +174,22 @@ class OpenVspBackend:
         vspaero_data: dict[str, Any] = {}
         if _vspaero_enabled():
             from services.workers.cad_worker.openvsp_generator.vspaero_analysis import (
+                build_analysis_geoms,
+                LAYOUT_ANALYSIS_NAMES,
                 run_vspaero_analysis,
             )
-            components = _components(build_results)
-            wing_id = components.get("main_wing", "")
-            if wing_id:
+            geom_ids = build_analysis_geoms(spec, build_results)
+            if geom_ids:
                 try:
                     report = run_vspaero_analysis(
-                        adapter, spec, wing_id, output_dir=output_dir,
+                        adapter, spec, geom_ids, output_dir=output_dir,
                     )
+                    layout = spec.aircraft.layout.lower()
+                    all_names = ["main_wing"] + LAYOUT_ANALYSIS_NAMES.get(layout, [])
+                    component_map = _components(build_results)
+                    report.components_analyzed = [
+                        n for n in all_names if n in component_map
+                    ]
                     vspaero_data = report.to_dict()
                 except Exception as exc:
                     vspaero_data = {"status": "failed", "error_message": str(exc)}
