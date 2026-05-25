@@ -37,6 +37,80 @@ DEFAULT_STRATEGIES = [
     ]},
 ]
 
+LAYOUT_STRATEGIES: dict[str, list[dict]] = {
+    "conventional": DEFAULT_STRATEGIES,
+    "canard": [
+        {"label": "compact", "changes": [
+            {"path": "wing.span.value", "value": -2, "op": "relative"},
+            {"path": "canard.span.value", "value": -0.5, "op": "relative"},
+        ]},
+        {"label": "standard", "changes": []},
+        {"label": "extended", "changes": [
+            {"path": "wing.span.value", "value": 2, "op": "relative"},
+            {"path": "canard.span.value", "value": 0.5, "op": "relative"},
+        ]},
+    ],
+    "three_surface": [
+        {"label": "compact", "changes": [
+            {"path": "wing.span.value", "value": -2, "op": "relative"},
+            {"path": "canard.span.value", "value": -0.5, "op": "relative"},
+        ]},
+        {"label": "standard", "changes": []},
+        {"label": "extended", "changes": [
+            {"path": "wing.span.value", "value": 2, "op": "relative"},
+            {"path": "canard.span.value", "value": 0.5, "op": "relative"},
+        ]},
+    ],
+    "tandem_wing": [
+        {"label": "compact", "changes": [
+            {"path": "wing.span.value", "value": -2, "op": "relative"},
+            {"path": "rear_wing.span.value", "value": -1, "op": "relative"},
+        ]},
+        {"label": "standard", "changes": []},
+        {"label": "extended", "changes": [
+            {"path": "wing.span.value", "value": 2, "op": "relative"},
+            {"path": "rear_wing.span.value", "value": 1, "op": "relative"},
+        ]},
+    ],
+    "joined_wing": [
+        {"label": "compact", "changes": [
+            {"path": "wing.span.value", "value": -2, "op": "relative"},
+            {"path": "rear_wing.span.value", "value": -1, "op": "relative"},
+        ]},
+        {"label": "standard", "changes": []},
+        {"label": "extended", "changes": [
+            {"path": "wing.span.value", "value": 2, "op": "relative"},
+            {"path": "rear_wing.span.value", "value": 1, "op": "relative"},
+        ]},
+    ],
+    "biplane": [
+        {"label": "compact", "changes": [
+            {"path": "wing.span.value", "value": -2, "op": "relative"},
+            {"path": "second_wing.gap.value", "value": -0.2, "op": "relative"},
+        ]},
+        {"label": "standard", "changes": []},
+        {"label": "extended", "changes": [
+            {"path": "wing.span.value", "value": 2, "op": "relative"},
+            {"path": "second_wing.gap.value", "value": 0.2, "op": "relative"},
+        ]},
+    ],
+    "box_wing": [
+        {"label": "compact", "changes": [
+            {"path": "wing.span.value", "value": -2, "op": "relative"},
+            {"path": "box_wing_config.gap.value", "value": -0.3, "op": "relative"},
+        ]},
+        {"label": "standard", "changes": []},
+        {"label": "extended", "changes": [
+            {"path": "wing.span.value", "value": 2, "op": "relative"},
+            {"path": "box_wing_config.gap.value", "value": 0.3, "op": "relative"},
+        ]},
+    ],
+    "twin_boom": DEFAULT_STRATEGIES,
+    "flying_wing": DEFAULT_STRATEGIES,
+    "blended_wing_body": DEFAULT_STRATEGIES,
+    "multi_fuselage": DEFAULT_STRATEGIES,
+}
+
 
 class DeepDesignState(TypedDict, total=False):
     # Input
