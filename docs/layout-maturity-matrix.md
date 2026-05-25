@@ -202,6 +202,12 @@ For each layout to graduate from Experimental to Stable, the following should be
 
 ---
 
+## QA Report
+
+Automated layout validation report: [docs/layout-openvsp-qa.md](layout-openvsp-qa.md)
+
+---
+
 ## Summary
 
 | Maturity | Layouts | Count |
