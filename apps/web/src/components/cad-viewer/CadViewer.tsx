@@ -12,6 +12,7 @@ import {
 import {
   buildAircraftPreview,
   type AircraftPreviewSpec,
+  type PreviewElement,
 } from "./previewGeometry";
 
 type CadViewerRuntimeStatus = {
@@ -35,6 +36,31 @@ type CadViewerProps = {
   isGenerating?: boolean;
   runtimeStatus?: CadViewerRuntimeStatus;
 };
+
+function renderElement(el: PreviewElement, idx: number) {
+  switch (el.kind) {
+    case "polygon":
+      return <polygon className={el.className} points={el.points} key={`el-${idx}`} />;
+    case "rect":
+      return (
+        <rect
+          className={el.className}
+          x={el.x} y={el.y}
+          width={el.width} height={el.height}
+          rx={el.radius} ry={el.radius}
+          key={`el-${idx}`}
+        />
+      );
+    case "circle":
+      return (
+        <circle
+          className={el.className}
+          cx={el.cx} cy={el.cy} r={el.r}
+          key={`el-${idx}`}
+        />
+      );
+  }
+}
 
 export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generationStage, generationProgress, isGenerating, runtimeStatus }: CadViewerProps) {
   const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
@@ -143,7 +169,7 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
                 <svg className="preview-top" viewBox={preview.viewBox} role="img">
                   <title>飞机俯视预览</title>
                   <line className="preview-axis" x1="0" y1="-7" x2="0" y2="7" />
-                  <polygon className="preview-wing" points={preview.top.wing} />
+                  {preview.top.underlays.map((el, i) => renderElement(el, i))}
                   <rect
                     className="preview-fuselage"
                     x={preview.top.fuselage.x}
@@ -153,7 +179,8 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
                     rx={preview.top.fuselage.radius}
                     ry={preview.top.fuselage.radius}
                   />
-                  <polygon className="preview-tail" points={preview.top.tail} />
+                  <polygon className="preview-wing" points={preview.top.wing} />
+                  {preview.top.tail && <polygon className="preview-tail" points={preview.top.tail} />}
                   {preview.top.engines.map((engine) => (
                     <circle
                       className="preview-engine"
@@ -163,6 +190,7 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
                       r={engine.r}
                     />
                   ))}
+                  {preview.top.overlays.map((el, i) => renderElement(el, i))}
                 </svg>
               </div>
               <div
@@ -173,9 +201,10 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
                 className="preview-side-wrap"
                 style={{ flex: `1 1 ${100 - topPct}%` }}
               >
-                <svg className="preview-side" viewBox="-4.2 -1.4 8.4 2.8" role="img">
+                <svg className="preview-side" viewBox={preview.sideViewBox} role="img">
                   <title>飞机侧视预览</title>
                   <line className="preview-ground" x1="-4.2" y1="1.05" x2="4.2" y2="1.05" />
+                  {preview.side.underlays.map((el, i) => renderElement(el, i))}
                   <rect
                     className="preview-fuselage"
                     x={preview.side.fuselage.x}
@@ -186,7 +215,7 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
                     ry={preview.side.fuselage.radius}
                   />
                   <polygon className="preview-wing" points={preview.side.wing} />
-                  <polygon className="preview-tail" points={preview.side.tail} />
+                  {preview.side.tail && <polygon className="preview-tail" points={preview.side.tail} />}
                   {preview.side.engines.map((engine) => (
                     <circle
                       className="preview-engine"
@@ -196,6 +225,7 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
                       r={engine.r}
                     />
                   ))}
+                  {preview.side.overlays.map((el, i) => renderElement(el, i))}
                 </svg>
               </div>
             </div>

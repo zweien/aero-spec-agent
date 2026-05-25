@@ -1107,6 +1107,42 @@ select:focus {
   stroke-width: 0.035;
 }
 
+.preview-canard {
+  fill: rgba(129, 140, 248, 0.55);
+  stroke: rgba(129, 140, 248, 0.7);
+  stroke-width: 0.035;
+}
+
+.preview-rear-wing {
+  fill: rgba(167, 139, 250, 0.5);
+  stroke: rgba(167, 139, 250, 0.65);
+  stroke-width: 0.035;
+}
+
+.preview-lower-wing {
+  fill: rgba(96, 165, 250, 0.35);
+  stroke: rgba(96, 165, 250, 0.5);
+  stroke-width: 0.035;
+}
+
+.preview-boom {
+  fill: rgba(148, 163, 184, 0.4);
+  stroke: rgba(148, 163, 184, 0.5);
+  stroke-width: 0.035;
+}
+
+.preview-bwb-body {
+  fill: rgba(226, 232, 240, 0.45);
+  stroke: rgba(226, 232, 240, 0.35);
+  stroke-width: 0.035;
+}
+
+.preview-endplate {
+  fill: rgba(52, 211, 153, 0.4);
+  stroke: rgba(52, 211, 153, 0.5);
+  stroke-width: 0.035;
+}
+
 .preview-metrics {
   display: flex;
   flex-wrap: wrap;
