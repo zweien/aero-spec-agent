@@ -130,6 +130,21 @@ def _layout_aware_defaults(spec_data: dict[str, Any]) -> None:
             "gap": _spec_scalar({"value": 1.5, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
         }
 
+    # Twin boom → need boom section
+    if layout == "twin_boom" and "boom" not in spec_data:
+        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
+        spec_data["boom"] = {
+            "length": _spec_scalar({"value": 2.0, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+            "span": _spec_scalar({"value": round(span * 0.6, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        }
+
+    # Blended wing body → need body section
+    if layout == "blended_wing_body" and "body" not in spec_data:
+        spec_data["body"] = {
+            "width": _spec_scalar({"value": 2.0, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+            "height": _spec_scalar({"value": 0.6, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        }
+
 
 def ensure_required_defaults(spec_data: dict[str, Any]) -> None:
     """Fill missing required fields with rule defaults (in-place)."""

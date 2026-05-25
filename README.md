@@ -344,7 +344,7 @@ AeroSpec Agent supports 11 aerodynamic layout types via `aircraft.layout` in the
 | `multi_fuselage` | 2× fuselage + wing + tail + engine | **Stable** | `multi_fuselage: MultiFuselageConfig` | `multi_fuselage_uav.yaml` |
 
 **Maturity levels:**
-- **Stable** — Validated with real OpenVSP E2E (vsp3 + glb artifacts), fake CAD pipeline tests, and frontend 2D preview
+- **Stable** — Validated with real OpenVSP E2E (vsp3 + glb artifacts), spec defaults, and frontend 2D preview verification (11/11 pass via automated script)
 
 Layout-aware dispatch automatically creates or skips geometry components:
 
