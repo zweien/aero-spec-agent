@@ -96,6 +96,25 @@ class TestVspaeroReport:
         assert d["status"] == "failed"
         assert d["error_message"] == "timeout"
 
+    def test_to_dict_includes_components_analyzed(self):
+        sweep = [AeroPoint(alpha=0, cl=0.1, cd=0.025, cm=0.0, mach=0.0, beta=0.0)]
+        report = VspaeroReport(
+            status="success",
+            method="VSPAERO_panel",
+            alpha_sweep=sweep,
+            optimal_ld=20.0,
+            optimal_cl=0.5,
+            optimal_alpha=3.0,
+            components_analyzed=["main_wing", "canard"],
+        )
+        d = report.to_dict()
+        assert d["components_analyzed"] == ["main_wing", "canard"]
+
+    def test_to_dict_omits_empty_components_analyzed(self):
+        report = VspaeroReport(status="success", method="VSPAERO_panel")
+        d = report.to_dict()
+        assert "components_analyzed" not in d
+
 
 class TestOptimalLd:
     def test_finds_best_cl_cd(self):
@@ -234,7 +253,7 @@ class TestRunVspaeroHandlesError:
 
         spec = _make_spec()
         with pytest.raises(RuntimeError, match="VSPAERO not installed"):
-            run_vspaero_analysis(FailAdapter(), spec, "wing-1")
+            run_vspaero_analysis(FailAdapter(), spec, ["wing-1"])
 
 
 def _mock_results(names: list[str]) -> list[GeometryBuildResult]:
@@ -319,3 +338,41 @@ class TestBuildAnalysisGeoms:
         results = _mock_results(["fuselage", "main_wing"])
         geom_ids = build_analysis_geoms(spec, results)
         assert geom_ids == ["id-main_wing"]
+
+
+class TestRunVspaeroMultiGeom:
+    def test_accepts_list_of_geom_ids(self):
+        """run_vspaero_analysis should accept geom_ids: list[str]."""
+        class StubAdapter:
+            def __init__(self):
+                self._ref_wing = None
+            def set_vspaero_ref_wing(self, wing_id):
+                self._ref_wing = wing_id
+            def write_vsp_file(self, path):
+                pass
+            def set_analysis_input_defaults(self, name):
+                pass
+            def set_int_analysis_input(self, name, key, vals, index=0):
+                pass
+            def set_double_analysis_input(self, name, key, vals):
+                pass
+            def exec_analysis(self, name):
+                raise RuntimeError("VSPAERO not installed")
+            def default_set_id(self):
+                return 0
+            def find_latest_results_id(self, name):
+                return ""
+            def create_set(self, name):
+                return 1
+            def add_to_set(self, set_id, geom_id):
+                pass
+
+        from services.workers.cad_worker.openvsp_generator.vspaero_analysis import (
+            run_vspaero_analysis,
+        )
+
+        spec = _make_spec()
+        adapter = StubAdapter()
+        with pytest.raises(RuntimeError, match="VSPAERO not installed"):
+            run_vspaero_analysis(adapter, spec, ["wing-1", "canard-1"])
+        assert adapter._ref_wing == "wing-1"

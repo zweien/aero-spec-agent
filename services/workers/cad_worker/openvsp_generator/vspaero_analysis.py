@@ -41,6 +41,7 @@ class VspaeroReport:
     cl_alpha: float | None = None
     cd0_estimate: float | None = None
     span_load: list[dict[str, float]] = field(default_factory=list)
+    components_analyzed: list[str] = field(default_factory=list)
     error_message: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -59,6 +60,8 @@ class VspaeroReport:
             d["cl_alpha"] = self.cl_alpha
         if self.cd0_estimate is not None:
             d["cd0_estimate"] = self.cd0_estimate
+        if self.components_analyzed:
+            d["components_analyzed"] = self.components_analyzed
         if self.error_message is not None:
             d["error_message"] = self.error_message
         return d
@@ -168,7 +171,7 @@ def _fit_cd0(sweep: list[AeroPoint]) -> float | None:
 def run_vspaero_analysis(
     adapter: OpenVspAdapter,
     spec: AircraftSpec,
-    wing_geom_id: str,
+    geom_ids: list[str],
     *,
     alpha_range: tuple[float, float] = (-4.0, 12.0),
     alpha_step: float = 1.0,
@@ -178,7 +181,7 @@ def run_vspaero_analysis(
     import os
     from pathlib import Path
 
-    adapter.set_vspaero_ref_wing(wing_geom_id)
+    adapter.set_vspaero_ref_wing(geom_ids[0])
 
     # VSPAERO requires a .vsp3 file on disk to determine output paths for
     # .vspgeom, .history, .polar etc.  Use output_dir (which already has
@@ -197,12 +200,13 @@ def run_vspaero_analysis(
     try:
         # Step 1: generate geometry mesh.
         # Use Set_0 and only add the wing to avoid mesh issues with complex bodies.
-        wing_set_id = adapter.create_set("Set_0")
-        adapter.add_to_set(wing_set_id, wing_geom_id)
+        analysis_set_id = adapter.create_set("Set_0")
+        for gid in geom_ids:
+            adapter.add_to_set(analysis_set_id, gid)
 
         geom_analysis = "VSPAEROComputeGeometry"
         adapter.set_analysis_input_defaults(geom_analysis)
-        adapter.set_int_analysis_input(geom_analysis, "GeomSet", [wing_set_id])
+        adapter.set_int_analysis_input(geom_analysis, "GeomSet", [analysis_set_id])
         adapter.set_int_analysis_input(geom_analysis, "ThinGeomSet", [0])
         adapter.set_int_analysis_input(geom_analysis, "Symmetry", [1])
         adapter.exec_analysis(geom_analysis)
@@ -213,7 +217,7 @@ def run_vspaero_analysis(
         # Step 2: run aero sweep
         sweep_analysis = "VSPAEROSweep"
         adapter.set_analysis_input_defaults(sweep_analysis)
-        adapter.set_int_analysis_input(sweep_analysis, "GeomSet", [wing_set_id])
+        adapter.set_int_analysis_input(sweep_analysis, "GeomSet", [analysis_set_id])
         adapter.set_int_analysis_input(sweep_analysis, "ThinGeomSet", [0])
         adapter.set_int_analysis_input(sweep_analysis, "Symmetry", [1])
 
