@@ -548,7 +548,23 @@ aero-spec-agent/
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**.
+
+### Third-Party Dependencies
+
+Third-party dependencies are governed by their respective licenses — not by the MIT License of this project:
+
+| Dependency | License | Notes |
+|-----------|---------|-------|
+| [OpenVSP](http://openvsp.org/) | **NOSA-1.3** (NASA Open Source Agreement v1.3) | Optional external dependency. Not distributed with this project. Users must install and comply with NOSA-1.3 separately. |
+| Python packages (pip) | MIT, Apache-2.0, BSD, PSF, MPL-2.0, LGPL-3.0 | ~70 packages. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full list. |
+| NPM packages (Node.js) | MIT, Apache-2.0, ISC, BSD-3-Clause, CC-BY-4.0 | ~150 packages. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full list. |
+
+Full dependency license report: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
+### Disclaimer
+
+This project is an independent community effort. It is not endorsed, sponsored, or certified by NASA, OpenVSP, Vercel, OpenAI, LangChain, Meta, or any other upstream project. Product names and logos are the property of their respective owners.
 
 ## Acknowledgments
 
