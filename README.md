@@ -56,7 +56,7 @@ Three.js viewer with GLB/OBJ model loading and a parameter-driven wireframe fall
 
 ### Parametric CAD Generation
 
-OpenVSP builds fuselage, wing, tail, engine nacelles, booms, and BWB flat bodies from the spec. Four aerodynamic layout types are supported with layout-aware geometry dispatch. Each generation exports `.vsp3`, `.step`, `.obj`, `.glb` artifacts per version.
+OpenVSP builds fuselage, wing, tail, engine nacelles, canard, booms, BWB flat bodies, and other layout-specific components from the spec. 11 aerodynamic layout types are supported with layout-aware geometry dispatch. Each generation exports `.vsp3`, `.step`, `.obj`, `.glb` artifacts per version.
 
 ### Aerodynamic Analysis
 
@@ -325,23 +325,42 @@ storage/designs/{design_id}/
 
 #### Aerodynamic Layouts
 
-| Layout | Components | Description | Example Spec |
-|--------|-----------|-------------|-------------|
-| **Conventional** | fuselage + wing + tail + engine | Standard fixed-wing with separate fuselage, wing, and empennage | `twin_engine_uav.yaml` |
-| **Twin Boom** | fuselage + wing + tail + engine + booms | Two tail booms extending aft from the wing, pusher engine common | `twin_boom_pusher_uav.yaml` |
-| **Flying Wing** | wing + engine | No fuselage, no tail — all-in-one lifting body, multi-section wing optional | `flying_wing_uav.yaml` |
-| **BWB** | flat body + wing + engine | Blended wing body with non-circular fuselage cross-section (width >> height) | `bwb_uav.yaml` |
+> **Note:** These layouts are intended for concept design and geometric exploration. They do not represent engineering-validated configurations. Aerodynamic analysis results from VSPAERO are approximate (panel method) and should not be used as the basis for design decisions.
+
+AeroSpec Agent supports 11 aerodynamic layout types via `aircraft.layout` in the spec:
+
+| Layout | Components | Maturity | Extra Spec Fields | Example Spec |
+|--------|-----------|----------|-------------------|-------------|
+| `conventional` | fuselage + wing + tail + engine | **Stable** | — | `twin_engine_uav.yaml` |
+| `twin_boom` | fuselage + wing + tail + engine + booms | **Stable** | `boom: Boom` | `twin_boom_pusher_uav.yaml` |
+| `flying_wing` | wing + engine (no fuselage, no tail) | **Stable** | — | `flying_wing_uav.yaml` |
+| `blended_wing_body` | flat body + wing + engine | **Stable** | `body: Body` | `bwb_uav.yaml` |
+| `canard` | fuselage + wing + tail + engine + canard | **Experimental** | `canard: Canard` | `canard_uav.yaml` |
+| `three_surface` | fuselage + wing + tail + engine + canard | **Experimental** | `canard: Canard` | `three_surface_uav.yaml` |
+| `tandem_wing` | fuselage + wing + rear_wing + engine | **Experimental** | `rear_wing: RearWing` | `tandem_wing_uav.yaml` |
+| `biplane` | fuselage + wing + lower_wing + tail + engine | **Experimental** | `second_wing: SecondWing` | `biplane_uav.yaml` |
+| `joined_wing` | fuselage + wing + rear_wing (forward-swept) + tail + engine | **Experimental** | `rear_wing: RearWing` | `joined_wing_uav.yaml` |
+| `box_wing` | fuselage + wing + lower_wing + endplates + tail + engine | **Experimental** | `box_wing_config: BoxWingConfig` | `box_wing_uav.yaml` |
+| `multi_fuselage` | 2× fuselage + wing + tail + engine | **Experimental** | `multi_fuselage: MultiFuselageConfig` | `multi_fuselage_uav.yaml` |
+
+**Maturity levels:**
+- **Stable** — Validated with real OpenVSP E2E, fake CAD pipeline tests, and frontend 2D preview
+- **Experimental** — Geometry builders implemented, fake CAD E2E tests pass, frontend preview supported. Real OpenVSP generation works but has not been systematically verified across all configurations
 
 Layout-aware dispatch automatically creates or skips geometry components:
 
-| Component | Conventional | Twin Boom | Flying Wing | BWB |
-|-----------|:---:|:---:|:---:|:---:|
-| Fuselage | ✅ | ✅ | — | — |
-| Flat Body (BWB) | — | — | — | ✅ |
-| Tail Surfaces | ✅ | ✅ | — | — |
-| Main Wing | ✅ | ✅ | ✅ | ✅ |
-| Booms | — | ✅ | — | — |
-| Engine Nacelles | ✅ | ✅ | ✅ | ✅ |
+| Component | Conv | Twin Boom | Flying Wing | BWB | Canard | 3-Surf | Tandem | Biplane | Joined | Box | Multi-Fuse |
+|-----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Fuselage | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 2× |
+| Flat Body | — | — | — | ✅ | — | — | — | — | — | — | — |
+| Tail Surfaces | ✅ | ✅ | — | — | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ |
+| Main Wing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Canard | — | — | — | — | ✅ | ✅ | — | — | — | — | — |
+| Rear Wing | — | — | — | — | — | — | ✅ | — | ✅ | — | — |
+| Lower/Second Wing | — | — | — | — | — | — | — | ✅ | — | ✅ | — |
+| Booms | — | ✅ | — | — | — | — | — | — | — | — | — |
+| Endplates | — | — | — | — | — | — | — | — | — | ✅ | — |
+| Engine Nacelles | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 #### Tail Configurations
 
@@ -362,7 +381,7 @@ Layout-aware dispatch automatically creates or skips geometry components:
 | 3 | Center + symmetric pair | Same base positions, center at Y=0 |
 | 4 | Inner + outer symmetric pairs | Inner at 18% span, outer at 38% span |
 
-All engines support optional XYZ offsets (`engine.x_offset`, `engine.y_offset`, `engine.z_offset`) for fine-tuning nacelle placement.
+All engines support optional XYZ offsets (`engine.x_offset`, `engine.y_offset`, `engine.z_offset`) for fine-tuning nacelle placement. Additional positions `push_pull` and `over_wing` are available.
 
 #### Multi-Section Wing
 
@@ -376,15 +395,16 @@ Multi-section wings allow inner and outer panels with different sweep and dihedr
 
 #### Full Parameter Matrix
 
-| Area | Supported | Not yet exposed |
-|------|-----------|-----------------|
-| Aircraft layout | `conventional`, `twin_boom`, `flying_wing`, `blended_wing_body` | Multirotor, rotorcraft |
-| Wing position | `high`, `mid`, `low` | Custom multi-wing layouts |
-| Wing sections | 1 (single), 2 (inner+outer), 3 (inner+mid+outer) | Continuous airfoil transition |
-| Tail type | `conventional`, `t_tail`, `v_tail`, `inverted_v`, `cruciform` | `butterfly` |
-| Engine count | 1, 2, 3, 4 | More than four engines |
-| Engine position | `nose`, `tail`, `rear_fuselage`, `under_wing`, `wing_tip`, `over_wing`, `pusher` | `on_fuselage` |
-| Mission priority | `endurance`, `speed`, `payload`, `range` | Multi-objective trade-off |
+| Area | Supported |
+|------|-----------|
+| Aircraft layout | `conventional`, `twin_boom`, `flying_wing`, `blended_wing_body`, `canard`, `three_surface`, `tandem_wing`, `biplane`, `joined_wing`, `box_wing`, `multi_fuselage` |
+| Wing position | `high`, `mid`, `low` |
+| Wing planform | `conventional`, `delta`, `ogee` |
+| Wing sections | 1 (single), 2 (inner+outer), 3 (inner+mid+outer) |
+| Tail type | `conventional`, `t_tail`, `v_tail`, `inverted_v`, `cruciform` |
+| Engine count | 1, 2, 3, 4 |
+| Engine position | `nose`, `tail`, `rear_fuselage`, `under_wing`, `wing_tip`, `over_wing`, `pusher`, `push_pull` |
+| Mission priority | `endurance`, `speed`, `payload`, `range` |
 
 ## API Reference
 
@@ -443,10 +463,13 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 |-----------|--------|---------|-------|
 | Fake CAD pipeline | Pass | fake | 585+ |
 | OpenVSP env check | Script ready | N/A | -- |
-| OpenVSP conventional layout | Pass | openvsp | E2E |
+| OpenVSP conventional layout | Pass | openvsp | E2E + browser |
 | OpenVSP twin_boom layout | Pass | openvsp | E2E |
 | OpenVSP flying_wing layout | Pass | openvsp | E2E |
 | OpenVSP BWB layout | Pass | openvsp | E2E |
+| OpenVSP canard layout | Pass | openvsp | browser |
+| canard / three_surface / tandem_wing / biplane / joined_wing / box_wing / multi_fuselage (fake) | Pass | fake | E2E (14 tests) |
+| Frontend 2D preview (all 11 layouts) | Pass | — | manual |
 | Chat→Minimax LLM→OpenVSP E2E | Pass | openvsp | browser |
 | OpenVSP failure injection | Pass | fake | 12 |
 | Variant trust / confidence | Pass | fake | 8 |
@@ -458,9 +481,6 @@ CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/tes
 | V-tail / inverted_v / cruciform | Pass | fake | 6 |
 | Multi-section wing (1-3) | Pass | fake | 8 |
 | 3-4 engine config | Pass | fake | 5 |
-| Twin boom layout | Pass | fake | 2 |
-| Flying wing layout | Pass | fake | 4 |
-| BWB flat body | Pass | fake | 6 |
 
 Run `python scripts/summarize_qa_status.py` for detailed QA doc status.
 
