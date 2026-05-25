@@ -184,7 +184,9 @@ def prepare_variants(state: DeepDesignState) -> dict:
             "error_message": "no base_spec provided for exploration",
         }
 
-    strategies = DEFAULT_STRATEGIES[:variant_count]
+    layout = base_spec.get("aircraft", {}).get("layout", "conventional") if isinstance(base_spec, dict) else "conventional"
+    layout_strategies = LAYOUT_STRATEGIES.get(layout, LAYOUT_STRATEGIES["conventional"])
+    strategies = layout_strategies[:variant_count]
     while len(strategies) < variant_count:
         strategies.append({
             "label": f"variant_{len(strategies) + 1}",
@@ -316,7 +318,9 @@ def refine_variants(state: DeepDesignState) -> dict:
     # Increase delta by 50% for next iteration
     delta_multiplier = 1.5
     refined_strategies = []
-    for strategy in DEFAULT_STRATEGIES[:variant_count]:
+    layout = base_spec.get("aircraft", {}).get("layout", "conventional") if isinstance(base_spec, dict) else "conventional"
+    layout_strategies = LAYOUT_STRATEGIES.get(layout, LAYOUT_STRATEGIES["conventional"])
+    for strategy in layout_strategies[:variant_count]:
         refined_changes = []
         for change in strategy.get("changes", []):
             if change.get("op") == "relative":
