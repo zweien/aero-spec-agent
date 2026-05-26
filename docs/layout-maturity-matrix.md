@@ -1,19 +1,20 @@
 # Layout Maturity Matrix
 
-This document describes the maturity of each aerodynamic layout (`aircraft.layout`) across schema, CAD generation, testing, frontend preview, and analysis. It is intended to help users and contributors understand which layouts are production-ready and which are still evolving.
+This document describes the verification status of each aerodynamic layout (`aircraft.layout`) across multiple dimensions: schema, CAD generation, testing, frontend preview, and analysis.
 
-> **AeroSpec Agent is a concept design exploration tool.** Layout support means the system can generate parametric geometry and estimate basic metrics. It does not imply the layout is engineering-validated or that aerodynamic analysis results are suitable for design decisions.
+> **Stable means the software pipeline can generate artifacts reliably.** It does not mean the aircraft configuration is aerodynamically optimal, structurally feasible, or engineering certified. All layouts are for concept design exploration only.
 
 ---
 
-## Maturity Definitions
+## Verification Dimensions
 
-| Level | Meaning |
-|-------|---------|
-| **Stable** | Full pipeline works: schema → OpenVSP builder → vsp3/glTF artifacts → frontend 2D/3D preview. Automated E2E tests pass with real OpenVSP. Spec defaults auto-fill missing fields. 2D preview elements verified by automated script. |
-| **Experimental** | Core pipeline works (schema + builder + artifacts), but gaps exist in spec defaults, analysis coverage, or systematic QA. Use with awareness of limitations. |
-| **Prototype** | Schema and initial builder exist, but testing is incomplete or key features (preview, analysis) are missing. |
-| **Planned** | Listed in the schema enum but not yet implemented. |
+| Dimension | Meaning |
+|-----------|---------|
+| **Pipeline Stable** | Schema, defaults, builder, fake pipeline, and basic artifact generation pass. |
+| **OpenVSP Verified** | Real OpenVSP 3.50.2 backend has generated vsp3/glb/step/obj artifacts with non-zero file sizes. |
+| **Visually Checked** | A human has viewed the 3D model and confirmed no obvious misalignment, missing parts, or scale anomalies. |
+| **Aero Approximate** | VSPAERO panel method analysis available. Results are approximate and for concept-stage comparison only, not engineering decisions. |
+| **Engineering Validated** | Higher-fidelity analysis (VLM, CFD, structural) confirmed. **Currently none.** |
 
 ---
 
@@ -21,24 +22,22 @@ This document describes the maturity of each aerodynamic layout (`aircraft.layou
 
 ### Legend
 
-- ✅ Full support — implemented and tested
+- ✅ Verified — implemented, tested, and confirmed
 - ⚠️ Partial — works but has known gaps
 - ❌ None — not applicable or not implemented
 - — N/A for this layout
 
 | Dimension | Conv | Twin Boom | Flying Wing | BWB | Canard | 3-Surface | Tandem | Biplane | Joined | Box | Multi-Fuse |
 |-----------|:----:|:---------:|:-----------:|:---:|:------:|:---------:|:------:|:-------:|:------:|:---:|:----------:|
-| **Schema support** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Spec defaults** | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **OpenVSP builder** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Fake CAD E2E** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **OpenVSP E2E** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Pipeline Stable** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Real OpenVSP Verified** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Frontend 2D preview** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **GLB 3D preview** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **VSPAERO** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Visually Checked** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **VSPAERO (approximate)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Deep Design** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Compare View** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Current maturity** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** | **Stable** |
+| **Engineering Validated** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
@@ -202,19 +201,21 @@ For each layout to graduate from Experimental to Stable, the following should be
 
 ---
 
-## QA Report
+## QA Reports
 
-Automated layout validation report: [docs/layout-openvsp-qa.md](layout-openvsp-qa.md)
+- Fake pipeline QA: [docs/layout-openvsp-qa.md](layout-openvsp-qa.md) — validates software pipeline structure
+- Real OpenVSP QA: [docs/layout-openvsp-real-qa.md](layout-openvsp-real-qa.md) — validates real geometry generation
+- Visual QA: [docs/layout-visual-qa.md](layout-visual-qa.md) — human visual inspection of 3D models
 
 ---
 
 ## Summary
 
-| Maturity | Layouts | Count |
-|----------|---------|:-----:|
-| **Stable** | All 11 layouts | 11 |
-| Experimental | — | 0 |
-| Prototype | — | 0 |
-| Planned | — | 0 |
+| Verification | Layouts | Count |
+|-------------|---------|:-----:|
+| **Pipeline Stable** | All 11 layouts | 11 |
+| **Real OpenVSP Verified** | All 11 layouts | 11 |
+| **Visually Checked** | Pending | 0 |
+| **Engineering Validated** | None | 0 |
 
-All 11 layouts have working geometry generation (OpenVSP E2E 8/8 pass), complete spec defaults, verified 2D preview rendering (11/11 pass), multi-surface VSPAERO analysis, and layout-aware Deep Design variant strategies.
+All 11 layouts have pipeline-stable geometry generation (fake + real OpenVSP QA 11/11 pass), complete spec defaults, verified 2D preview rendering (11/11 pass), multi-surface VSPAERO analysis, and layout-aware Deep Design variant strategies. **No layout has been engineering-validated.** Visual inspection of 3D models is recommended before relying on generated geometry.

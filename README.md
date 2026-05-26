@@ -330,22 +330,21 @@ storage/designs/{design_id}/
 
 AeroSpec Agent supports 11 aerodynamic layout types via `aircraft.layout` in the spec:
 
-| Layout | Components | Maturity | Extra Spec Fields | Example Spec |
-|--------|-----------|----------|-------------------|-------------|
-| `conventional` | fuselage + wing + tail + engine | **Stable** | — | `twin_engine_uav.yaml` |
-| `twin_boom` | fuselage + wing + tail + engine + booms | **Stable** | `boom: Boom` | `twin_boom_pusher_uav.yaml` |
-| `flying_wing` | wing + engine (no fuselage, no tail) | **Stable** | — | `flying_wing_uav.yaml` |
-| `blended_wing_body` | flat body + wing + engine | **Stable** | `body: Body` | `bwb_uav.yaml` |
-| `canard` | fuselage + wing + tail + engine + canard | **Stable** | `canard: Canard` | `canard_uav.yaml` |
-| `three_surface` | fuselage + wing + tail + engine + canard | **Stable** | `canard: Canard` | `three_surface_uav.yaml` |
-| `tandem_wing` | fuselage + wing + rear_wing + engine | **Stable** | `rear_wing: RearWing` | `tandem_wing_uav.yaml` |
-| `biplane` | fuselage + wing + lower_wing + tail + engine | **Stable** | `second_wing: SecondWing` | `biplane_uav.yaml` |
-| `joined_wing` | fuselage + wing + rear_wing (forward-swept) + tail + engine | **Stable** | `rear_wing: RearWing` | `joined_wing_uav.yaml` |
-| `box_wing` | fuselage + wing + lower_wing + endplates + tail + engine | **Stable** | `box_wing_config: BoxWingConfig` | `box_wing_uav.yaml` |
-| `multi_fuselage` | 2× fuselage + wing + tail + engine | **Stable** | `multi_fuselage: MultiFuselageConfig` | `multi_fuselage_uav.yaml` |
+| Layout | Components | Pipeline | Real OpenVSP | Extra Spec Fields | Example Spec |
+|--------|-----------|:--------:|:------------:|-------------------|-------------|
+| `conventional` | fuselage + wing + tail + engine | ✅ | ✅ | — | `twin_engine_uav.yaml` |
+| `twin_boom` | fuselage + wing + tail + engine + booms | ✅ | ✅ | `boom: Boom` | `twin_boom_pusher_uav.yaml` |
+| `flying_wing` | wing + engine (no fuselage, no tail) | ✅ | ✅ | — | `flying_wing_uav.yaml` |
+| `blended_wing_body` | flat body + wing + engine | ✅ | ✅ | `body: Body` | `bwb_uav.yaml` |
+| `canard` | fuselage + wing + tail + engine + canard | ✅ | ✅ | `canard: Canard` | `canard_uav.yaml` |
+| `three_surface` | fuselage + wing + tail + engine + canard | ✅ | ✅ | `canard: Canard` | `three_surface_uav.yaml` |
+| `tandem_wing` | fuselage + wing + rear_wing + engine | ✅ | ✅ | `rear_wing: RearWing` | `tandem_wing_uav.yaml` |
+| `biplane` | fuselage + wing + lower_wing + tail + engine | ✅ | ✅ | `second_wing: SecondWing` | `biplane_uav.yaml` |
+| `joined_wing` | fuselage + wing + rear_wing (forward-swept) + tail + engine | ✅ | ✅ | `rear_wing: RearWing` | `joined_wing_uav.yaml` |
+| `box_wing` | fuselage + wing + lower_wing + endplates + tail + engine | ✅ | ✅ | `box_wing_config: BoxWingConfig` | `box_wing_uav.yaml` |
+| `multi_fuselage` | 2× fuselage + wing + tail + engine | ✅ | ✅ | `multi_fuselage: MultiFuselageConfig` | `multi_fuselage_uav.yaml` |
 
-**Maturity levels:**
-- **Stable** — Validated with real OpenVSP E2E (vsp3 + glb artifacts), spec defaults, frontend 2D preview verification (11/11 pass), multi-surface VSPAERO analysis, and layout-aware Deep Design strategies. See [Layout QA Report](docs/layout-openvsp-qa.md) for per-layout artifact verification.
+**Pipeline ✅** = software pipeline generates artifacts reliably. **Real OpenVSP ✅** = real OpenVSP 3.50.2 verified with non-zero vsp3/glb/step artifacts. Neither implies engineering validation. See [Layout Maturity Matrix](docs/layout-maturity-matrix.md), [Fake QA](docs/layout-openvsp-qa.md), [Real OpenVSP QA](docs/layout-openvsp-real-qa.md), and [Visual QA](docs/layout-visual-qa.md).
 
 Layout-aware dispatch automatically creates or skips geometry components:
 
@@ -453,9 +452,17 @@ cd apps/web && npm run build && cd ../..
 # OpenVSP integration tests (requires OpenVSP installed)
 CAD_BACKEND=openvsp RUN_OPENVSP_TESTS=1 .venv/bin/python -m pytest tests/api/test_openvsp_integration.py -q
 
+# 11-layout QA — fake backend (validates pipeline structure)
+.venv/bin/python scripts/validate_layout_matrix.py --backend fake
+
+# 11-layout QA — real OpenVSP (validates real geometry generation)
+.venv/bin/python scripts/validate_layout_matrix.py --backend openvsp --output docs/layout-openvsp-real-qa.md
+
 # Lint
 .venv/bin/python -m ruff check .
 ```
+
+**Fake QA vs Real OpenVSP QA:** Fake QA validates that the software pipeline can load specs, apply defaults, and generate artifacts. Real OpenVSP QA validates that actual OpenVSP 3.50.2 produces geometrically valid vsp3/glb/step files with non-zero sizes. Neither validates engineering correctness.
 
 ## Current Verification Status
 
