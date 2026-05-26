@@ -11,6 +11,8 @@ import {
 } from "./cadPreviewStatus";
 import {
   buildAircraftPreview,
+  extractLayout,
+  LAYOUT_LABELS,
   type AircraftPreviewSpec,
   type PreviewElement,
 } from "./previewGeometry";
@@ -130,9 +132,14 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
       <header>
         <span>CAD 预览</span>
         {spec && preview ? (
-          <small>
-            {preview.labels.wingSpan} / {preview.labels.engineCount} 发
-          </small>
+          <>
+            <span className="layout-badge">
+              {LAYOUT_LABELS[extractLayout(spec)] ?? extractLayout(spec)}
+            </span>
+            <small>
+              {preview.labels.wingSpan} / {preview.labels.engineCount} 发
+            </small>
+          </>
         ) : null}
       </header>
       <div className="viewer-surface" ref={surfaceRef}>

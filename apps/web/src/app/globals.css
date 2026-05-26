@@ -1049,6 +1049,17 @@ select:focus {
   line-height: 1.5;
 }
 
+.layout-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 500;
+  background: var(--accent-bg);
+  color: var(--accent-bright);
+  margin-left: 8px;
+}
+
 .preview-source-status {
   position: absolute;
   left: 10px;

@@ -3,6 +3,30 @@ type Scalar = {
   unit?: string | null;
 };
 
+export const LAYOUT_LABELS: Record<string, string> = {
+  conventional: "常规布局",
+  twin_boom: "双尾撑",
+  flying_wing: "飞翼",
+  blended_wing_body: "翼身融合",
+  canard: "鸭翼布局",
+  three_surface: "三翼面",
+  tandem_wing: "串列翼",
+  biplane: "双翼机",
+  joined_wing: "连接翼",
+  box_wing: "箱式翼",
+  multi_fuselage: "双机身",
+};
+
+export function extractLayout(spec: AircraftPreviewSpec | null): string {
+  if (!spec) return "conventional";
+  const aircraftObj = (spec as Record<string, unknown>).aircraft as Record<string, unknown> | undefined;
+  const rawLayout = spec.layout ?? aircraftObj?.layout;
+  const layoutStr = typeof rawLayout === "string" ? rawLayout : (rawLayout as Scalar | null | undefined)?.value;
+  return typeof layoutStr === "string" && layoutStr.trim()
+    ? layoutStr.trim().toLowerCase()
+    : "conventional";
+}
+
 export type AircraftPreviewSpec = {
   layout?: Scalar | null;
   fuselage: {
