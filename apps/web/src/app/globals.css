@@ -1755,6 +1755,94 @@ select:focus {
 }
 .design-rule-row:last-child { border-bottom: none; }
 
+.design-rule-section-title {
+  font-size: 11px;
+  font-weight: 590;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin: 6px 0 2px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+}
+.design-rule-section-title:first-child { border-top: none; padding-top: 0; }
+
+.historical-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+.historical-status-error { color: #f87171; }
+
+.historical-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+.historical-chip {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+}
+.historical-chip strong { color: var(--text); font-weight: 590; margin-left: 2px; }
+
+.historical-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin-top: 4px;
+}
+.historical-table th,
+.historical-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.historical-table th {
+  font-weight: 590;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+}
+.historical-table tr:last-child td { border-bottom: none; }
+
+.historical-bar-track {
+  position: relative;
+  width: 70px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.historical-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 220ms ease;
+}
+.historical-bar-high { background: #4ade80; }
+.historical-bar-mid { background: #facc15; }
+.historical-bar-low { background: #f87171; }
+.historical-bar-label { font-size: 10px; color: var(--text-muted); }
+
+.historical-disclaimer {
+  margin-top: 6px;
+  padding: 4px 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  font-style: italic;
+}
+
 .design-rule-icon { font-size: 13px; text-align: center; }
 .design-rule-pass .design-rule-icon { color: #4ade80; }
 .design-rule-warn .design-rule-icon { color: #facc15; }

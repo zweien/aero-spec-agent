@@ -1,0 +1,174 @@
+# Expert Knowledge — Aerodynamics, Performance & Stealth Reference Values
+
+schema_version: "0.1"
+
+entries:
+  - id: ld-cruise-civil
+    topic: ld_cruise
+    applies_to: [airliner, civil_transport]
+    metric: ld_cruise
+    range: [16, 20]
+    warn_range: [14, 22]
+    unit: ""
+    summary_zh: "现代民航巡航升阻比 16~20."
+    summary_en: "Modern airliner cruise L/D 16-20."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.4 气动性能"
+      - book: raymer
+        chapter: "Ch.13 Cruise Performance"
+
+  - id: ld-cruise-male-uav
+    topic: ld_cruise
+    applies_to: [long_endurance_uav, male_uav]
+    metric: ld_cruise
+    range: [18, 28]
+    warn_range: [14, 35]
+    unit: ""
+    summary_zh: "长航时无人机巡航升阻比 18~28, 高高空 HALE 可达 30+."
+    summary_en: "Long-endurance UAV cruise L/D 18-28; HALE up to 30+."
+    sources:
+      - book: raymer
+        chapter: "Ch.13"
+      - book: yuxiongqing
+        chapter: "Ch.7 续航与升阻比"
+
+  - id: ld-cruise-fighter
+    topic: ld_cruise
+    applies_to: [fighter, stealth_fighter]
+    metric: ld_cruise
+    range: [6, 11]
+    warn_range: [4, 13]
+    unit: ""
+    summary_zh: "战斗机巡航升阻比 6~11, 兼顾超音速."
+    summary_en: "Fighter cruise L/D 6-11."
+    sources:
+      - book: nwpu
+        chapter: "战斗机气动"
+
+  - id: cl-max-clean
+    topic: cl_max_clean
+    applies_to: [fixed_wing_uav, airliner, general_aviation]
+    metric: cl_max_clean
+    range: [1.2, 1.6]
+    warn_range: [0.9, 1.9]
+    unit: ""
+    summary_zh: "干净构型最大升力系数 1.2~1.6 (无襟翼)."
+    summary_en: "Clean-configuration CL_max 1.2-1.6."
+    sources:
+      - book: raymer
+        chapter: "Ch.12 Aerodynamics"
+      - book: liuhu
+        chapter: "Ch.9 升力特性"
+
+  - id: cl-max-takeoff-flap
+    topic: cl_max_takeoff
+    applies_to: [airliner, civil_transport, fixed_wing_uav]
+    metric: cl_max_takeoff
+    range: [1.8, 2.5]
+    warn_range: [1.6, 2.8]
+    unit: ""
+    summary_zh: "起飞构型 CL_max 1.8~2.5 (襟翼下偏 15-20°)."
+    summary_en: "Takeoff configuration CL_max 1.8-2.5 with flaps."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.5 高升力装置"
+
+  - id: cd0-clean
+    topic: cd0_clean
+    applies_to: [airliner, civil_transport, fixed_wing_uav]
+    metric: cd0_clean
+    range: [0.018, 0.030]
+    warn_range: [0.012, 0.040]
+    unit: ""
+    summary_zh: "干净外形零升阻力系数 0.018~0.030."
+    summary_en: "Clean configuration CD0 typically 0.018-0.030."
+    sources:
+      - book: raymer
+        chapter: "Ch.12.5 Drag Buildup"
+
+  - id: oswald-efficiency-typical
+    topic: oswald_efficiency
+    applies_to: [fixed_wing_uav, airliner, general_aviation]
+    metric: oswald_efficiency
+    range: [0.75, 0.90]
+    warn_range: [0.65, 0.95]
+    unit: ""
+    summary_zh: "奥斯沃尔德效率 0.75~0.90."
+    summary_en: "Oswald efficiency factor 0.75-0.90."
+    sources:
+      - book: raymer
+        chapter: "Ch.12 Drag Polar"
+
+  - id: range-civil-narrowbody
+    topic: range_km
+    applies_to: [airliner]
+    metric: range_km
+    range: [3500, 7000]
+    warn_range: [2000, 9000]
+    unit: "km"
+    summary_zh: "窄体民航典型航程 3500~7000 km."
+    summary_en: "Narrow-body airliner typical range 3500-7000 km."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.2 民航任务剖面"
+
+  - id: endurance-male-uav
+    topic: endurance_h
+    applies_to: [long_endurance_uav, male_uav]
+    metric: endurance_h
+    range: [20, 36]
+    warn_range: [12, 50]
+    unit: "h"
+    summary_zh: "MALE 无人机续航 20~36 小时."
+    summary_en: "MALE UAV endurance 20-36 hours."
+    sources:
+      - book: yuxiongqing
+        chapter: "Ch.7 续航"
+      - book: liuhu
+        chapter: "Ch.10 长航时设计"
+
+  - id: stealth-rcs-low-observable
+    topic: rcs_estimate
+    applies_to: [stealth_uav, stealth_fighter, stealth_bomber]
+    metric: rcs_estimate
+    range: [0.001, 0.05]
+    warn_range: [0.0005, 0.5]
+    unit: "m²"
+    summary_zh: "低可观测平台正向 RCS 0.001~0.05 m² 量级 (开源量级值)."
+    summary_en: "Low-observable platform frontal RCS 0.001-0.05 m^2 (open-source order-of-magnitude)."
+    sources:
+      - book: gusongfen
+        chapter: "Ch.10 隐身设计"
+      - book: nwpu
+        chapter: "Ch.9 低可观测性"
+
+  - id: stealth-shaping-principles
+    topic: stealth_shaping
+    applies_to: [stealth_uav, stealth_fighter, stealth_bomber]
+    metric: shaping_level
+    range: null
+    warn_range: null
+    unit: ""
+    summary_zh: "隐身外形的四条原则: (1) 平面化, (2) 边缘对齐, (3) 进气道遮蔽, (4) 减少棱角与曲率不连续."
+    summary_en: "Stealth shaping principles: planform alignment, edge alignment, inlet shielding, smooth curvature."
+    sources:
+      - book: gusongfen
+        chapter: "Ch.10.2 隐身外形"
+      - book: nwpu
+        chapter: "Ch.9.3 RCS 抑制方法"
+
+  - id: payload-bay-fuselage-ratio
+    topic: payload_volume_ratio
+    applies_to: [fixed_wing_uav, military_transport, cargo]
+    metric: payload_volume_ratio
+    range: [0.20, 0.55]
+    warn_range: [0.10, 0.70]
+    unit: ""
+    summary_zh: "有效载荷舱体积占机身体积 20%~55%, 取决于任务."
+    summary_en: "Payload bay/fuselage volume ratio 20-55% depending on mission."
+    sources:
+      - book: liuhu
+        chapter: "Ch.5 机身布置"
+      - book: yuxiongqing
+        chapter: "Ch.5.4 载荷舱"

@@ -55,6 +55,11 @@ class Mission(BaseModel):
     cruise_speed: NumericScalar | None = None
     payload: NumericScalar | None = None
     priority: TextScalar | None = None
+    mtow: NumericScalar | None = None
+    empty_weight: NumericScalar | None = None
+    fuel_weight: NumericScalar | None = None
+    cg_position_ratio: NumericScalar | None = None
+    thrust: NumericScalar | None = None
 
 
 class Fuselage(BaseModel):
@@ -62,6 +67,17 @@ class Fuselage(BaseModel):
 
     length: NumericScalar
     max_diameter: NumericScalar | None = None
+    payload_bay_length: NumericScalar | None = None
+    payload_bay_diameter: NumericScalar | None = None
+    fuel_tank_volume: NumericScalar | None = None
+
+
+class Stealth(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    material_class: TextScalar | None = None
+    shaping_level: TextScalar | None = None
+    frontal_rcs_target: NumericScalar | None = None
 
 
 class Wing(BaseModel):
@@ -171,3 +187,4 @@ class AircraftSpec(BaseModel):
     second_wing: SecondWing | None = None
     multi_fuselage: MultiFuselageConfig | None = None
     box_wing_config: BoxWingConfig | None = None
+    stealth: Stealth | None = None

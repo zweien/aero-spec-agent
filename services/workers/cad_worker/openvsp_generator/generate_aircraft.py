@@ -6,6 +6,7 @@ from typing import Any
 from services.api.app.schemas.aircraft_spec import AircraftSpec
 from services.workers.cad_worker.openvsp_generator.backend import CadArtifacts, CadBackend, ProgressCallback
 from services.workers.cad_worker.openvsp_generator.design_rules import run_design_rules
+from services.workers.cad_worker.openvsp_generator.extended_metrics import run_extended_metrics
 from services.workers.cad_worker.openvsp_generator.performance_estimate import run_performance_estimate
 from services.workers.cad_worker.openvsp_generator.verify_model import verification_entry
 
@@ -130,6 +131,67 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend,
     validation_report["design_rules"] = rule_report.to_dict()
     perf_report = run_performance_estimate(spec)
     validation_report["performance_estimate"] = perf_report.to_dict()
+    extended_report = run_extended_metrics(spec)
+    validation_report["extended_metrics"] = extended_report.to_dict()
+    try:
+        from services.api.app.services.expert_knowledge import load_entries, render_citation
+        from services.workers.cad_worker.openvsp_generator.extended_metrics import run_extended_metrics as _ext
+        ext_metrics = _ext(spec).to_dict().get("metrics", [])
+        perf_metrics = perf_report.to_dict().get("estimates", [])
+        metric_lookup: dict[str, float] = {}
+        for m in ext_metrics:
+            if m.get("metric_id"):
+                metric_lookup[m["metric_id"]] = float(m.get("value", 0.0))
+        for e in perf_metrics:
+            if e.get("estimate_id"):
+                metric_lookup[e["estimate_id"]] = float(e.get("value", 0.0))
+        aliases = {
+            "aspect_ratio": "aspect_ratio_perf",
+            "taper_ratio": "taper_ratio_perf",
+            "wing_loading_kg_m2": "wing_loading_mtow",
+            "cl_max_clean": "cl_max",
+            "cd0_clean": "cd0",
+            "oswald_efficiency": "oswald",
+            "endurance_h": "endurance_est",
+            "range_km": "range_est",
+        }
+        advisory_entries: list[dict[str, Any]] = []
+        for entry in load_entries():
+            if not entry.metric or entry.range is None:
+                continue
+            key = aliases.get(entry.metric, entry.metric)
+            if key not in metric_lookup:
+                continue
+            value = metric_lookup[key]
+            lo, hi = entry.range
+            if lo <= value <= hi:
+                status = "pass"
+            elif entry.warn_range and entry.warn_range[0] <= value <= entry.warn_range[1]:
+                status = "warn"
+            else:
+                status = "fail"
+            advisory_entries.append({
+                "entry_id": entry.id,
+                "topic": entry.topic,
+                "metric": entry.metric,
+                "applies_to": list(entry.applies_to),
+                "value": round(value, 4),
+                "unit": entry.unit,
+                "expected_range": [lo, hi],
+                "status": status,
+                "summary_zh": entry.summary_zh,
+                "citations": render_citation(entry),
+            })
+        validation_report["expert_advisory"] = {
+            "entries": advisory_entries,
+            "summary": {
+                k: sum(1 for a in advisory_entries if a["status"] == k)
+                for k in ("pass", "warn", "fail")
+            },
+        }
+    except Exception:
+        # Knowledge base is optional; never break generation if YAML missing
+        validation_report["expert_advisory"] = {"entries": [], "summary": {}}
     vspaero_data = artifacts.metadata.get("vspaero_analysis")
     if vspaero_data:
         validation_report["vspaero_analysis"] = vspaero_data

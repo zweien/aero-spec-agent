@@ -1,0 +1,115 @@
+# Expert Knowledge — Weight & Loading Reference Values
+#
+# Empirical weight-fraction ranges from classical conceptual-design textbooks.
+# These complement extended_metrics.py loading category checks.
+
+schema_version: "0.1"
+
+entries:
+  - id: payload-fraction-male-uav
+    topic: payload_fraction
+    applies_to: [long_endurance_uav, male_uav, fixed_wing_uav]
+    metric: payload_fraction
+    range: [0.10, 0.25]
+    warn_range: [0.05, 0.35]
+    unit: ""
+    summary_zh: "MALE 无人机载荷重量比 10%~25%."
+    summary_en: "MALE UAV payload fraction 10-25%."
+    sources:
+      - book: raymer
+        chapter: "Ch.6 Weight Fractions"
+      - book: liuhu
+        chapter: "Ch.7 重量平衡"
+
+  - id: payload-fraction-airliner
+    topic: payload_fraction
+    applies_to: [airliner, civil_transport]
+    metric: payload_fraction
+    range: [0.18, 0.28]
+    warn_range: [0.12, 0.35]
+    unit: ""
+    summary_zh: "民航客机有效载荷比 18%~28%."
+    summary_en: "Airliner payload fraction 18-28%."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.5 重量分组"
+
+  - id: payload-fraction-cargo
+    topic: payload_fraction
+    applies_to: [military_transport, cargo]
+    metric: payload_fraction
+    range: [0.25, 0.45]
+    warn_range: [0.18, 0.55]
+    unit: ""
+    summary_zh: "运输机载荷比 25%~45%, 高于客机."
+    summary_en: "Transport aircraft payload fraction 25-45%."
+    sources:
+      - book: nwpu
+        chapter: "运输机重量"
+
+  - id: empty-weight-fraction-uav
+    topic: empty_weight_fraction
+    applies_to: [long_endurance_uav, male_uav, fixed_wing_uav]
+    metric: empty_weight_fraction
+    range: [0.45, 0.62]
+    warn_range: [0.38, 0.70]
+    unit: ""
+    summary_zh: "无人机空机比典型 45%~62%."
+    summary_en: "UAV empty-weight fraction 45-62%."
+    sources:
+      - book: raymer
+        chapter: "Ch.6.2 Empty Weight Fraction"
+
+  - id: empty-weight-fraction-airliner
+    topic: empty_weight_fraction
+    applies_to: [airliner, civil_transport]
+    metric: empty_weight_fraction
+    range: [0.50, 0.58]
+    warn_range: [0.45, 0.62]
+    unit: ""
+    summary_zh: "民航空机比 50%~58%."
+    summary_en: "Airliner empty-weight fraction 50-58%."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.5"
+
+  - id: fuel-fraction-airliner
+    topic: fuel_fraction
+    applies_to: [airliner, civil_transport]
+    metric: fuel_fraction
+    range: [0.20, 0.35]
+    warn_range: [0.15, 0.45]
+    unit: ""
+    summary_zh: "民航燃油比 20%~35%, 长航程接近 35%."
+    summary_en: "Airliner fuel fraction 20-35%, long-haul up to 35%."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.6 燃油"
+
+  - id: fuel-fraction-male-uav
+    topic: fuel_fraction
+    applies_to: [long_endurance_uav, male_uav]
+    metric: fuel_fraction
+    range: [0.20, 0.40]
+    warn_range: [0.10, 0.50]
+    unit: ""
+    summary_zh: "MALE 无人机燃油比 20%~40%."
+    summary_en: "MALE UAV fuel fraction 20-40%."
+    sources:
+      - book: yuxiongqing
+        chapter: "Ch.6 燃油重量估算"
+
+  - id: cg-range-static-margin
+    topic: cg_position_ratio
+    applies_to: [fixed_wing_uav, airliner, civil_transport, general_aviation]
+    metric: cg_position_ratio
+    range: [0.20, 0.35]
+    warn_range: [0.15, 0.45]
+    unit: ""
+    summary_zh: "亚音速飞机重心位于 MAC 20%~35%, 静稳定."
+    summary_en: "Subsonic aircraft CG at 20-35% MAC for static stability."
+    sources:
+      - book: raymer
+        chapter: "Ch.16 Stability"
+      - book: gusongfen
+        chapter: "Ch.7 重心与稳定性"

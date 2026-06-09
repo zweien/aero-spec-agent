@@ -1,0 +1,374 @@
+# Historical Aircraft Reference Database
+#
+# Curated reference set of 20 well-known fixed-wing aircraft used to anchor
+# concept-design comparisons. Numerical fields use SI / standard units:
+#   wingspan_m, length_m, mtow_kg, payload_kg, empty_weight_kg,
+#   cruise_speed_kmh, range_km, endurance_h, service_ceiling_m, engines.
+#
+# Sources are public references (manufacturer fact sheets, Jane's, Wikipedia,
+# FAA/EASA TCDS). Values are nominal cruise / clean configuration.
+#
+# Layout vocabulary matches AircraftSpec.aircraft.layout where possible.
+
+schema_version: "0.1"
+
+aircraft:
+  - id: cessna_172
+    name: Cessna 172 Skyhawk
+    role: general_aviation
+    layout: conventional
+    wing_position: high
+    wingspan_m: 11.0
+    length_m: 8.28
+    mtow_kg: 1157
+    empty_weight_kg: 767
+    payload_kg: 390
+    cruise_speed_kmh: 226
+    range_km: 1289
+    endurance_h: 6.7
+    service_ceiling_m: 4115
+    engines: 1
+    aspect_ratio: 7.32
+    note: "Most-produced GA aircraft; baseline for small piston monoplanes."
+
+  - id: an_2
+    name: Antonov An-2
+    role: utility
+    layout: biplane
+    wing_position: high
+    wingspan_m: 18.18
+    length_m: 12.4
+    mtow_kg: 5500
+    empty_weight_kg: 3300
+    payload_kg: 2140
+    cruise_speed_kmh: 185
+    range_km: 845
+    endurance_h: 4.5
+    service_ceiling_m: 4500
+    engines: 1
+    aspect_ratio: 7.4
+    note: "Iconic STOL biplane utility; large wing area, low wing loading."
+
+  - id: piper_pa28
+    name: Piper PA-28 Cherokee
+    role: general_aviation
+    layout: conventional
+    wing_position: low
+    wingspan_m: 10.67
+    length_m: 7.16
+    mtow_kg: 1156
+    empty_weight_kg: 717
+    payload_kg: 439
+    cruise_speed_kmh: 232
+    range_km: 1040
+    endurance_h: 5.0
+    service_ceiling_m: 4200
+    engines: 1
+    aspect_ratio: 6.0
+    note: "Low-wing piston single, contrast to Cessna 172."
+
+  - id: scaneagle
+    name: Insitu ScanEagle
+    role: tactical_uav
+    layout: conventional
+    wing_position: mid
+    wingspan_m: 3.11
+    length_m: 1.71
+    mtow_kg: 26.5
+    empty_weight_kg: 18.0
+    payload_kg: 3.4
+    cruise_speed_kmh: 90
+    range_km: 700
+    endurance_h: 24.0
+    service_ceiling_m: 5950
+    engines: 1
+    aspect_ratio: 14.0
+    note: "Long-endurance small UAV launched by pneumatic catapult."
+
+  - id: bayraktar_tb2
+    name: Baykar Bayraktar TB2
+    role: medium_altitude_uav
+    layout: twin_boom
+    wing_position: high
+    wingspan_m: 12.0
+    length_m: 6.5
+    mtow_kg: 700
+    empty_weight_kg: 420
+    payload_kg: 150
+    cruise_speed_kmh: 130
+    range_km: 4000
+    endurance_h: 27.0
+    service_ceiling_m: 7620
+    engines: 1
+    aspect_ratio: 14.4
+    note: "Twin-boom MALE UAV; reference for long-endurance combat UAV."
+
+  - id: mq1_predator
+    name: General Atomics MQ-1 Predator
+    role: medium_altitude_uav
+    layout: conventional
+    wing_position: mid
+    wingspan_m: 14.8
+    length_m: 8.22
+    mtow_kg: 1020
+    empty_weight_kg: 512
+    payload_kg: 204
+    cruise_speed_kmh: 130
+    range_km: 1100
+    endurance_h: 24.0
+    service_ceiling_m: 7620
+    engines: 1
+    aspect_ratio: 19.0
+    note: "Pioneering MALE UAV, very high aspect ratio for endurance."
+
+  - id: mq9_reaper
+    name: General Atomics MQ-9 Reaper
+    role: medium_altitude_uav
+    layout: conventional
+    wing_position: mid
+    wingspan_m: 20.12
+    length_m: 11.0
+    mtow_kg: 4760
+    empty_weight_kg: 2223
+    payload_kg: 1746
+    cruise_speed_kmh: 313
+    range_km: 1850
+    endurance_h: 27.0
+    service_ceiling_m: 15000
+    engines: 1
+    aspect_ratio: 17.0
+    note: "Hunter-killer UAV; turboprop, much heavier than MQ-1."
+
+  - id: rq4_global_hawk
+    name: Northrop Grumman RQ-4 Global Hawk
+    role: high_altitude_uav
+    layout: conventional
+    wing_position: high
+    wingspan_m: 39.9
+    length_m: 14.5
+    mtow_kg: 14628
+    empty_weight_kg: 6781
+    payload_kg: 1360
+    cruise_speed_kmh: 575
+    range_km: 22780
+    endurance_h: 32.0
+    service_ceiling_m: 18288
+    engines: 1
+    aspect_ratio: 25.0
+    note: "HALE strategic ISR UAV; very high-aspect-ratio glider-like wing."
+
+  - id: ch_4
+    name: CASC CH-4 (彩虹4)
+    role: medium_altitude_uav
+    layout: conventional
+    wing_position: mid
+    wingspan_m: 18.0
+    length_m: 8.5
+    mtow_kg: 1330
+    empty_weight_kg: 800
+    payload_kg: 345
+    cruise_speed_kmh: 180
+    range_km: 3500
+    endurance_h: 30.0
+    service_ceiling_m: 7200
+    engines: 1
+    aspect_ratio: 18.0
+    note: "Chinese MALE UAV; comparable to MQ-1 class."
+
+  - id: wing_loong_2
+    name: AVIC Wing Loong II (翼龙II)
+    role: medium_altitude_uav
+    layout: conventional
+    wing_position: mid
+    wingspan_m: 20.5
+    length_m: 11.0
+    mtow_kg: 4200
+    empty_weight_kg: 1900
+    payload_kg: 480
+    cruise_speed_kmh: 370
+    range_km: 4000
+    endurance_h: 32.0
+    service_ceiling_m: 9000
+    engines: 1
+    aspect_ratio: 18.5
+    note: "Chinese long-endurance armed UAV; comparable to MQ-9 class."
+
+  - id: cessna_caravan
+    name: Cessna 208 Caravan
+    role: utility_turboprop
+    layout: conventional
+    wing_position: high
+    wingspan_m: 15.88
+    length_m: 12.67
+    mtow_kg: 3629
+    empty_weight_kg: 2073
+    payload_kg: 1500
+    cruise_speed_kmh: 344
+    range_km: 1982
+    endurance_h: 5.5
+    service_ceiling_m: 7620
+    engines: 1
+    aspect_ratio: 9.7
+    note: "Single-engine turboprop utility; benchmark for small cargo aircraft."
+
+  - id: dhc_6_twin_otter
+    name: De Havilland Canada DHC-6 Twin Otter
+    role: utility_turboprop
+    layout: conventional
+    wing_position: high
+    wingspan_m: 19.81
+    length_m: 15.77
+    mtow_kg: 5670
+    empty_weight_kg: 3363
+    payload_kg: 1842
+    cruise_speed_kmh: 337
+    range_km: 1480
+    endurance_h: 5.0
+    service_ceiling_m: 7620
+    engines: 2
+    aspect_ratio: 10.0
+    note: "Twin-engine STOL utility; under-wing turboprops."
+
+  - id: c130
+    name: Lockheed C-130 Hercules
+    role: military_transport
+    layout: conventional
+    wing_position: high
+    wingspan_m: 40.4
+    length_m: 29.8
+    mtow_kg: 70300
+    empty_weight_kg: 34400
+    payload_kg: 19960
+    cruise_speed_kmh: 540
+    range_km: 3800
+    endurance_h: 7.0
+    service_ceiling_m: 10060
+    engines: 4
+    aspect_ratio: 10.1
+    note: "Four-engine high-wing tactical transport; classic large turboprop."
+
+  - id: a320
+    name: Airbus A320
+    role: airliner
+    layout: conventional
+    wing_position: low
+    wingspan_m: 35.8
+    length_m: 37.57
+    mtow_kg: 78000
+    empty_weight_kg: 42600
+    payload_kg: 16600
+    cruise_speed_kmh: 840
+    range_km: 6150
+    endurance_h: 7.3
+    service_ceiling_m: 12500
+    engines: 2
+    aspect_ratio: 10.3
+    note: "Narrow-body twin-engine airliner; baseline for short/medium-haul."
+
+  - id: boeing_737_800
+    name: Boeing 737-800
+    role: airliner
+    layout: conventional
+    wing_position: low
+    wingspan_m: 35.8
+    length_m: 39.5
+    mtow_kg: 79010
+    empty_weight_kg: 41413
+    payload_kg: 20540
+    cruise_speed_kmh: 842
+    range_km: 5436
+    endurance_h: 6.5
+    service_ceiling_m: 12500
+    engines: 2
+    aspect_ratio: 9.45
+    note: "Mainline narrow-body twinjet; close peer of A320."
+
+  - id: u2
+    name: Lockheed U-2
+    role: high_altitude_recon
+    layout: conventional
+    wing_position: high
+    wingspan_m: 31.39
+    length_m: 19.2
+    mtow_kg: 18144
+    empty_weight_kg: 6804
+    payload_kg: 1360
+    cruise_speed_kmh: 760
+    range_km: 11265
+    endurance_h: 12.0
+    service_ceiling_m: 21336
+    engines: 1
+    aspect_ratio: 10.6
+    note: "High-altitude reconnaissance; glider-like long wing."
+
+  - id: x_47b
+    name: Northrop Grumman X-47B
+    role: stealth_uav
+    layout: flying_wing
+    wing_position: mid
+    wingspan_m: 18.92
+    length_m: 11.63
+    mtow_kg: 20215
+    empty_weight_kg: 6350
+    payload_kg: 2000
+    cruise_speed_kmh: 990
+    range_km: 3889
+    endurance_h: 9.0
+    service_ceiling_m: 12200
+    engines: 1
+    aspect_ratio: 5.5
+    note: "Tail-less flying-wing UCAV demonstrator; reference for LO UAV."
+
+  - id: rq170
+    name: Lockheed Martin RQ-170 Sentinel
+    role: stealth_uav
+    layout: flying_wing
+    wing_position: mid
+    wingspan_m: 19.81
+    length_m: 4.5
+    mtow_kg: 3855
+    empty_weight_kg: 2400
+    payload_kg: 450
+    cruise_speed_kmh: 470
+    range_km: 1500
+    endurance_h: 6.0
+    service_ceiling_m: 15240
+    engines: 1
+    aspect_ratio: 8.0
+    note: "Stealth UAV, public data is approximate."
+
+  - id: b2
+    name: Northrop Grumman B-2 Spirit
+    role: stealth_bomber
+    layout: flying_wing
+    wing_position: mid
+    wingspan_m: 52.43
+    length_m: 21.03
+    mtow_kg: 170600
+    empty_weight_kg: 71700
+    payload_kg: 22680
+    cruise_speed_kmh: 900
+    range_km: 11100
+    endurance_h: 12.0
+    service_ceiling_m: 15240
+    engines: 4
+    aspect_ratio: 5.9
+    note: "Strategic flying-wing bomber, premier low-observable design."
+
+  - id: f22
+    name: Lockheed Martin F-22 Raptor
+    role: stealth_fighter
+    layout: conventional
+    wing_position: mid
+    wingspan_m: 13.56
+    length_m: 18.92
+    mtow_kg: 38000
+    empty_weight_kg: 19700
+    payload_kg: 8000
+    cruise_speed_kmh: 1963
+    range_km: 2960
+    endurance_h: 2.5
+    service_ceiling_m: 19812
+    engines: 2
+    aspect_ratio: 2.36
+    note: "Twin-engine stealth fighter; low-aspect-ratio diamond planform."
