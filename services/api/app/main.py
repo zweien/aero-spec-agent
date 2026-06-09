@@ -1,15 +1,20 @@
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
+from services.api.app.routers import conversations as conv_router_module
+from services.api.app.routers.chat import chat_service
 from services.api.app.routers.chat import router as chat_router
 from services.api.app.routers.chat import set_job_runner as set_chat_job_runner
+from services.api.app.routers.conversations import router as conversations_router
 from services.api.app.routers.deep_design import router as deep_design_router
 from services.api.app.routers.design_controller import router as design_controller_router
 from services.api.app.routers.designs import router as designs_router
 from services.api.app.routers.designs import runner as designs_runner
+from services.api.app.services.conversation_index import ConversationIndex
 
 
 def _local_web_origins() -> list[str]:
@@ -33,6 +38,12 @@ app.include_router(design_controller_router)
 app.include_router(deep_design_router)
 
 set_chat_job_runner(designs_runner)
+
+# Initialize conversations router with index-backed storage
+_conv_index = ConversationIndex(root=Path("storage"))
+_conv_index.bootstrap()
+conv_router_module.init(chat_service, _conv_index)
+app.include_router(conversations_router)
 
 
 @app.get("/health")
