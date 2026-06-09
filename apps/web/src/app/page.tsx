@@ -19,6 +19,10 @@ import { useDeepDesignStream } from "@/components/graph/useDeepDesignStream";
 import { CompareDrawer } from "@/components/compare/CompareDrawer";
 import { useCompareItems, extractCompareMetrics } from "@/components/compare";
 import type { CompareItem, CompareMetrics } from "@/components/compare/types";
+import {
+  SessionSidebar,
+  type SessionItem,
+} from "@/components/chat/SessionSidebar";
 
 type VersionResponse = {
   files: string[];
@@ -93,7 +97,7 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8900";
 
 export default function Home() {
-  const [conversationId] = useState(() => crypto.randomUUID());
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [previewSource, setPreviewSource] = useState<CadPreviewSource | null>(
     null,
   );
@@ -150,6 +154,22 @@ export default function Home() {
     };
   }, []);
 
+  // Auto-load most recent conversation or create new on mount
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/conversations`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ conversations: SessionItem[] }>) : null))
+      .then((data) => {
+        if (data && data.conversations.length > 0) {
+          setConversationId(data.conversations[0].conversation_id);
+        } else {
+          setConversationId(crypto.randomUUID());
+        }
+      })
+      .catch(() => {
+        setConversationId(crypto.randomUUID());
+      });
+  }, []);
+
   const handleDragStart = useCallback(() => {
     dragging.current = true;
     document.body.style.cursor = "col-resize";
@@ -160,6 +180,44 @@ export default function Home() {
     setDraftSpec(specData);
     setPendingChanges(new Map());
   }, [specData]);
+
+  const resetDesignState = useCallback(() => {
+    setSpecData(null);
+    setDraftSpec(null);
+    setPendingChanges(new Map());
+    setPreviewSource(null);
+    setPreviewSpec(null);
+    setDesignRules(null);
+    setPerfEstimates(null);
+    setAeroAnalysis(null);
+    setDesignMetrics(null);
+    setVersionList([]);
+    setCurrentVersionNo(undefined);
+    setDesignId(null);
+    setCompareData(null);
+    setCompareVersions(null);
+    setGenerationStage(null);
+    setGenerationProgress(0);
+    setIsGenerating(false);
+    setGenerationArtifacts([]);
+    setGenerationError(null);
+    setSelectedRefs([]);
+  }, []);
+
+  const handleSwitchConversation = useCallback(
+    (id: string) => {
+      if (id !== conversationId) {
+        resetDesignState();
+        setConversationId(id);
+      }
+    },
+    [conversationId, resetDesignState],
+  );
+
+  const handleNewConversation = useCallback(() => {
+    resetDesignState();
+    setConversationId(crypto.randomUUID());
+  }, [resetDesignState]);
 
   const registerSystemMessage = useCallback((fn: (text: string) => void) => {
     chatSystemMessageRef.current = fn;
@@ -241,7 +299,7 @@ export default function Home() {
 
   const handleGenerationComplete = useCallback(
     (data: { design_id?: string; version_no?: number; status?: string; files?: string[] }) => {
-      const convId = data.design_id ?? conversationId;
+      const convId = data.design_id ?? conversationId ?? "";
       const vNo = data.version_no;
       if (!vNo) return;
       setDesignId(convId);
@@ -297,6 +355,7 @@ export default function Home() {
   const handleApplyChanges = useCallback(async () => {
     if (pendingChanges.size === 0 || isApplyingChanges) return;
     const activeDesignId = designId ?? conversationId;
+    if (!activeDesignId) return;
     const changes = Array.from(pendingChanges.entries()).map(
       ([path, value]) => ({ path, value }),
     );
@@ -485,27 +544,39 @@ export default function Home() {
         </div>
       </nav>
       <div className="main-content" ref={mainRef}>
+        <SessionSidebar
+          activeId={conversationId}
+          onSelect={handleSwitchConversation}
+          onNew={handleNewConversation}
+          apiBaseUrl={API_BASE_URL}
+        />
         <div className="chat-column" style={{ width: `${chatWidth}%` }}>
-          <ChatPanel
-            conversationId={conversationId}
-            apiBaseUrl={API_BASE_URL}
-            onGenerationComplete={handleGenerationComplete}
-            onClearSelectedRefs={handleClearSelectedRefs}
-            registerSystemMessage={registerSystemMessage}
-            registerToolAction={registerToolAction}
-	            selectedRefs={selectedRefs}
-	            onViewModel={handleViewModel}
-	            onDeepDesign={handleOpenDeepDesign}
-	            onExportReport={handleExportReport}
-	            onShowDetails={handleShowRunDetails}
-	            onGenerationStage={(stage, progress, generating, extras) => {
-              setGenerationStage(stage);
-              setGenerationProgress(progress);
-              setIsGenerating(generating);
-              setGenerationArtifacts(extras?.artifacts ?? []);
-              setGenerationError(extras?.error ?? null);
-            }}
-          />
+          {conversationId ? (
+            <ChatPanel
+              conversationId={conversationId}
+              apiBaseUrl={API_BASE_URL}
+              onGenerationComplete={handleGenerationComplete}
+              onClearSelectedRefs={handleClearSelectedRefs}
+              registerSystemMessage={registerSystemMessage}
+              registerToolAction={registerToolAction}
+              selectedRefs={selectedRefs}
+              onViewModel={handleViewModel}
+              onDeepDesign={handleOpenDeepDesign}
+              onExportReport={handleExportReport}
+              onShowDetails={handleShowRunDetails}
+              onGenerationStage={(stage, progress, generating, extras) => {
+                setGenerationStage(stage);
+                setGenerationProgress(progress);
+                setIsGenerating(generating);
+                setGenerationArtifacts(extras?.artifacts ?? []);
+                setGenerationError(extras?.error ?? null);
+              }}
+            />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-tertiary, #888)" }}>
+              加载中...
+            </div>
+          )}
         </div>
         <div
           className="resize-handle"
