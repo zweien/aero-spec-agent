@@ -22,6 +22,7 @@ from services.api.app.services.chat_tools import (
     MODIFY_SELECTED_PART_TOOL,
     SUPPORTED_FIELD_VALUES,
 )
+from services.api.app.services.conversation_index import ConversationIndex
 from services.api.app.services.selected_part_modifier import (
     SelectedPartPatchError,
     apply_selected_part_patch,
@@ -228,13 +229,18 @@ def _chat_generation_mode() -> str:
 
 
 class ChatService:
-    def __init__(self, storage_root: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        storage_root: str | Path | None = None,
+        conversation_index: ConversationIndex | None = None,
+    ) -> None:
         self._conversations: dict[str, ConversationState] = {}
         self._model = os.getenv("OPENAI_MODEL", "deepseek-chat")
         self._client: AsyncOpenAI | None = None
         self._job_runner = None
         self._storage_root = Path(storage_root) if storage_root else Path("storage")
         self._background_generation_tasks: set[Future] = set()
+        self._index = conversation_index
 
     def _state_path(self, conversation_id: str) -> Path:
         return self._storage_root / "conversations" / conversation_id / "state.json"
@@ -243,6 +249,20 @@ class ChatService:
         path = self._state_path(state.conversation_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        if self._index is not None:
+            title = None
+            msg_count = len(state.messages)
+            if msg_count > 0:
+                for m in state.messages:
+                    if m.get("role") == "user" and m.get("content"):
+                        title = m["content"][:30]
+                        break
+            self._index.update_entry(
+                state.conversation_id,
+                title=title,
+                message_count=msg_count,
+                design_id=state.design_id,
+            )
 
     def _get_client(self) -> AsyncOpenAI:
         if self._client is None:
@@ -260,6 +280,9 @@ class ChatService:
 
     def set_job_runner(self, runner: Any) -> None:
         self._job_runner = runner
+
+    def set_conversation_index(self, index: ConversationIndex) -> None:
+        self._index = index
 
     def _schedule_job_generation(self, job: Any, spec: AircraftSpec) -> None:
         future = _CHAT_GENERATION_EXECUTOR.submit(self._job_runner.run_job_generation, job, spec)

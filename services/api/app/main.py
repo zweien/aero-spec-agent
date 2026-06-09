@@ -42,6 +42,7 @@ set_chat_job_runner(designs_runner)
 # Initialize conversations router with index-backed storage
 _conv_index = ConversationIndex(root=Path("storage"))
 _conv_index.bootstrap()
+chat_service.set_conversation_index(_conv_index)
 conv_router_module.init(chat_service, _conv_index)
 app.include_router(conversations_router)
 
