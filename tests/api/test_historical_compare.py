@@ -101,7 +101,7 @@ def test_route_compare_inline_spec():
 def test_route_compare_inline_rejects_missing_spec():
     client = TestClient(app)
     resp = client.post("/api/historical-compare", json={})
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_route_compare_design_404_when_design_missing():

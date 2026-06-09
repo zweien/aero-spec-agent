@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import yaml
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from services.api.app.routers.designs import _get_version_store
 from services.api.app.schemas.aircraft_spec import AircraftSpec
@@ -14,6 +15,10 @@ from services.api.app.services.historical_compare import (
 
 
 router = APIRouter(prefix="/api", tags=["historical"])
+
+
+class InlineSpecRequest(BaseModel):
+    spec: str | dict
 
 
 @router.get("/historical-aircraft")
@@ -60,16 +65,11 @@ def compare_design_to_history(
 
 @router.post("/historical-compare")
 async def compare_inline_spec(
-    payload: dict,
+    body: InlineSpecRequest,
     top_k: int = Query(default=5, ge=1, le=20),
 ):
-    """Compare an inline spec without persisting it.
-
-    Body: { "spec": <aircraft spec dict or YAML string> }
-    """
-    raw = payload.get("spec") if isinstance(payload, dict) else None
-    if raw is None:
-        raise HTTPException(status_code=400, detail="missing 'spec' in body")
+    """Compare an inline spec without persisting it."""
+    raw = body.spec
     if isinstance(raw, str):
         try:
             data = yaml.safe_load(raw)

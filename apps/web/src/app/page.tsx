@@ -9,6 +9,10 @@ import {
 } from "@/components/cad-viewer/cadPreviewSource";
 import type { AircraftPreviewSpec } from "@/components/cad-viewer/previewGeometry";
 import { ChatPanel, type GenerationCompleteData } from "@/components/chat/ChatPanel";
+import {
+  SessionSidebar,
+  type SessionItem,
+} from "@/components/chat/SessionSidebar";
 import { pollJobToCompletion } from "@/lib/generationFlow";
 import { ParameterPanel } from "@/components/parameter-panel/ParameterPanel";
 import type { AircraftSpecData } from "@/components/parameter-panel/ParameterPanel";
@@ -19,24 +23,10 @@ import { useDeepDesignStream } from "@/components/graph/useDeepDesignStream";
 import { CompareDrawer } from "@/components/compare/CompareDrawer";
 import { useCompareItems, extractCompareMetrics } from "@/components/compare";
 import type { CompareItem, CompareMetrics } from "@/components/compare/types";
+import type { VersionResponse } from "@/components/version-panel/types";
 
-type VersionResponse = {
-  files: string[];
-  validation_report?: {
-    spec_echo?: Record<string, unknown>;
-    design_rules?: {
-      rules: DesignRuleEntry[];
-      summary: Record<string, number>;
-    };
-    performance_estimate?: {
-      estimates: PerformanceEstimateEntry[];
-      summary: Record<string, number>;
-    };
-    extended_metrics?: {
-      metrics: ExtendedMetricEntry[];
-      summary: Record<string, number>;
-    };
-    vspaero_analysis?: VspaeroAnalysisEntry;
+type VersionResponseWithMetrics = VersionResponse & {
+  validation_report?: VersionResponse["validation_report"] & {
     design_metrics?: {
       wingspan_m?: number;
       fuselage_length_m?: number;
@@ -110,7 +100,8 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8900";
 
 export default function Home() {
-  const [conversationId] = useState(() => crypto.randomUUID());
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [previewSource, setPreviewSource] = useState<CadPreviewSource | null>(
     null,
   );
@@ -129,7 +120,7 @@ export default function Home() {
   const [designId, setDesignId] = useState<string | null>(null);
   const [isApplyingChanges, setIsApplyingChanges] = useState(false);
   const [compareVersions, setCompareVersions] = useState<[number, number] | null>(null);
-  const [compareData, setCompareData] = useState<[VersionResponse, VersionResponse] | null>(null);
+  const [compareData, setCompareData] = useState<[VersionResponseWithMetrics, VersionResponseWithMetrics] | null>(null);
   const [selectedRefs, setSelectedRefs] = useState<string[]>([]);
   const [rightTab, setRightTab] = useState<"parameters" | "deep-design">("parameters");
   const [generationStage, setGenerationStage] = useState<string | null>(null);
@@ -175,9 +166,53 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    fetch(`${API_BASE_URL}/api/conversations`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ conversations: SessionItem[] }>) : null))
+      .then((data) => {
+        if (data && data.conversations.length > 0) {
+          setConversationId(data.conversations[0].conversation_id);
+        } else {
+          setConversationId(crypto.randomUUID());
+        }
+      })
+      .catch(() => { setConversationId(crypto.randomUUID()); });
+  }, []);
+
+  useEffect(() => {
     setDraftSpec(specData);
     setPendingChanges(new Map());
   }, [specData]);
+
+  const resetDesignState = useCallback(() => {
+    setSpecData(null);
+    setDraftSpec(null);
+    setPendingChanges(new Map());
+    setPreviewSource(null);
+    setPreviewSpec(null);
+    setDesignRules(null);
+    setPerfEstimates(null);
+    setAeroAnalysis(null);
+    setDesignMetrics(null);
+    setVersionList([]);
+    setCurrentVersionNo(undefined);
+    setDesignId(null);
+    setCompareData(null);
+    setCompareVersions(null);
+    setGenerationStage(null);
+    setGenerationProgress(0);
+    setIsGenerating(false);
+    setGenerationArtifacts([]);
+    setGenerationError(null);
+    setSelectedRefs([]);
+  }, []);
+
+  const handleSwitchConversation = useCallback((id: string) => {
+    if (id !== conversationId) { resetDesignState(); setConversationId(id); }
+  }, [conversationId, resetDesignState]);
+
+  const handleNewConversation = useCallback(() => {
+    resetDesignState(); setConversationId(crypto.randomUUID());
+  }, [resetDesignState]);
 
   const registerSystemMessage = useCallback((fn: (text: string) => void) => {
     chatSystemMessageRef.current = fn;
@@ -201,7 +236,7 @@ export default function Home() {
       );
       if (!resp.ok) return;
 
-      const version = (await resp.json()) as VersionResponse;
+      const version = (await resp.json()) as VersionResponseWithMetrics;
       setDesignId(dId);
       setCurrentVersionNo(versionNo);
       setPreviewSpec(
@@ -262,7 +297,7 @@ export default function Home() {
 
   const handleGenerationComplete = useCallback(
     (data: { design_id?: string; version_no?: number; status?: string; files?: string[] }) => {
-      const convId = data.design_id ?? conversationId;
+      const convId = data.design_id ?? conversationId ?? "";
       const vNo = data.version_no;
       if (!vNo) return;
       setDesignId(convId);
@@ -317,7 +352,7 @@ export default function Home() {
 
   const handleApplyChanges = useCallback(async () => {
     if (pendingChanges.size === 0 || isApplyingChanges) return;
-    const activeDesignId = designId ?? conversationId;
+    const activeDesignId = designId ?? conversationId ?? "";
     const changes = Array.from(pendingChanges.entries()).map(
       ([path, value]) => ({ path, value }),
     );
@@ -427,7 +462,7 @@ export default function Home() {
         fetch(`${API_BASE_URL}/api/designs/${designId}/versions/${v1}`).then((r) => r.json()),
         fetch(`${API_BASE_URL}/api/designs/${designId}/versions/${v2}`).then((r) => r.json()),
       ]);
-      setCompareData([r1 as VersionResponse, r2 as VersionResponse]);
+      setCompareData([r1 as VersionResponseWithMetrics, r2 as VersionResponseWithMetrics]);
       setCompareVersions([v1, v2]);
     },
     [designId],
@@ -454,7 +489,7 @@ export default function Home() {
         try {
           const resp = await fetch(`${API_BASE_URL}/api/designs/${dId}/versions/${item.versionNo}`);
           if (resp.ok) {
-            const data = (await resp.json()) as VersionResponse;
+            const data = (await resp.json()) as VersionResponseWithMetrics;
             const specEcho = data.validation_report?.spec_echo;
             const enriched: CompareItem = {
               ...item,
@@ -506,9 +541,18 @@ export default function Home() {
         </div>
       </nav>
       <div className="main-content" ref={mainRef}>
+        <SessionSidebar
+          activeId={conversationId}
+          onSelect={handleSwitchConversation}
+          onNew={handleNewConversation}
+          apiBaseUrl={API_BASE_URL}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+        />
         <div className="chat-column" style={{ width: `${chatWidth}%` }}>
-          <ChatPanel
-            conversationId={conversationId}
+          {conversationId ? (
+            <ChatPanel
+              conversationId={conversationId}
             apiBaseUrl={API_BASE_URL}
             onGenerationComplete={handleGenerationComplete}
             onClearSelectedRefs={handleClearSelectedRefs}
@@ -527,6 +571,11 @@ export default function Home() {
               setGenerationError(extras?.error ?? null);
             }}
           />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-muted)" }}>
+              加载中...
+            </div>
+          )}
         </div>
         <div
           className="resize-handle"

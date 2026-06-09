@@ -94,7 +94,8 @@ def _status(value: float, lo: float, hi: float) -> Status:
         return "unusual"
     if lo <= value <= hi:
         return "reasonable"
-    if lo * 0.6 <= value <= hi * 1.4:
+    margin = (hi - lo) * 0.5
+    if lo - margin <= value <= hi + margin:
         return "warning"
     return "unusual"
 

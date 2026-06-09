@@ -111,10 +111,10 @@ def test_route_advisory_post_inline_spec():
     assert sum(payload["summary"].values()) == len(payload["advisory"])
 
 
-def test_route_advisory_missing_spec_returns_400():
+def test_route_advisory_missing_spec_returns_422():
     client = TestClient(app)
     resp = client.post("/api/expert-knowledge/advisory", json={})
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_route_advisory_design_404_when_design_missing():

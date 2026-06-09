@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import yaml
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from services.api.app.routers.designs import _get_version_store
 from services.api.app.schemas.aircraft_spec import AircraftSpec
@@ -18,6 +19,31 @@ from services.api.app.services.expert_knowledge import (
 )
 from services.workers.cad_worker.openvsp_generator.extended_metrics import run_extended_metrics
 from services.workers.cad_worker.openvsp_generator.performance_estimate import run_performance_estimate
+
+# Canonical mapping from expert-knowledge metric names to computed metric IDs.
+METRIC_ALIASES: dict[str, str] = {
+    "aspect_ratio": "aspect_ratio_perf",
+    "taper_ratio": "taper_ratio_perf",
+    "wing_loading_kg_m2": "wing_loading_mtow",
+    "ld_cruise": "ld_cruise",
+    "cl_max_clean": "cl_max",
+    "cd0_clean": "cd0",
+    "oswald_efficiency": "oswald",
+    "endurance_h": "endurance_est",
+    "range_km": "range_est",
+    "thrust_to_weight": "thrust_to_weight",
+    "payload_fraction": "payload_fraction",
+    "empty_weight_fraction": "empty_weight_fraction",
+    "fuel_fraction": "fuel_fraction",
+    "payload_volume_ratio": "payload_volume_ratio",
+    "rcs_estimate": "rcs_estimate",
+    "htail_volume": "htail_volume",
+    "vtail_volume": "vtail_volume",
+}
+
+
+class InlineSpecRequest(BaseModel):
+    spec: str | dict
 
 
 router = APIRouter(prefix="/api/expert-knowledge", tags=["expert-knowledge"])
@@ -74,8 +100,8 @@ def _value_status(value: float, entry: KnowledgeEntry) -> str:
     return "fail"
 
 
-def _spec_metric_value(spec: AircraftSpec, metric: str) -> float | None:
-    """Compute the spec's actual value for a known metric name."""
+def _build_metric_map(spec: AircraftSpec) -> dict[str, float]:
+    """Pre-compute all metric values once, returning {metric_id: value}."""
     perf = run_performance_estimate(spec).to_dict()
     ext = run_extended_metrics(spec).to_dict()
     metric_map: dict[str, float] = {}
@@ -85,37 +111,19 @@ def _spec_metric_value(spec: AircraftSpec, metric: str) -> float | None:
     for m in ext.get("metrics", []):
         if m.get("metric_id"):
             metric_map[m["metric_id"]] = float(m.get("value", 0.0))
-    aliases = {
-        "aspect_ratio": "aspect_ratio_perf",
-        "taper_ratio": "taper_ratio_perf",
-        "wing_loading_kg_m2": "wing_loading_mtow",
-        "ld_cruise": "ld_cruise",
-        "cl_max_clean": "cl_max",
-        "cd0_clean": "cd0",
-        "oswald_efficiency": "oswald",
-        "endurance_h": "endurance_est",
-        "range_km": "range_est",
-        "thrust_to_weight": "thrust_to_weight",
-        "payload_fraction": "payload_fraction",
-        "empty_weight_fraction": "empty_weight_fraction",
-        "fuel_fraction": "fuel_fraction",
-        "payload_volume_ratio": "payload_volume_ratio",
-        "rcs_estimate": "rcs_estimate",
-        "htail_volume": "htail_volume",
-        "vtail_volume": "vtail_volume",
-    }
-    key = aliases.get(metric, metric)
-    return metric_map.get(key)
+    return metric_map
 
 
 def _advise(spec: AircraftSpec, aircraft_category: str | None) -> dict:
+    metric_map = _build_metric_map(spec)
     advisory: list[dict] = []
     for entry in load_entries():
         if aircraft_category and aircraft_category not in entry.applies_to:
             continue
         if not entry.metric or entry.range is None:
             continue
-        value = _spec_metric_value(spec, entry.metric)
+        key = METRIC_ALIASES.get(entry.metric, entry.metric)
+        value = metric_map.get(key)
         if value is None:
             continue
         status = _value_status(value, entry)
@@ -164,12 +172,10 @@ def get_advisory_for_design(
 
 @router.post("/advisory")
 async def post_inline_advisory(
-    payload: dict,
+    body: InlineSpecRequest,
     aircraft_category: str | None = Query(default=None),
 ):
-    raw = payload.get("spec") if isinstance(payload, dict) else None
-    if raw is None:
-        raise HTTPException(status_code=400, detail="missing 'spec' in body")
+    raw = body.spec
     if isinstance(raw, str):
         try:
             data = yaml.safe_load(raw)

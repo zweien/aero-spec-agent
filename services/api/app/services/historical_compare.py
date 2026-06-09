@@ -102,14 +102,14 @@ def _spec_to_features(spec: AircraftSpec) -> dict[str, float]:
     mtow = user_mtow if user_mtow and user_mtow > 0 else (payload / 0.15 if payload > 0 else 0.0)
 
     cruise = _scalar(getattr(spec.mission, "cruise_speed", None), 0.0) or 0.0
-    # range/endurance not in spec; leave 0 to skip in distance.
+    range_km = _scalar(getattr(spec.mission, "range", None), 0.0) or 0.0
     return {
         "wingspan_m": span,
         "length_m": length,
         "mtow_kg": mtow,
         "payload_kg": payload,
         "cruise_speed_kmh": cruise,
-        "range_km": 0.0,
+        "range_km": range_km,
         "aspect_ratio": _aspect_ratio(spec),
     }
 

@@ -9,26 +9,7 @@ import { HistoricalComparePanel } from "@/components/historical/HistoricalCompar
 import { ExpertAdvisoryPanel } from "@/components/historical/ExpertAdvisoryPanel";
 import type { CompareItem, CompareMetrics } from "@/components/compare/types";
 import { DesignMetricsCard } from "@/components/metrics/DesignMetricsCard";
-
-type VersionResponse = {
-  files: string[];
-  validation_report?: {
-    spec_echo?: Record<string, unknown>;
-    design_rules?: {
-      rules: DesignRuleEntry[];
-      summary: Record<string, number>;
-    };
-    performance_estimate?: {
-      estimates: PerformanceEstimateEntry[];
-      summary: Record<string, number>;
-    };
-    extended_metrics?: {
-      metrics: ExtendedMetricEntry[];
-      summary: Record<string, number>;
-    };
-    vspaero_analysis?: VspaeroAnalysisEntry;
-  };
-};
+import type { VersionResponse } from "./types";
 
 type VersionPanelProps = {
   designRules?: DesignRuleEntry[] | null;
