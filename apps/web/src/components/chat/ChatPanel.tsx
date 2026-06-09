@@ -806,6 +806,48 @@ export function ChatPanel({
     registerToolAction?.(startToolAction);
   }, [registerToolAction, startToolAction]);
 
+  // --- Conversation state loading ---
+  const prevConvIdRef = useRef(conversationId);
+  useEffect(() => {
+    if (!conversationId) return;
+    if (prevConvIdRef.current === conversationId) return;
+    prevConvIdRef.current = conversationId;
+
+    const abort = new AbortController();
+    setStatus("idle");
+    setMessages([]);
+
+    fetch(`${apiBaseUrl}/api/conversations/${encodeURIComponent(conversationId)}`, {
+      signal: abort.signal,
+    })
+      .then(async (resp) => {
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (abort.signal.aborted) return;
+
+        const rawMsgs: Array<{ role: string; content?: string | null }> =
+          data.messages ?? [];
+        let nextId = 1;
+
+        const restored: ChatMessage[] = rawMsgs
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({
+            id: `msg-${nextId++}`,
+            role: m.role as ChatRole,
+            parts: m.content
+              ? [{ type: "text" as const, text: m.content }]
+              : [],
+          }));
+
+        setMessages(restored);
+      })
+      .catch(() => {
+        // AbortError expected on switch
+      });
+
+    return () => abort.abort();
+  }, [conversationId, apiBaseUrl]);
+
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
