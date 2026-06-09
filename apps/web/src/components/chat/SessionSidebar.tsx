@@ -24,6 +24,7 @@ type SessionSidebarProps = {
   apiBaseUrl: string;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  refreshKey?: number;
 };
 
 function relativeTime(iso: string): string {
@@ -49,6 +50,7 @@ export function SessionSidebar({
   apiBaseUrl,
   collapsed,
   onToggleCollapse,
+  refreshKey,
 }: SessionSidebarProps): JSX.Element {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,14 +87,20 @@ export function SessionSidebar({
     void fetchSessions();
   }, [fetchSessions]);
 
-  // Refresh 2 seconds after activeId changes (to pick up new message counts)
+  // Refresh when refreshKey changes (e.g. after generation completes)
   useEffect(() => {
-    if (activeId == null) return;
-    const timer = setTimeout(() => {
+    if (refreshKey == null || refreshKey === 0) return;
+    void fetchSessions();
+  }, [refreshKey, fetchSessions]);
+
+  // Poll every 5 seconds when not collapsed to keep list fresh
+  useEffect(() => {
+    if (collapsed) return;
+    const timer = setInterval(() => {
       void fetchSessions();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [activeId, fetchSessions]);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [collapsed, fetchSessions]);
 
   // Focus rename input when renaming
   useEffect(() => {

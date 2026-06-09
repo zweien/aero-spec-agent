@@ -99,6 +99,7 @@ const API_BASE_URL =
 export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const [previewSource, setPreviewSource] = useState<CadPreviewSource | null>(
     null,
   );
@@ -304,6 +305,7 @@ export default function Home() {
       const vNo = data.version_no;
       if (!vNo) return;
       setDesignId(convId);
+      setSidebarRefreshKey((k) => k + 1);
       void loadVersion(convId, vNo).then(() => fetchVersionList(convId)).catch(() => {});
     },
     [conversationId, loadVersion, fetchVersionList],
@@ -552,6 +554,7 @@ export default function Home() {
           apiBaseUrl={API_BASE_URL}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          refreshKey={sidebarRefreshKey}
         />
         <div className="chat-column" style={{ width: `${chatWidth}%` }}>
           {conversationId ? (
