@@ -1,0 +1,202 @@
+# Expert Knowledge — Geometry & Sizing Reference Values
+#
+# Each entry is a typical-value range or recommended formula condensed from
+# classical aircraft conceptual-design textbooks. Values are intentionally
+# expressed as ranges, not single numbers, because conceptual-design texts
+# present them as design windows.
+#
+# Schema:
+#   id:              kebab-case unique identifier
+#   topic:           short topic key (used by lookup API)
+#   applies_to:      list of aircraft categories the value is valid for
+#   metric:          field name matching design_rules / extended_metrics
+#   range:           [low, high]           # typical / preferred window
+#   warn_range:      [low, high]           # acceptable but flagged window
+#   unit:            SI unit
+#   summary_zh:      one-line Chinese summary (UI hint)
+#   summary_en:      one-line English summary
+#   sources:         list of source citations
+#     - book: book_id from books.yaml
+#       chapter: optional chapter / section reference
+#       note: optional clarification
+
+schema_version: "0.1"
+
+entries:
+  - id: aspect-ratio-uav-long-endurance
+    topic: aspect_ratio
+    applies_to: [long_endurance_uav, hale_uav, male_uav, fixed_wing_uav]
+    metric: aspect_ratio
+    range: [12.0, 25.0]
+    warn_range: [9.0, 30.0]
+    unit: ""
+    summary_zh: "长航时无人机展弦比典型 12~25, 高高空 HALE 接近 25~30."
+    summary_en: "Long-endurance UAV aspect ratio typically 12-25; HALE up to 30."
+    sources:
+      - book: raymer
+        chapter: "Ch.4 Wing Geometry, Table 4.1"
+      - book: liuhu
+        chapter: "Ch.5 机翼参数选择"
+      - book: yuxiongqing
+        chapter: "Ch.4 机翼几何参数"
+
+  - id: aspect-ratio-civil-airliner
+    topic: aspect_ratio
+    applies_to: [airliner, civil_transport]
+    metric: aspect_ratio
+    range: [8.0, 11.0]
+    warn_range: [6.5, 12.5]
+    unit: ""
+    summary_zh: "现代民用客机展弦比 8~11, 极少超过 12."
+    summary_en: "Modern airliner aspect ratio 8-11."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.3 机翼"
+      - book: raymer
+        chapter: "Ch.4 Wing Geometry"
+
+  - id: aspect-ratio-fighter
+    topic: aspect_ratio
+    applies_to: [fighter, stealth_fighter]
+    metric: aspect_ratio
+    range: [2.2, 4.5]
+    warn_range: [1.8, 5.5]
+    unit: ""
+    summary_zh: "战斗机展弦比 2~4, 兼顾机动与超音速."
+    summary_en: "Fighter aspect ratio 2-4 trades manoeuvre vs supersonic drag."
+    sources:
+      - book: nwpu
+        chapter: "战斗机机翼参数"
+      - book: gusongfen
+        chapter: "战斗机概念设计"
+
+  - id: taper-ratio-conventional
+    topic: taper_ratio
+    applies_to: [fixed_wing_uav, airliner, civil_transport, general_aviation]
+    metric: taper_ratio
+    range: [0.30, 0.55]
+    warn_range: [0.20, 0.70]
+    unit: ""
+    summary_zh: "常规梯形翼梢根比 0.3~0.55, 兼顾结构与气动."
+    summary_en: "Tapered wing typical taper ratio 0.3-0.55."
+    sources:
+      - book: raymer
+        chapter: "Ch.4.4 Taper Ratio"
+      - book: liuhu
+        chapter: "Ch.5 翼平面形状"
+
+  - id: wing-loading-long-endurance-uav
+    topic: wing_loading
+    applies_to: [long_endurance_uav, male_uav, fixed_wing_uav]
+    metric: wing_loading_kg_m2
+    range: [40, 90]
+    warn_range: [25, 120]
+    unit: "kg/m²"
+    summary_zh: "长航时无人机翼载 40~90 kg/m², 低翼载有利续航."
+    summary_en: "Long-endurance UAV wing loading 40-90 kg/m^2."
+    sources:
+      - book: raymer
+        chapter: "Ch.5 Wing Loading and T/W"
+      - book: yuxiongqing
+        chapter: "Ch.6 翼载荷选择"
+
+  - id: wing-loading-airliner
+    topic: wing_loading
+    applies_to: [airliner, civil_transport]
+    metric: wing_loading_kg_m2
+    range: [500, 700]
+    warn_range: [400, 800]
+    unit: "kg/m²"
+    summary_zh: "现代民航翼载 500~700 kg/m²."
+    summary_en: "Modern airliner wing loading 500-700 kg/m^2."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.4 翼载荷"
+      - book: raymer
+        chapter: "Ch.5"
+
+  - id: thrust-to-weight-male-uav
+    topic: thrust_to_weight
+    applies_to: [long_endurance_uav, male_uav, fixed_wing_uav]
+    metric: thrust_to_weight
+    range: [0.18, 0.30]
+    warn_range: [0.12, 0.45]
+    unit: ""
+    summary_zh: "MALE 无人机推重比 0.18~0.30 (活塞/涡桨)."
+    summary_en: "MALE UAV T/W 0.18-0.30 (piston / turboprop)."
+    sources:
+      - book: raymer
+        chapter: "Ch.5 T/W Selection"
+      - book: liuhu
+        chapter: "Ch.7 推重比"
+
+  - id: thrust-to-weight-airliner
+    topic: thrust_to_weight
+    applies_to: [airliner, civil_transport]
+    metric: thrust_to_weight
+    range: [0.25, 0.35]
+    warn_range: [0.22, 0.40]
+    unit: ""
+    summary_zh: "民航客机推重比 0.25~0.35."
+    summary_en: "Airliner T/W typically 0.25-0.35."
+    sources:
+      - book: civil_uav_design
+        chapter: "Ch.5 推重比"
+
+  - id: thrust-to-weight-fighter
+    topic: thrust_to_weight
+    applies_to: [fighter, stealth_fighter]
+    metric: thrust_to_weight
+    range: [0.85, 1.20]
+    warn_range: [0.70, 1.40]
+    unit: ""
+    summary_zh: "现代战斗机推重比 0.85~1.20, 第五代接近或超过 1."
+    summary_en: "Modern fighter T/W 0.85-1.20."
+    sources:
+      - book: nwpu
+        chapter: "战斗机推重比"
+      - book: gusongfen
+        chapter: "Ch.6 战斗机性能"
+
+  - id: fuselage-fineness-ratio
+    topic: fuselage_fineness
+    applies_to: [fixed_wing_uav, airliner, civil_transport, general_aviation]
+    metric: fineness_ratio
+    range: [6.0, 10.0]
+    warn_range: [4.0, 14.0]
+    unit: ""
+    summary_zh: "亚音速机身长径比 6~10, 兼顾阻力与容积."
+    summary_en: "Subsonic fuselage fineness ratio L/D = 6-10."
+    sources:
+      - book: raymer
+        chapter: "Ch.6 Fuselage Sizing"
+      - book: yuxiongqing
+        chapter: "Ch.5 机身参数"
+
+  - id: tail-volume-coefficient-h
+    topic: htail_volume
+    applies_to: [fixed_wing_uav, airliner, general_aviation]
+    metric: htail_volume
+    range: [0.50, 0.80]
+    warn_range: [0.30, 1.00]
+    unit: ""
+    summary_zh: "水平尾容量系数 Vh 典型 0.5~0.8."
+    summary_en: "Horizontal tail volume coefficient Vh = 0.5-0.8."
+    sources:
+      - book: raymer
+        chapter: "Ch.6 Tail Sizing"
+      - book: liuhu
+        chapter: "Ch.6 尾翼"
+
+  - id: tail-volume-coefficient-v
+    topic: vtail_volume
+    applies_to: [fixed_wing_uav, airliner, general_aviation]
+    metric: vtail_volume
+    range: [0.04, 0.09]
+    warn_range: [0.02, 0.12]
+    unit: ""
+    summary_zh: "垂直尾容量系数 Vv 典型 0.04~0.09."
+    summary_en: "Vertical tail volume coefficient Vv = 0.04-0.09."
+    sources:
+      - book: raymer
+        chapter: "Ch.6 Tail Sizing"

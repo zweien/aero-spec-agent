@@ -32,6 +32,10 @@ type VersionResponse = {
       estimates: PerformanceEstimateEntry[];
       summary: Record<string, number>;
     };
+    extended_metrics?: {
+      metrics: ExtendedMetricEntry[];
+      summary: Record<string, number>;
+    };
     vspaero_analysis?: VspaeroAnalysisEntry;
     design_metrics?: {
       wingspan_m?: number;
@@ -59,6 +63,19 @@ export type DesignRuleEntry = {
 
 export type PerformanceEstimateEntry = {
   estimate_id: string;
+  label: string;
+  value: number;
+  unit: string;
+  confidence: "high" | "medium" | "low";
+  method: string;
+  status: "reasonable" | "warning" | "unusual";
+  typical_range: string;
+  message: string;
+};
+
+export type ExtendedMetricEntry = {
+  metric_id: string;
+  category: "volume" | "loading" | "stealth";
   label: string;
   value: number;
   unit: string;
@@ -104,6 +121,7 @@ export default function Home() {
   const [pendingChanges, setPendingChanges] = useState<Map<string, string | number>>(new Map());
   const [designRules, setDesignRules] = useState<DesignRuleEntry[] | null>(null);
   const [perfEstimates, setPerfEstimates] = useState<PerformanceEstimateEntry[] | null>(null);
+  const [extendedMetrics, setExtendedMetrics] = useState<ExtendedMetricEntry[] | null>(null);
   const [aeroAnalysis, setAeroAnalysis] = useState<VspaeroAnalysisEntry | null>(null);
   const [designMetrics, setDesignMetrics] = useState<CompareMetrics | null>(null);
   const [versionList, setVersionList] = useState<number[]>([]);
@@ -197,6 +215,9 @@ export default function Home() {
       );
       setPerfEstimates(
         version.validation_report?.performance_estimate?.estimates ?? null,
+      );
+      setExtendedMetrics(
+        version.validation_report?.extended_metrics?.metrics ?? null,
       );
       setAeroAnalysis(
         version.validation_report?.vspaero_analysis ?? null,
@@ -573,11 +594,13 @@ export default function Home() {
       <VersionPanel
         designRules={designRules}
         perfEstimates={perfEstimates}
+        extendedMetrics={extendedMetrics}
         aeroAnalysis={aeroAnalysis}
         designMetrics={designMetrics}
+        designId={designId}
+        apiBaseUrl={API_BASE_URL}
         versionList={versionList}
         currentVersionNo={currentVersionNo}
-        designId={designId}
         onCompare={handleCompare}
         onCancelCompare={handleCancelCompare}
         onSelectVersion={handleSelectVersion}

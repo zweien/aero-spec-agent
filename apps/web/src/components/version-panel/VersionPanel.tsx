@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 
-import type { DesignRuleEntry, PerformanceEstimateEntry, VspaeroAnalysisEntry } from "@/app/page";
+import type { DesignRuleEntry, ExtendedMetricEntry, PerformanceEstimateEntry, VspaeroAnalysisEntry } from "@/app/page";
 import { VersionCompare } from "./VersionCompare";
 import { AddToCompareButton } from "@/components/compare/AddToCompareButton";
+import { HistoricalComparePanel } from "@/components/historical/HistoricalComparePanel";
+import { ExpertAdvisoryPanel } from "@/components/historical/ExpertAdvisoryPanel";
 import type { CompareItem, CompareMetrics } from "@/components/compare/types";
 import { DesignMetricsCard } from "@/components/metrics/DesignMetricsCard";
 
@@ -20,6 +22,10 @@ type VersionResponse = {
       estimates: PerformanceEstimateEntry[];
       summary: Record<string, number>;
     };
+    extended_metrics?: {
+      metrics: ExtendedMetricEntry[];
+      summary: Record<string, number>;
+    };
     vspaero_analysis?: VspaeroAnalysisEntry;
   };
 };
@@ -27,11 +33,13 @@ type VersionResponse = {
 type VersionPanelProps = {
   designRules?: DesignRuleEntry[] | null;
   perfEstimates?: PerformanceEstimateEntry[] | null;
+  extendedMetrics?: ExtendedMetricEntry[] | null;
   aeroAnalysis?: VspaeroAnalysisEntry | null;
   designMetrics?: CompareMetrics | null;
   versionList?: number[];
   currentVersionNo?: number;
   designId?: string | null;
+  apiBaseUrl?: string;
   onCompare?: (v1: number, v2: number) => void;
   onCancelCompare?: () => void;
   onSelectVersion?: (versionNo: number) => void;
@@ -45,11 +53,13 @@ type VersionPanelProps = {
 export function VersionPanel({
   designRules,
   perfEstimates,
+  extendedMetrics,
   aeroAnalysis,
   designMetrics,
   versionList,
   currentVersionNo,
   designId,
+  apiBaseUrl,
   onCompare,
   onCancelCompare,
   onSelectVersion,
@@ -62,7 +72,7 @@ export function VersionPanel({
   const [compareMode, setCompareMode] = useState(false);
   const [selectedFirst, setSelectedFirst] = useState<number | null>(null);
 
-  const hasContent = (designRules && designRules.length > 0) || (perfEstimates && perfEstimates.length > 0) || aeroAnalysis || designMetrics;
+  const hasContent = (designRules && designRules.length > 0) || (perfEstimates && perfEstimates.length > 0) || (extendedMetrics && extendedMetrics.length > 0) || aeroAnalysis || designMetrics;
   const hasVersions = versionList && versionList.length > 0;
 
   if (!hasContent && !hasVersions) return null;
@@ -163,6 +173,23 @@ export function VersionPanel({
           )}
           {perfEstimates && perfEstimates.length > 0 && (
             <PerformanceEstimateSummary estimates={perfEstimates} />
+          )}
+          {extendedMetrics && extendedMetrics.length > 0 && (
+            <ExtendedMetricsSummary metrics={extendedMetrics} />
+          )}
+          {designId && apiBaseUrl && (
+            <HistoricalComparePanel
+              apiBaseUrl={apiBaseUrl}
+              designId={designId}
+              versionNo={currentVersionNo}
+            />
+          )}
+          {designId && apiBaseUrl && (
+            <ExpertAdvisoryPanel
+              apiBaseUrl={apiBaseUrl}
+              designId={designId}
+              versionNo={currentVersionNo}
+            />
           )}
           {aeroAnalysis && <VspaeroSummary analysis={aeroAnalysis} />}
           {designMetrics && <DesignMetricsSummary metrics={designMetrics} />}
@@ -335,6 +362,82 @@ function PerformanceEstimateSummary({ estimates }: { estimates: PerformanceEstim
               <span className="design-rule-msg">{e.message}</span>
             </div>
           ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  volume: "容积",
+  loading: "装载",
+  stealth: "隐身",
+};
+
+function ExtendedMetricsSummary({ metrics }: { metrics: ExtendedMetricEntry[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const counts = { reasonable: 0, warning: 0, unusual: 0 };
+  for (const m of metrics) counts[m.status]++;
+
+  const grouped: Record<string, ExtendedMetricEntry[]> = { volume: [], loading: [], stealth: [] };
+  for (const m of metrics) grouped[m.category]?.push(m);
+
+  return (
+    <span className="design-rules">
+      <button
+        type="button"
+        className="design-rules-toggle"
+        onClick={() => setExpanded(!expanded)}
+      >
+        容积/装载/隐身
+        {counts.unusual > 0 && (
+          <span className="design-rule-pill design-rule-pill-fail">{counts.unusual}</span>
+        )}
+        {counts.warning > 0 && (
+          <span className="design-rule-pill design-rule-pill-warn">{counts.warning}</span>
+        )}
+        {counts.unusual === 0 && counts.warning === 0 && (
+          <span className="design-rule-pill design-rule-pill-pass">{counts.reasonable}</span>
+        )}
+        <span className="design-rules-arrow">{expanded ? "▾" : "▸"}</span>
+      </button>
+      {expanded && (
+        <div className="design-rules-list">
+          <div className="design-rules-bar">
+            <span className="design-rule-pill design-rule-pill-pass">合理 {counts.reasonable}</span>
+            {counts.warning > 0 && (
+              <span className="design-rule-pill design-rule-pill-warn">偏离 {counts.warning}</span>
+            )}
+            {counts.unusual > 0 && (
+              <span className="design-rule-pill design-rule-pill-fail">异常 {counts.unusual}</span>
+            )}
+          </div>
+          {(["volume", "loading", "stealth"] as const).map((cat) => {
+            const items = grouped[cat];
+            if (!items || items.length === 0) return null;
+            return (
+              <div key={cat}>
+                <div className="design-rule-section-title">{CATEGORY_LABEL[cat]}</div>
+                {items.map((m) => (
+                  <div
+                    key={m.metric_id}
+                    className={`design-rule-row design-rule-${m.status === "warning" ? "warn" : m.status === "unusual" ? "fail" : "pass"}`}
+                  >
+                    <span className="design-rule-icon">{PERF_STATUS_ICON[m.status]}</span>
+                    <span className="design-rule-label">{m.label}</span>
+                    <span className="design-rule-value">
+                      {Number.isInteger(m.value) ? m.value : m.value.toFixed(3)}
+                      {m.unit ? ` ${m.unit}` : ""}
+                    </span>
+                    <span className="design-rule-expected" title={m.method}>
+                      {CONFIDENCE_ICON[m.confidence]} {m.typical_range}
+                    </span>
+                    <span className="design-rule-msg">{m.message}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </span>

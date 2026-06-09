@@ -1,0 +1,54 @@
+# Expert Knowledge Source — Book Registry
+#
+# Index of classical aircraft conceptual-design textbooks referenced by the
+# expert-knowledge YAML files in this directory. Each entry uses a stable
+# `book_id` that knowledge entries cite as `source.book_id`.
+#
+# Sources listed here are public, widely-cited textbooks. Entries pointing
+# to specific page numbers are cited from common editions; minor pagination
+# differences across printings are expected.
+
+schema_version: "0.1"
+
+books:
+  raymer:
+    title: "Aircraft Design: A Conceptual Approach"
+    author: "Daniel P. Raymer"
+    publisher: "AIAA Education Series"
+    edition: "6th edition"
+    language: en
+    note: "Industry-standard reference for civil and military conceptual design."
+
+  liuhu:
+    title: "飞机总体设计"
+    author: "刘虎, 罗明强, 孙康文"
+    publisher: "北京航空航天大学出版社"
+    language: zh-CN
+    note: "面向中国高校的总体设计教材, 含具体经验值与算例."
+
+  yuxiongqing:
+    title: "飞机总体设计"
+    author: "余雄庆"
+    publisher: "国防工业出版社"
+    language: zh-CN
+    note: "南京航空航天大学课程教材."
+
+  nwpu:
+    title: "飞机总体设计"
+    author: "西北工业大学"
+    publisher: "西北工业大学出版社"
+    language: zh-CN
+    note: "西工大经典教材, 重点关注军用飞机概念设计."
+
+  gusongfen:
+    title: "飞机总体设计"
+    author: "顾诵芬 等"
+    publisher: "国防工业出版社"
+    language: zh-CN
+    note: "国内权威教材, 含较多型号实例分析."
+
+  civil_uav_design:
+    title: "民用飞机总体设计"
+    publisher: "航空工业出版社"
+    language: zh-CN
+    note: "面向民用大型飞机总体设计的教材."
