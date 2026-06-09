@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import asyncio
 from collections.abc import AsyncIterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -250,20 +251,70 @@ class ChatService:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
         if self._index is not None:
-            title: str | None = None
             msg_count = len(state.messages)
-            if msg_count > 0:
-                for m in state.messages:
-                    if m.get("role") == "user" and m.get("content"):
-                        title = m["content"][:30]
-                        break
             update_kwargs: dict = {
                 "message_count": msg_count,
                 "design_id": state.design_id,
             }
-            if title is not None:
-                update_kwargs["title"] = title
+            # Only set auto-title when no title exists yet (first user message placeholder)
+            existing = self._index.get_entry(state.conversation_id)
+            if existing is None or not existing.get("title"):
+                if msg_count > 0:
+                    for m in state.messages:
+                        if m.get("role") == "user" and m.get("content"):
+                            update_kwargs["title"] = m["content"][:30]
+                            break
             self._index.update_entry(state.conversation_id, **update_kwargs)
+
+    async def _maybe_generate_title(self, state: ConversationState) -> None:
+        """Generate an LLM-based title after the first conversation exchange."""
+        if self._index is None:
+            return
+        entry = self._index.get_entry(state.conversation_id)
+        if entry is None:
+            return
+        current_title = entry.get("title", "")
+        # Skip if already LLM-renamed or manually renamed (not the auto-generated placeholder)
+        first_user_msg = ""
+        for m in state.messages:
+            if m.get("role") == "user" and m.get("content"):
+                first_user_msg = m["content"][:30]
+                break
+        if current_title and current_title != first_user_msg and current_title != "新对话":
+            return
+
+        user_msg = ""
+        assistant_msg = ""
+        for m in state.messages:
+            if m.get("role") == "user" and not user_msg and m.get("content"):
+                user_msg = m["content"]
+            if m.get("role") == "assistant" and not assistant_msg and m.get("content"):
+                assistant_msg = m["content"]
+        if not user_msg:
+            return
+
+        prompt = f"用户说：{user_msg[:300]}"
+        if assistant_msg:
+            prompt += f"\n助手回复：{assistant_msg[:200]}"
+        prompt += "\n\n请生成对话标题："
+
+        try:
+            response = await self._get_client().chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": "根据对话内容生成简短中文标题（10字以内，纯文字，无引号无标点）。只输出标题文字。"},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=20,
+                temperature=0.3,
+            )
+            title = ""
+            if response.choices and response.choices[0].message.content:
+                title = response.choices[0].message.content.strip()[:20]
+            if title:
+                self._index.update_entry(state.conversation_id, title=title)
+        except Exception:
+            logger.debug("LLM title generation failed, keeping current title")
 
     def _get_client(self) -> AsyncOpenAI:
         if self._client is None:
@@ -366,185 +417,189 @@ class ChatService:
         tool_calls_collected: dict[int, dict[str, Any]] = {}
 
         try:
-            response = await self._get_client().chat.completions.create(
-                model=self._model,
-                messages=api_messages,
-                tools=self.build_tools(),
-                stream=True,
-            )
+            try:
+                response = await self._get_client().chat.completions.create(
+                    model=self._model,
+                    messages=api_messages,
+                    tools=self.build_tools(),
+                    stream=True,
+                )
 
-            async for chunk in response:
-                choice = chunk.choices[0] if chunk.choices else None
-                if choice is None:
-                    continue
+                async for chunk in response:
+                    choice = chunk.choices[0] if chunk.choices else None
+                    if choice is None:
+                        continue
 
-                delta = choice.delta
+                    delta = choice.delta
 
-                if delta.content:
-                    collected_content += delta.content
-                    yield _sse_event("message", delta.content)
+                    if delta.content:
+                        collected_content += delta.content
+                        yield _sse_event("message", delta.content)
 
-                if delta.tool_calls:
-                    for tc in delta.tool_calls:
-                        if tc.index not in tool_calls_collected:
-                            tool_calls_collected[tc.index] = {
-                                "id": tc.id or "",
-                                "name": "",
-                                "arguments": "",
-                            }
-                        if tc.id:
-                            tool_calls_collected[tc.index]["id"] = tc.id
-                        if tc.function:
-                            if tc.function.name:
-                                tool_calls_collected[tc.index]["name"] = tc.function.name
-                            if tc.function.arguments:
-                                tool_calls_collected[tc.index]["arguments"] += tc.function.arguments
+                    if delta.tool_calls:
+                        for tc in delta.tool_calls:
+                            if tc.index not in tool_calls_collected:
+                                tool_calls_collected[tc.index] = {
+                                    "id": tc.id or "",
+                                    "name": "",
+                                    "arguments": "",
+                                }
+                            if tc.id:
+                                tool_calls_collected[tc.index]["id"] = tc.id
+                            if tc.function:
+                                if tc.function.name:
+                                    tool_calls_collected[tc.index]["name"] = tc.function.name
+                                if tc.function.arguments:
+                                    tool_calls_collected[tc.index]["arguments"] += tc.function.arguments
 
-                if choice.finish_reason == "tool_calls":
-                    break
-        except Exception as exc:
-            error_msg = str(exc)
-            yield _sse_event("error", {"content": error_msg})
-            self._save_state(state)
-            return
+                    if choice.finish_reason == "tool_calls":
+                        break
+            except Exception as exc:
+                error_msg = str(exc)
+                yield _sse_event("error", {"content": error_msg})
+                return
 
-        assistant_msg: dict[str, Any] = {"role": "assistant", "content": collected_content or None}
-        if tool_calls_collected:
-            assistant_msg["tool_calls"] = []
+            assistant_msg: dict[str, Any] = {"role": "assistant", "content": collected_content or None}
+            if tool_calls_collected:
+                assistant_msg["tool_calls"] = []
+                for idx in sorted(tool_calls_collected):
+                    tc_data = tool_calls_collected[idx]
+                    assistant_msg["tool_calls"].append({
+                        "id": tc_data["id"],
+                        "type": "function",
+                        "function": {
+                            "name": tc_data["name"],
+                            "arguments": tc_data["arguments"],
+                        },
+                    })
+
+            state.messages.append(assistant_msg)
+
+            if not tool_calls_collected:
+                if is_fallback_enabled():
+                    intent = detect_generation_intent(
+                        user_message=message,
+                        assistant_text=collected_content,
+                        has_current_design=state.current_spec is not None,
+                        selected_part=state.selected_refs[0] if state.selected_refs else None,
+                    )
+                    if intent:
+                        logger.info(
+                            "no-tool-call fallback: tool=%s confidence=%.2f msg=%.60s",
+                            intent.tool_name,
+                            intent.confidence,
+                            message,
+                        )
+                        yield _sse_event("fallback_tool_detected", {
+                            "tool_name": intent.tool_name,
+                            "confidence": intent.confidence,
+                            "source": intent.source,
+                        })
+                        yield _sse_event("tool_call", {
+                            "name": intent.tool_name,
+                            "arguments": json.dumps(intent.args, ensure_ascii=False),
+                        })
+                        handler_map = {
+                            "generate_design": self._handle_generate_design,
+                            "modify_design": self._handle_modify_design,
+                            "modify_selected_part": self._handle_modify_selected_part,
+                        }
+                        handler = handler_map.get(intent.tool_name)
+                        if handler:
+                            async for event in handler(
+                                state,
+                                intent.args,
+                                f"fallback-{intent.tool_name}",
+                                background_tasks=background_tasks,
+                            ):
+                                yield event
+                asyncio.ensure_future(self._maybe_generate_title(state))
+                return
+
             for idx in sorted(tool_calls_collected):
                 tc_data = tool_calls_collected[idx]
-                assistant_msg["tool_calls"].append({
-                    "id": tc_data["id"],
-                    "type": "function",
-                    "function": {
-                        "name": tc_data["name"],
-                        "arguments": tc_data["arguments"],
-                    },
-                })
+                tool_name = tc_data["name"]
+                tool_args_str = tc_data["arguments"]
+                tool_call_id = tc_data["id"]
 
-        state.messages.append(assistant_msg)
-
-        if not tool_calls_collected:
-            if is_fallback_enabled():
-                intent = detect_generation_intent(
-                    user_message=message,
-                    assistant_text=collected_content,
-                    has_current_design=state.current_spec is not None,
-                    selected_part=state.selected_refs[0] if state.selected_refs else None,
+                yield _sse_event("tool_call", {"name": tool_name, "arguments": tool_args_str})
+                logger.debug(
+                    "chat shadow_intent_actual_tool=%s",
+                    json.dumps(
+                        {
+                            "message": message,
+                            "selected_refs": state.selected_refs,
+                            "shadow_intent": shadow_intent,
+                            "actual_tool": tool_name,
+                        },
+                        ensure_ascii=False,
+                    ),
                 )
-                if intent:
-                    logger.info(
-                        "no-tool-call fallback: tool=%s confidence=%.2f msg=%.60s",
-                        intent.tool_name,
-                        intent.confidence,
-                        message,
-                    )
-                    yield _sse_event("fallback_tool_detected", {
-                        "tool_name": intent.tool_name,
-                        "confidence": intent.confidence,
-                        "source": intent.source,
+
+                try:
+                    tool_args = json.loads(tool_args_str)
+                except json.JSONDecodeError:
+                    tool_result = json.dumps({"error": "invalid JSON arguments"}, ensure_ascii=False)
+                    state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": tool_result})
+                    continue
+
+                if tool_name == "generate_design":
+                    async for event in self._handle_generate_design(
+                        state,
+                        tool_args,
+                        tool_call_id,
+                        background_tasks=background_tasks,
+                    ):
+                        yield event
+                elif tool_name == "modify_design":
+                    async for event in self._handle_modify_design(
+                        state,
+                        tool_args,
+                        tool_call_id,
+                        background_tasks=background_tasks,
+                    ):
+                        yield event
+                elif tool_name == "modify_selected_part":
+                    async for event in self._handle_modify_selected_part(
+                        state,
+                        tool_args,
+                        tool_call_id,
+                        background_tasks=background_tasks,
+                    ):
+                        yield event
+                else:
+                    state.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": json.dumps({"error": f"unknown tool: {tool_name}"}, ensure_ascii=False),
                     })
-                    yield _sse_event("tool_call", {
-                        "name": intent.tool_name,
-                        "arguments": json.dumps(intent.args, ensure_ascii=False),
-                    })
-                    handler_map = {
-                        "generate_design": self._handle_generate_design,
-                        "modify_design": self._handle_modify_design,
-                        "modify_selected_part": self._handle_modify_selected_part,
-                    }
-                    handler = handler_map.get(intent.tool_name)
-                    if handler:
-                        async for event in handler(
-                            state,
-                            intent.args,
-                            f"fallback-{intent.tool_name}",
-                            background_tasks=background_tasks,
-                        ):
-                            yield event
+
+            # Save intermediate state (current_spec + tool results) before second LLM call
             self._save_state(state)
-            return
 
-        for idx in sorted(tool_calls_collected):
-            tc_data = tool_calls_collected[idx]
-            tool_name = tc_data["name"]
-            tool_args_str = tc_data["arguments"]
-            tool_call_id = tc_data["id"]
-
-            yield _sse_event("tool_call", {"name": tool_name, "arguments": tool_args_str})
-            logger.debug(
-                "chat shadow_intent_actual_tool=%s",
-                json.dumps(
-                    {
-                        "message": message,
-                        "selected_refs": state.selected_refs,
-                        "shadow_intent": shadow_intent,
-                        "actual_tool": tool_name,
-                    },
-                    ensure_ascii=False,
-                ),
-            )
-
+            final_content = ""
             try:
-                tool_args = json.loads(tool_args_str)
-            except json.JSONDecodeError:
-                tool_result = json.dumps({"error": "invalid JSON arguments"}, ensure_ascii=False)
-                state.messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": tool_result})
-                continue
+                second_response = await self._get_client().chat.completions.create(
+                    model=self._model,
+                    messages=[{"role": "system", "content": system_prompt}] + state.messages,
+                    stream=True,
+                )
 
-            if tool_name == "generate_design":
-                async for event in self._handle_generate_design(
-                    state,
-                    tool_args,
-                    tool_call_id,
-                    background_tasks=background_tasks,
-                ):
-                    yield event
-            elif tool_name == "modify_design":
-                async for event in self._handle_modify_design(
-                    state,
-                    tool_args,
-                    tool_call_id,
-                    background_tasks=background_tasks,
-                ):
-                    yield event
-            elif tool_name == "modify_selected_part":
-                async for event in self._handle_modify_selected_part(
-                    state,
-                    tool_args,
-                    tool_call_id,
-                    background_tasks=background_tasks,
-                ):
-                    yield event
-            else:
-                state.messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "content": json.dumps({"error": f"unknown tool: {tool_name}"}, ensure_ascii=False),
-                })
+                async for chunk in second_response:
+                    choice = chunk.choices[0] if chunk.choices else None
+                    if choice and choice.delta and choice.delta.content:
+                        final_content += choice.delta.content
+                        yield _sse_event("message", choice.delta.content)
+            except Exception as exc:
+                yield _sse_event("error", {"content": str(exc)})
+                return
 
-        final_content = ""
-        try:
-            second_response = await self._get_client().chat.completions.create(
-                model=self._model,
-                messages=[{"role": "system", "content": system_prompt}] + state.messages,
-                stream=True,
-            )
+            if final_content:
+                state.messages.append({"role": "assistant", "content": final_content})
 
-            async for chunk in second_response:
-                choice = chunk.choices[0] if chunk.choices else None
-                if choice and choice.delta and choice.delta.content:
-                    final_content += choice.delta.content
-                    yield _sse_event("message", choice.delta.content)
-        except Exception as exc:
-            yield _sse_event("error", {"content": str(exc)})
+            await self._maybe_generate_title(state)
+        finally:
             self._save_state(state)
-            return
-
-        if final_content:
-            state.messages.append({"role": "assistant", "content": final_content})
-
-        self._save_state(state)
 
     async def _handle_generate_design(
         self,

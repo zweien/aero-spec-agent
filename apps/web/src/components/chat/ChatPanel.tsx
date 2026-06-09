@@ -807,11 +807,8 @@ export function ChatPanel({
   }, [registerToolAction, startToolAction]);
 
   // --- Conversation state loading ---
-  const prevConvIdRef = useRef(conversationId);
   useEffect(() => {
     if (!conversationId) return;
-    if (prevConvIdRef.current === conversationId) return;
-    prevConvIdRef.current = conversationId;
 
     const abort = new AbortController();
     setStatus("idle");

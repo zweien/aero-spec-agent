@@ -56,7 +56,6 @@ def create_conversation(req: ConversationCreateRequest | None = None):
     chat_svc._save_state(state)
     index.update_entry(
         conversation_id,
-        title="",
         message_count=len(state.messages),
         design_id=state.design_id,
     )

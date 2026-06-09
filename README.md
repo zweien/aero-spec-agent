@@ -272,6 +272,66 @@ Type natural language in the chat panel:
 
 The LLM generates a full `AircraftSpec`, calls OpenVSP, and shows the 3D model with a tool card.
 
+### Design Prompt Examples
+
+Below are example prompts covering all 11 supported aerodynamic layouts. Copy any of these into the chat panel to generate a design.
+
+**Conventional (常规布局)**
+> 设计一架翼展10米、单发、上单翼、常规尾翼的长航时侦察无人机，巡航速度150km/h
+
+> 一架双发中单翼运输无人机，翼展14米，载荷50kg，V尾
+
+**Twin Boom (双尾撑)**
+> 设计一架双尾撑推进式无人机，翼展6米，尾推发动机，用于航拍测绘
+
+> 一架双尾撑侦察无人机，翼展4米，单发推进，巡航速度120km/h
+
+**Flying Wing (飞翼)**
+> 设计一架飞翼布局无人机，翼展5米，单发，用于隐身侦察
+
+> 一架飞翼无人机，翼展8米，双发，三角翼，巡航速度200km/h
+
+**Blended Wing Body (翼身融合)**
+> 设计一架翼身融合布局无人机，翼展12米，单发，用于长航时巡逻
+
+> 一架BWB运输无人机，翼展15米，双发，载荷100kg
+
+**Canard (鸭翼布局)**
+> 设计一架鸭翼布局无人机，翼展8米，单发，上单翼，用于高速侦察
+
+> 一架鸭翼气动布局无人机，翼展6米，双发，巡航速度180km/h
+
+**Three Surface (三翼面)**
+> 设计一架三翼面布局无人机，翼展10米，单发，兼具鸭翼和常规尾翼，用于高机动任务
+
+**Tandem Wing (串列翼)**
+> 设计一架串列翼布局无人机，翼展5米，单发，用于短距起降运输
+
+> 一架串列翼无人机，前后翼布局，翼展4米，载荷20kg
+
+**Biplane (双翼机)**
+> 设计一架双翼机布局无人机，翼展6米，单发，用于低速航拍和农业巡查
+
+> 一架双翼无人机，翼展4米，层翼间距1米，巡航速度80km/h
+
+**Joined Wing (连接翼)**
+> 设计一架连接翼布局无人机，翼展7米，单发，前后翼在翼尖连接，用于长航时监控
+
+**Box Wing (箱式翼)**
+> 设计一架箱式翼布局无人机，翼展8米，单发，上下翼通过端板连接，高升力运输
+
+**Multi-Fuselage (双机身)**
+> 设计一架双机身布局无人机，翼展16米，双发，用于大载荷远程运输
+
+---
+
+You can also modify an existing design after generation:
+
+> 把机翼后掠角改成25度
+> 机身加长2米
+> 把右发动机往外移0.5米
+> 改成V尾
+
 ### Deep Design Exploration
 
 After generating an initial design:
