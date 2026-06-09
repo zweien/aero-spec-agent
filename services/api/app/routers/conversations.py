@@ -42,6 +42,9 @@ def _require_services():
 def list_conversations():
     _, index = _require_services()
     entries = index.list_entries()
+    for e in entries:
+        if e.get("title") is None:
+            e["title"] = "新对话"
     return ConversationListResponse(conversations=entries)
 
 

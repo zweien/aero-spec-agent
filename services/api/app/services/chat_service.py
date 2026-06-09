@@ -250,19 +250,20 @@ class ChatService:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
         if self._index is not None:
-            title = None
+            title: str | None = None
             msg_count = len(state.messages)
             if msg_count > 0:
                 for m in state.messages:
                     if m.get("role") == "user" and m.get("content"):
                         title = m["content"][:30]
                         break
-            self._index.update_entry(
-                state.conversation_id,
-                title=title,
-                message_count=msg_count,
-                design_id=state.design_id,
-            )
+            update_kwargs: dict = {
+                "message_count": msg_count,
+                "design_id": state.design_id,
+            }
+            if title is not None:
+                update_kwargs["title"] = title
+            self._index.update_entry(state.conversation_id, **update_kwargs)
 
     def _get_client(self) -> AsyncOpenAI:
         if self._client is None:
