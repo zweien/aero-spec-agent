@@ -98,6 +98,7 @@ const API_BASE_URL =
 
 export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [previewSource, setPreviewSource] = useState<CadPreviewSource | null>(
     null,
   );
@@ -549,6 +550,8 @@ export default function Home() {
           onSelect={handleSwitchConversation}
           onNew={handleNewConversation}
           apiBaseUrl={API_BASE_URL}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
         />
         <div className="chat-column" style={{ width: `${chatWidth}%` }}>
           {conversationId ? (

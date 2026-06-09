@@ -22,6 +22,8 @@ type SessionSidebarProps = {
   onSelect: (id: string) => void;
   onNew: () => void;
   apiBaseUrl: string;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 };
 
 function relativeTime(iso: string): string {
@@ -45,6 +47,8 @@ export function SessionSidebar({
   onSelect,
   onNew,
   apiBaseUrl,
+  collapsed,
+  onToggleCollapse,
 }: SessionSidebarProps): JSX.Element {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,16 +181,43 @@ export function SessionSidebar({
     }
   }, [activeId, apiBaseUrl, deletingId, deleteError, onNew]);
 
+  if (collapsed) {
+    return (
+      <aside className="session-sidebar collapsed">
+        <button
+          type="button"
+          className="session-sidebar-toggle"
+          onClick={onToggleCollapse}
+          title="展开会话列表"
+        >
+          &#9776;
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="session-sidebar">
       <div className="session-sidebar-header">
-        <button
-          type="button"
-          className="session-sidebar-new"
-          onClick={onNew}
-        >
-          新建会话
-        </button>
+        <span>会话</span>
+        <div className="session-sidebar-header-actions">
+          <button
+            type="button"
+            className="session-sidebar-new"
+            onClick={onNew}
+            title="新建会话"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="session-sidebar-toggle"
+            onClick={onToggleCollapse}
+            title="收起会话列表"
+          >
+            &#9664;
+          </button>
+        </div>
       </div>
 
       <div className="session-sidebar-items">
