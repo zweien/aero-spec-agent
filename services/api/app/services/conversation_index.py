@@ -47,6 +47,10 @@ class ConversationIndex:
     def _now_iso() -> str:
         return datetime.now(timezone.utc).isoformat()
 
+    @staticmethod
+    def _ts_to_iso(ts: float) -> str:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -149,12 +153,13 @@ class ConversationIndex:
                         if isinstance(content, str):
                             title = content[:30]
                             break
+                stat = state_file.stat()
                 new_entries.append(
                     {
                         "conversation_id": conv_id,
                         "title": title,
-                        "created_at": now,
-                        "updated_at": now,
+                        "created_at": self._ts_to_iso(stat.st_ctime),
+                        "updated_at": self._ts_to_iso(stat.st_mtime),
                         "message_count": len(messages),
                         "design_id": data.get("design_id"),
                     }
