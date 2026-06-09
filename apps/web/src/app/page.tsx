@@ -164,7 +164,13 @@ export default function Home() {
         if (data && data.conversations.length > 0) {
           setConversationId(data.conversations[0].conversation_id);
         } else {
-          setConversationId(crypto.randomUUID());
+          const newId = crypto.randomUUID();
+          setConversationId(newId);
+          fetch(`${API_BASE_URL}/api/conversations`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conversation_id: newId }),
+          }).catch(() => {});
         }
       })
       .catch(() => {
@@ -211,6 +217,24 @@ export default function Home() {
       if (id !== conversationId) {
         resetDesignState();
         setConversationId(id);
+        // Restore design state from backend
+        fetch(`${API_BASE_URL}/api/conversations/${encodeURIComponent(id)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!data) return;
+            if (data.design_id) {
+              setDesignId(data.design_id);
+            }
+            if (data.current_spec) {
+              const spec = data.current_spec as AircraftSpecData;
+              setSpecData(spec);
+              setPreviewSpec(spec as unknown as AircraftPreviewSpec);
+            }
+            if (data.selected_refs?.length) {
+              setSelectedRefs(data.selected_refs);
+            }
+          })
+          .catch(() => {});
       }
     },
     [conversationId, resetDesignState],
@@ -218,7 +242,14 @@ export default function Home() {
 
   const handleNewConversation = useCallback(() => {
     resetDesignState();
-    setConversationId(crypto.randomUUID());
+    const newId = crypto.randomUUID();
+    setConversationId(newId);
+    // Create backend record so it appears in index immediately
+    fetch(`${API_BASE_URL}/api/conversations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation_id: newId }),
+    }).catch(() => {});
   }, [resetDesignState]);
 
   const registerSystemMessage = useCallback((fn: (text: string) => void) => {
