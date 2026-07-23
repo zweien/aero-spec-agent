@@ -489,14 +489,15 @@ async def _tool_modify(state, args: dict, background_tasks: BackgroundTasks):
 
 async def _tool_modify_selected(state, args: dict, background_tasks: BackgroundTasks):
     from services.api.app.routers.designs import _get_job_runner
-    from services.api.app.services.selected_part_modifier import apply_selected_part_modification
+    from services.api.app.services.selected_part_modifier import apply_selected_part_patch
 
     if state.current_spec is None:
         raise HTTPException(status_code=400, detail="no current design to modify")
 
     try:
-        patched = apply_selected_part_modification(
+        patched = apply_selected_part_patch(
             state.current_spec,
+            state.selected_refs,
             args.get("part_ref", ""),
             args.get("operation", ""),
             args.get("value"),

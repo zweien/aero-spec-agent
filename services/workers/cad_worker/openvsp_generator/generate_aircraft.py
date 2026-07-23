@@ -63,10 +63,13 @@ def _glb_parseable_entry(path: Path) -> dict[str, Any]:
 
 
 def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend, *, on_progress: ProgressCallback | None = None) -> GenerationResult:
+    # NOTE: many test doubles define generate(self, spec, output_dir) without
+    # on_progress. Until the CadBackend contract is made explicit (#2) and all
+    # doubles conform, keep this compat shim. Removing it here would break ~10
+    # tests whose mocks predate the on_progress parameter.
     try:
         artifacts = backend.generate(spec, output_dir, on_progress=on_progress)
     except TypeError:
-        # Backward compat: legacy backends that don't accept on_progress yet
         artifacts = backend.generate(spec, output_dir)
     artifact_files = _artifact_files(artifacts)
     backend_name = str(artifacts.metadata.get("backend", backend.__class__.__name__))
