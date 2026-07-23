@@ -837,6 +837,9 @@ export function ChatPanel({
           }));
 
         setMessages(restored);
+        // Advance the live counter past restored ids so newly-sent messages never
+        // collide with restored ones (avoids duplicate React keys like "msg-1").
+        messageCounterRef.current = Math.max(messageCounterRef.current, nextId);
       })
       .catch(() => {
         // AbortError expected on switch
@@ -867,7 +870,14 @@ export function ChatPanel({
         )}
 	        {messages.map((msg, msgIndex) => {
           const hasToolPart = msg.parts.some((p) => p.type === "tool");
-          const showPreliminaryTimeline = isStreaming && msg.role === "assistant" && !hasToolPart;
+          // Preliminary timeline only applies to the message currently being
+          // streamed (the last one). Without the last-message guard, every
+          // historical assistant message without a tool part would render its
+          // own live timeline during generation, causing the details panels to
+          // multiply and flicker.
+          const isLastMessage = msgIndex === messages.length - 1;
+          const showPreliminaryTimeline =
+            isStreaming && isLastMessage && msg.role === "assistant" && !hasToolPart;
 
           return (
             <div

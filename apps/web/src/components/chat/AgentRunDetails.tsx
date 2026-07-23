@@ -1,6 +1,6 @@
 "use client";
 
-import { type JSX, useEffect, useRef, useState } from "react";
+import { type JSX, useEffect, useState } from "react";
 import type { WorkflowRuntimeStage } from "@/hooks/useWorkflowRuntime";
 import { DefaultedFieldsNotice, type DefaultedField } from "@/components/runtime/DefaultedFieldsNotice";
 import { FallbackToolNotice } from "@/components/chat/FallbackToolNotice";
@@ -50,7 +50,6 @@ export function AgentRunDetails({
       return false;
     }
   });
-  const detailsRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
     try {
@@ -60,20 +59,22 @@ export function AgentRunDetails({
     }
   }, [isOpen]);
 
-  // Sync the <details> open state with React state
-  useEffect(() => {
-    if (detailsRef.current) {
-      detailsRef.current.open = isOpen;
-    }
-  }, [isOpen]);
-
-  const handleToggle = () => {
-    setIsOpen((prev) => !prev);
-  };
-
+  // Fully controlled <details>: the `open` prop is the single source of truth.
+  // We toggle on <summary> click instead of the <details> onToggle event.
+  // During generation the parent re-renders frequently; onToggle fires whenever
+  // the DOM open state diverges from the prop (e.g. node remount), which created
+  // a feedback loop flipping the panel open/closed repeatedly. Driving state from
+  // the click handler breaks that loop while keeping user clicks working.
   return (
-    <details id={id} className="agent-run-details" ref={detailsRef} onToggle={handleToggle}>
-      <summary>查看运行细节</summary>
+    <details id={id} className="agent-run-details" open={isOpen}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setIsOpen((prev) => !prev);
+        }}
+      >
+        查看运行细节
+      </summary>
       <div className="detail-grid">
         {jobId && (
           <div className="detail-row">
