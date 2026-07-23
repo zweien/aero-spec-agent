@@ -109,3 +109,13 @@ Single-page app with four panels: ChatPanel, ParameterPanel, CadViewer (Three.js
 - The fake backend must be used for all tests unless explicitly testing OpenVSP (`RUN_OPENVSP_TESTS=1`)
 - Design IDs must match `^[A-Za-z0-9_-]+$`
 - Version directories auto-increment; no deletion or reuse
+
+## Git Identity
+
+- Commit author MUST be the project developer: `zweien <278954153@qq.com>`
+- Before committing, verify with `git config user.name` / `git config user.email`.
+  Do NOT commit with a generic identity like `z` or a bot/noreply address — this
+  already happened once and required a history rewrite to fix.
+- `git config user.name` / `user.email` are set both globally and in this repo to
+  the values above. If a fresh clone or environment resets them, set them again
+  before the first commit.
