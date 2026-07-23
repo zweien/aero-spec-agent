@@ -317,11 +317,18 @@ async def patch_spec(
     return _job_response(job)
 
 
+def _run_vspaero_analysis() -> bool:
+    """VSPAERO analysis is ON by default. The solver runs in an isolated
+    subprocess with a hard timeout, so an unavailable/hung solver yields a
+    skipped result rather than blocking generation."""
+    return os.getenv("RUN_VSPAERO_ANALYSIS", "true").lower() not in ("0", "false", "no", "")
+
+
 @router.get("/settings")
 def get_settings():
     return {
         "cad_backend": os.getenv("CAD_BACKEND", "fake"),
-        "run_vspaero_analysis": os.getenv("RUN_VSPAERO_ANALYSIS", "").lower() in ("1", "true", "yes"),
+        "run_vspaero_analysis": _run_vspaero_analysis(),
     }
 
 
@@ -342,9 +349,9 @@ async def update_settings(request: Request):
 
     if "run_vspaero_analysis" in body:
         enabled = bool(body["run_vspaero_analysis"])
-        os.environ["RUN_VSPAERO_ANALYSIS"] = "true" if enabled else ""
+        os.environ["RUN_VSPAERO_ANALYSIS"] = "true" if enabled else "false"
 
     return {
         "cad_backend": os.getenv("CAD_BACKEND", "fake"),
-        "run_vspaero_analysis": os.getenv("RUN_VSPAERO_ANALYSIS", "").lower() in ("1", "true", "yes"),
+        "run_vspaero_analysis": _run_vspaero_analysis(),
     }

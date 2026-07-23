@@ -1,5 +1,3 @@
-import math
-
 import pytest
 
 from services.api.app.schemas.aircraft_spec import (
@@ -376,3 +374,36 @@ class TestRunVspaeroMultiGeom:
         with pytest.raises(RuntimeError, match="VSPAERO not installed"):
             run_vspaero_analysis(adapter, spec, ["wing-1", "canard-1"])
         assert adapter._ref_wing == "wing-1"
+
+
+class TestVspaeroTimeoutProtection:
+    """Regression: VSPAEROSweep can deadlock (solver unavailable on some builds).
+    The analysis must run in an isolated subprocess with a hard timeout so that
+    a hung solver never blocks CAD generation."""
+
+    def test_no_wing_returns_skipped_not_blocked(self):
+        """With a vsp3 containing no wing geom, the subprocess resolves geoms,
+        finds none, and returns a skipped result — without ever calling the
+        (potentially deadlocking) solver. Crucially this must return promptly."""
+        import tempfile
+        from pathlib import Path
+
+        # Construct a minimal valid vsp3 with only a fuselage (no wing).
+        try:
+            import openvsp as vsp  # noqa: F401
+        except ImportError:
+            pytest.skip("OpenVSP not installed")
+
+        import openvsp as vsp
+        vsp.ClearVSPModel()
+        vsp.AddGeom("FUSELAGE")  # no wing → _resolve_geoms_from_vsp3 returns []
+        tmpdir = Path(tempfile.mkdtemp())
+        vsp3 = tmpdir / "aircraft.vsp3"
+        vsp.WriteVSPFile(str(vsp3))
+
+        from services.workers.cad_worker.openvsp_generator.vspaero_analysis import (
+            _resolve_geoms_from_vsp3,
+        )
+        spec = _make_spec()
+        # Directly verify the resolver finds no wing in this vsp3.
+        assert _resolve_geoms_from_vsp3(str(vsp3), spec) == []

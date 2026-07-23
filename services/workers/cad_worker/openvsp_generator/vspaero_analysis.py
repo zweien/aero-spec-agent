@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
@@ -179,7 +180,6 @@ def run_vspaero_analysis(
     output_dir: "Path | None" = None,
 ) -> VspaeroReport:
     import os
-    from pathlib import Path
 
     adapter.set_vspaero_ref_wing(geom_ids[0])
 
@@ -320,7 +320,7 @@ def fake_vspaero_results(spec: AircraftSpec) -> dict[str, Any]:
         sweep.append({"alpha": alpha, "cl": cl, "cd": cd, "cm": cm, "mach": 0.0, "beta": 0.0})
 
     best = max(sweep, key=lambda p: p["cl"] / p["cd"] if p["cd"] > 1e-6 else 0)
-    optimal_ld = round(best["cl"] / best["cd"], 3)
+    optimal_ld = round(best["cl"] / best["cd"], 1)
 
     return {
         "status": "success",
@@ -333,3 +333,186 @@ def fake_vspaero_results(spec: AircraftSpec) -> dict[str, Any]:
         "alpha_sweep": sweep,
         "span_load": [],
     }
+
+
+# ---------------------------------------------------------------------------
+# Subprocess isolation with timeout
+#
+# vsp.ExecAnalysis("VSPAEROSweep") invokes the external VSPAERO solver binary
+# (vspaero) via fork+exec. On builds where that solver is unavailable or hangs
+# (e.g. arm64 headless builds), the C++ call deadlocks and cannot be interrupted
+# from Python — it would block the whole CAD generation forever at 82%.
+#
+# To prevent that, the analysis runs in a child process with a hard timeout.
+# If the child times out or crashes, the parent returns a skipped/failed status
+# and CAD generation continues normally (the geometry is already produced).
+# ---------------------------------------------------------------------------
+
+# Name → OpenVSP geom type, used to re-identify components from a .vsp3 file in
+# the child process (where the parent's in-memory geom IDs are invalid).
+_COMPONENT_GEOM_TYPES: dict[str, str] = {
+    "main_wing": "WING",
+    "canard": "WING",
+    "rear_wing": "WING",
+    "lower_wing": "WING",
+    "box_lower_wing": "WING",
+}
+
+
+def _ensure_vspaero_path(vsp) -> None:
+    """Tell OpenVSP where the vspaero solver binary lives.
+
+    OpenVSP derives the solver directory from /proc/self/exe, which inside a
+    Python process resolves to the interpreter (e.g. /usr/bin/python3.12), so it
+    ends up looking for /usr/bin/vspaero and the execv fails, deadlocking the
+    sweep. SetVSPAEROPath overrides this, but it only succeeds when every
+    expected binary (vspaero, vsploads, vspviewer) exists in the target dir —
+    even in headless builds where vspviewer is never used. We create a harmless
+    vspviewer stub so the path check passes.
+    """
+    import os
+    from pathlib import Path
+
+    if str(vsp.GetVSPAEROPath()).rstrip("/").endswith("openvsp"):
+        return  # already pointing at our install dir
+
+    exe = os.getenv("OPENVSP_EXE", "")
+    if exe:
+        candidate = str(Path(exe).resolve().parent)
+    else:
+        candidate = "/opt/openvsp"
+    install_dir = Path(candidate)
+
+    # SetVSPAEROPath checks for vspviewer too (the #ifndef VSP_NO_GRAPHICS guard
+    # around ret_val is ineffective because the macro isn't passed to the
+    # compiler). Create an empty stub so the check passes in headless builds.
+    viewer_stub = install_dir / "vspviewer"
+    if not viewer_stub.exists():
+        try:
+            viewer_stub.write_bytes(b"")
+        except OSError:
+            pass
+
+    try:
+        vsp.SetVSPAEROPath(str(install_dir))
+    except Exception:
+        pass
+
+
+def _resolve_geoms_from_vsp3(vsp_path: str, spec: AircraftSpec) -> list[str]:
+    """Re-discover analysis geom IDs by reading a .vsp3 file in a fresh process.
+
+    Matches components by type (WING) and order, mirroring how the geometry
+    builders register them. Only used inside the isolated subprocess.
+    """
+    import openvsp as vsp
+
+    _ensure_vspaero_path(vsp)
+    vsp.ClearVSPModel()
+    vsp.ReadVSPFile(vsp_path)
+    layout = spec.aircraft.layout.lower()
+    extra_names = LAYOUT_ANALYSIS_NAMES.get(layout, [])
+
+    all_geoms = list(vsp.FindGeoms())
+    wing_ids = [g for g in all_geoms if str(vsp.GetGeomTypeName(g)).lower() == "wing"]
+    if not wing_ids:
+        return []
+
+    # main_wing is the first WING geom; extras (canard/rear_wing/lower_wing)
+    # follow in build order. This mirrors create_* builders' registration order.
+    result = [wing_ids[0]]
+    for _name in extra_names:
+        # For layouts with a second wing, take the next available WING geom.
+        if len(wing_ids) > len(result):
+            result.append(wing_ids[len(result)])
+    return result
+
+
+def _vspaero_subprocess_entry(
+    vsp3_path: str,
+    spec: AircraftSpec,
+    output_dir: str,
+    result_path: str,
+) -> None:
+    """Child-process entry point: rebuild model from .vsp3 and run analysis."""
+    import json
+
+    geom_ids = _resolve_geoms_from_vsp3(vsp3_path, spec)
+    if not geom_ids:
+        with open(result_path, "w") as f:
+            json.dump({"status": "skipped", "method": "VSPAERO_panel",
+                       "error_message": "no wing geom found in vsp3"}, f)
+        return
+
+    # OpenVspAdapter() lazily imports openvsp; since _resolve_geoms_from_vsp3
+    # already imported and loaded the model, the adapter shares that state.
+    adapter = OpenVspAdapter()
+
+    report = run_vspaero_analysis(adapter, spec, geom_ids, output_dir=output_dir)
+    with open(result_path, "w") as f:
+        json.dump(report.to_dict(), f)
+
+
+def run_vspaero_analysis_with_timeout(
+    adapter: OpenVspAdapter,
+    spec: AircraftSpec,
+    geom_ids: list[str],
+    *,
+    vsp3_path: "Path | str",
+    output_dir: "Path | str",
+    timeout: float = 30.0,
+) -> dict[str, Any]:
+    """Run VSPAERO analysis in a child process with a hard timeout.
+
+    Returns the report as a dict. On timeout or child error, returns a
+    skipped/failed status so the caller can continue without blocking.
+    """
+    import json
+    import multiprocessing as mp
+    import tempfile
+
+    # Use "spawn" (not "fork"): the parent process has already loaded OpenVSP,
+    # which holds C++ mutexes/threads. fork()+threads is unsafe and the child
+    # would inherit a half-initialized OpenVSP state. spawn starts a fresh
+    # interpreter that imports openvsp cleanly.
+    ctx = mp.get_context("spawn")
+    result_file = Path(tempfile.mktemp(prefix="vspaero_result_", suffix=".json"))
+
+    proc = ctx.Process(
+        target=_vspaero_subprocess_entry,
+        args=(str(vsp3_path), spec, str(output_dir), str(result_file)),
+        daemon=True,
+    )
+    proc.start()
+    proc.join(timeout)
+
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(5)
+        if proc.is_alive() and hasattr(proc, "kill"):
+            proc.kill()
+            proc.join(2)
+        return {
+            "status": "skipped",
+            "method": "VSPAERO_panel",
+            "error_message": f"VSPAERO solver did not finish within {timeout:.0f}s",
+        }
+
+    if proc.exitcode not in (0, None):
+        return {
+            "status": "failed",
+            "method": "VSPAERO_panel",
+            "error_message": f"VSPAERO subprocess exited with code {proc.exitcode}",
+        }
+
+    try:
+        with open(result_file) as f:
+            return json.load(f)
+    except Exception:
+        return {"status": "failed", "method": "VSPAERO_panel",
+                "error_message": "VSPAERO produced no result file"}
+    finally:
+        try:
+            result_file.unlink(missing_ok=True)
+        except Exception:
+            pass

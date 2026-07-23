@@ -174,25 +174,27 @@ class OpenVspBackend:
         vspaero_data: dict[str, Any] = {}
         if _vspaero_enabled():
             from services.workers.cad_worker.openvsp_generator.vspaero_analysis import (
-                build_analysis_geoms,
                 LAYOUT_ANALYSIS_NAMES,
-                run_vspaero_analysis,
+                run_vspaero_analysis_with_timeout,
             )
-            geom_ids = build_analysis_geoms(spec, build_results)
-            if geom_ids:
-                try:
-                    report = run_vspaero_analysis(
-                        adapter, spec, geom_ids, output_dir=output_dir,
-                    )
-                    layout = spec.aircraft.layout.lower()
-                    all_names = ["main_wing"] + LAYOUT_ANALYSIS_NAMES.get(layout, [])
-                    component_map = _components(build_results)
-                    report.components_analyzed = [
+            layout = spec.aircraft.layout.lower()
+            all_names = ["main_wing"] + LAYOUT_ANALYSIS_NAMES.get(layout, [])
+            component_map = _components(build_results)
+            try:
+                # Run in an isolated subprocess with a hard timeout: the
+                # VSPAERO solver (vspaero binary) can deadlock on builds where
+                # it is unavailable, which would otherwise block generation at
+                # this point forever.
+                vspaero_data = run_vspaero_analysis_with_timeout(
+                    adapter, spec, list(component_map.values()),
+                    vsp3_path=vsp3, output_dir=output_dir, timeout=30.0,
+                )
+                if vspaero_data.get("status") == "success":
+                    vspaero_data["components_analyzed"] = [
                         n for n in all_names if n in component_map
                     ]
-                    vspaero_data = report.to_dict()
-                except Exception as exc:
-                    vspaero_data = {"status": "failed", "error_message": str(exc)}
+            except Exception as exc:
+                vspaero_data = {"status": "failed", "error_message": str(exc)}
         try:
             adapter.export_file(step, "EXPORT_STEP")
         except Exception as exc:
@@ -249,7 +251,10 @@ def _components(build_results: list[GeometryBuildResult]) -> dict[str, str]:
 
 
 def _vspaero_enabled() -> bool:
-    return os.getenv("RUN_VSPAERO_ANALYSIS", "").lower() in ("1", "true", "yes")
+    # Default ON unless explicitly disabled. The analysis runs in an isolated
+    # subprocess with a hard timeout, so a hung/unavailable solver never blocks
+    # CAD generation — it just yields a skipped result.
+    return os.getenv("RUN_VSPAERO_ANALYSIS", "true").lower() not in ("0", "false", "no", "")
 
 
 def _stable_applied_parameters(
