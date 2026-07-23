@@ -15,3 +15,8 @@ dist/
 !.env.example
 *.egg-info/
 docs/screenshots/
+# Playwright CLI session artifacts (test/debug screenshots, snapshots, logs)
+.playwright-cli/
+apps/web/.playwright-cli/
+# ZCode client session data
+.zcode/
