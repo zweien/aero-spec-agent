@@ -1,11 +1,8 @@
 """Tests for no-tool-call fallback intent detection."""
 
-import os
-
 import pytest
 
 from services.api.app.services.tool_fallback import (
-    ToolFallbackIntent,
     build_generate_design_args,
     build_modify_design_args,
     build_modify_selected_part_args,
@@ -259,3 +256,35 @@ class TestConfig:
         monkeypatch.setenv("NO_TOOL_CALL_FALLBACK_MIN_CONFIDENCE", "0.8")
         intent = detect_generation_intent("设计一架翼展12米的固定翼无人机")
         assert intent is not None  # 0.85 >= 0.8
+
+
+# ---------------------------------------------------------------------------
+# fallback args -> AircraftSpec: engine.count must always be present
+# (regression: previously a missing engine_count caused a spec ValidationError)
+# ---------------------------------------------------------------------------
+
+
+class TestFallbackSpecEngineCount:
+    def test_spec_builds_without_engine_count(self):
+        """Fallback that detects no engine info must still produce a valid spec."""
+        from services.api.app.services.chat_service import _flat_args_to_spec
+
+        args = build_generate_design_args("设计一架翼展8米的固定翼无人机")
+        # No engine signal was extracted, so engine_count is absent from args.
+        assert "engine_count" not in args
+
+        spec = _flat_args_to_spec(args)
+        # Required engine.count must be filled by rule defaults.
+        assert spec.engine.count.value == 1
+        assert spec.engine.count.source == "rule_default"
+
+    def test_spec_keeps_explicit_engine_count(self):
+        """When the user specifies engine count, it must not be overridden by defaults."""
+        from services.api.app.services.chat_service import _flat_args_to_spec
+
+        args = build_generate_design_args("设计一架翼展12米 双发 上单翼的无人机")
+        assert args["engine_count"] == 2
+
+        spec = _flat_args_to_spec(args)
+        assert spec.engine.count.value == 2
+        assert spec.engine.count.source == "user"

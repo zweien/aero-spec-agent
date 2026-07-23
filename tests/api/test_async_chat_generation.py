@@ -152,6 +152,7 @@ def test_spec_defaults_no_defaults_when_all_provided():
             "sections": {"value": 1, "source": "user", "confidence": 1.0},
         },
         "tail": {"type": {"value": "conventional", "source": "user", "confidence": 1.0}},
+        "engine": {"count": {"value": 1, "source": "user", "confidence": 1.0}},
     }
     ensure_required_defaults(spec_data)
     defaulted = collect_defaulted_fields(spec_data)

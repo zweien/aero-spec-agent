@@ -351,9 +351,18 @@ def test_flat_args_to_spec_with_optional_fields():
     assert spec.fuselage.max_diameter.value == 0.6
 
 
-def test_flat_args_to_spec_rejects_missing_required():
-    with pytest.raises(Exception):
-        _flat_args_to_spec({"name": "bad"})
+def test_flat_args_to_spec_fills_required_defaults():
+    """Even a minimal input is completed via rule defaults (engine.count, etc.).
+
+    Previously this asserted a raise, but engine.count is now a rule default so
+    the fallback path can recover when the LLM omits engine info. A truly empty
+    spec (no aircraft at all) is still invalid at the schema level.
+    """
+    spec = _flat_args_to_spec({"name": "bad"})
+    assert spec.aircraft.name == "bad"
+    assert spec.engine.count.value == 1
+    assert spec.engine.count.source == "rule_default"
+    assert spec.wing.span.source == "rule_default"
 
 
 def test_flat_args_to_spec_inferred_fields():
