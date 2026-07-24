@@ -184,9 +184,10 @@ class OpenVspBackend:
                 # Run in an isolated subprocess with a hard timeout: the
                 # VSPAERO solver (vspaero binary) can deadlock on builds where
                 # it is unavailable, which would otherwise block generation at
-                # this point forever.
+                # this point forever. The subprocess rebuilds geometry from the
+                # vsp3 file, so no adapter/geom IDs are passed.
                 vspaero_data = run_vspaero_analysis_with_timeout(
-                    adapter, spec, list(component_map.values()),
+                    spec,
                     vsp3_path=vsp3, output_dir=output_dir, timeout=30.0,
                 )
                 if vspaero_data.get("status") == "success":

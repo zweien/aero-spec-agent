@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
-from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuildResult
 from services.workers.cad_worker.openvsp_generator.openvsp_adapter import OpenVspAdapter
 
 
@@ -82,22 +81,6 @@ LAYOUT_ANALYSIS_NAMES: dict[str, list[str]] = {
     "multi_fuselage": [],
 }
 
-
-def build_analysis_geoms(
-    spec: AircraftSpec,
-    build_results: list[GeometryBuildResult],
-) -> list[str]:
-    """Return geom IDs to include in VSPAERO analysis based on layout."""
-    layout = spec.aircraft.layout.lower()
-    extra_names = LAYOUT_ANALYSIS_NAMES.get(layout, [])
-    components = {r.name: r.geom_id for r in build_results}
-    geom_ids: list[str] = []
-    if "main_wing" in components:
-        geom_ids.append(components["main_wing"])
-    for name in extra_names:
-        if name in components:
-            geom_ids.append(components[name])
-    return geom_ids
 
 
 def _cruise_mach(spec: AircraftSpec) -> float:
@@ -454,9 +437,7 @@ def _vspaero_subprocess_entry(
 
 
 def run_vspaero_analysis_with_timeout(
-    adapter: OpenVspAdapter,
     spec: AircraftSpec,
-    geom_ids: list[str],
     *,
     vsp3_path: "Path | str",
     output_dir: "Path | str",
@@ -464,8 +445,11 @@ def run_vspaero_analysis_with_timeout(
 ) -> dict[str, Any]:
     """Run VSPAERO analysis in a child process with a hard timeout.
 
-    Returns the report as a dict. On timeout or child error, returns a
-    skipped/failed status so the caller can continue without blocking.
+    The subprocess rebuilds the model from ``vsp3_path`` (the parent process's
+    in-memory OpenVSP state cannot cross a process boundary), so no adapter or
+    geom IDs are needed here. Returns the report as a dict. On timeout or child
+    error, returns a skipped/failed status so the caller can continue without
+    blocking.
     """
     import json
     import multiprocessing as mp
