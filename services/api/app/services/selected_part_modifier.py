@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.api.app.schemas.aircraft_spec import AircraftSpec
+from services.api.app.services.spec_patch import pre_fill_none_scalars
 
 
 class SelectedPartPatchError(ValueError):
@@ -107,7 +108,7 @@ def _apply_engine_move(
 
     offset_field, sign = ENGINE_MOVE_MAP[operation]
     offset_path = f"engine.{offset_field}"
-    _pre_fill_none_scalars(data, [f"{offset_path}.value"])
+    pre_fill_none_scalars(data, [f"{offset_path}.value"])
 
     engine_dict = data.setdefault("engine", {})
     if offset_field not in engine_dict or engine_dict[offset_field] is None:
@@ -146,7 +147,7 @@ def _apply_part_scalar_patch(
         sign = 1.0
 
     field_path = f"{section}.{field_name}"
-    _pre_fill_none_scalars(data, [f"{field_path}.value"])
+    pre_fill_none_scalars(data, [f"{field_path}.value"])
 
     section_dict = data.setdefault(section, {})
     if field_name not in section_dict or section_dict[field_name] is None:
@@ -171,20 +172,3 @@ def _apply_part_scalar_patch(
     scalar_dict["confidence"] = 1.0
     if default_unit:
         scalar_dict["unit"] = default_unit
-
-
-def _pre_fill_none_scalars(data: dict[str, Any], paths: list[str]) -> None:
-    for path in paths:
-        keys = path.split(".")
-        if len(keys) < 2:
-            continue
-        parent_keys = keys[:-1]
-        scalar_key = parent_keys[-1]
-        current = data
-        for key in parent_keys[:-1]:
-            if not isinstance(current, dict) or key not in current:
-                break
-            current = current[key]
-        else:
-            if isinstance(current, dict) and current.get(scalar_key) is None:
-                current[scalar_key] = {}

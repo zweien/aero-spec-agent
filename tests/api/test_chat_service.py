@@ -18,13 +18,13 @@ from services.api.app.services.chat_service import (
     MODIFY_SELECTED_PART_TOOL,
     SYSTEM_PROMPT_TEMPLATE,
     _flat_args_to_spec,
-    _pre_fill_none_scalars,
 )
 from services.api.app.services.job_runner import JobRecord, JobRunner
 from services.api.app.services.selected_part_modifier import (
     ENGINE_MOVE_MAP,
     PART_SET_OPERATIONS,
 )
+from services.api.app.services.spec_patch import pre_fill_none_scalars
 from services.api.app.services.spec_io import load_aircraft_spec
 from services.api.app.services.version_store import VersionStore
 from services.workers.cad_worker.openvsp_generator.backend import FakeCadBackend
@@ -409,7 +409,7 @@ def test_modify_design_tool_has_field_enum():
 
 def test_pre_fill_none_scalars():
     data = {"wing": {"sweep": None, "span": {"value": 10}}, "tail": {"type": None}}
-    _pre_fill_none_scalars(data, ["wing.sweep.value"])
+    pre_fill_none_scalars(data, ["wing.sweep.value"])
     assert data["wing"]["sweep"] == {}
     assert data["wing"]["span"] == {"value": 10}
     assert data["tail"]["type"] is None  # not affected

@@ -29,7 +29,7 @@ from services.api.app.services.selected_part_modifier import (
     apply_selected_part_patch,
 )
 from services.api.app.services.spec_io import dump_aircraft_spec
-from services.api.app.services.spec_patch import _set_nested
+from services.api.app.services.spec_patch import _set_nested, pre_fill_none_scalars
 
 logger = logging.getLogger(__name__)
 _CHAT_GENERATION_EXECUTOR = ThreadPoolExecutor(
@@ -131,26 +131,6 @@ def _is_single_edit_apart(value: str, target: str) -> bool:
     return True
 
 
-def _pre_fill_none_scalars(data: dict[str, Any], paths: list[str]) -> None:
-    """Replace None scalar fields (only those being patched) with empty dicts.
-
-    Paths like "wing.sweep.value" → check if "wing.sweep" is None, replace with {}.
-    """
-    for path in paths:
-        keys = path.split(".")
-        if len(keys) < 2:
-            continue
-        # Navigate to the parent of the last key (e.g. wing.sweep from wing.sweep.value)
-        parent_keys = keys[:-1]
-        scalar_key = parent_keys[-1]  # e.g. "sweep"
-        current = data
-        for key in parent_keys[:-1]:
-            if not isinstance(current, dict) or key not in current:
-                break
-            current = current[key]
-        else:
-            if isinstance(current, dict) and current.get(scalar_key) is None:
-                current[scalar_key] = {}
 
 
 SYSTEM_PROMPT_TEMPLATE = """你是 AeroSpec Agent，一个飞机概念设计助手。
@@ -727,7 +707,7 @@ class ChatService:
 
         # 预处理: 只对被修改的字段，将 None 标量替换为空 dict
         data = state.current_spec.model_dump(mode="json")
-        _pre_fill_none_scalars(data, affected_paths)
+        pre_fill_none_scalars(data, affected_paths)
 
         # 应用补丁
         for change in patch_changes + extra_patches:
