@@ -28,7 +28,7 @@ def get_tracing_config(
     Args:
         design_id: Current design ID for trace metadata.
         conversation_id: Current conversation ID for trace metadata.
-        graph_mode: Current graph mode (legacy/shadow/partial).
+        graph_mode: Current graph mode (legacy/partial).
     """
     if not is_tracing_enabled():
         return {}

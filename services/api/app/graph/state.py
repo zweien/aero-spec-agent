@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import operator
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from langchain_core.messages import AnyMessage
@@ -16,6 +17,22 @@ DesignIntent = Literal[
     "conversation",
     "unknown",
 ]
+
+
+@dataclass(frozen=True)
+class IntentResult:
+    """Unified output of intent classification.
+
+    One place answers "what does this message want to do", for both the
+    LangGraph classify_intent node and the no-tool-call fallback path.
+    Carries a confidence so callers (fallback threshold, debug logging) can
+    use it. Args construction is deliberately separate — see the args-builders
+    in services/api/app/services/tool_fallback.py.
+    """
+
+    intent: DesignIntent
+    confidence: float
+    reason: str = ""
 
 
 class DesignGraphState(TypedDict, total=False):
@@ -46,10 +63,6 @@ class DesignGraphState(TypedDict, total=False):
     tool_args: dict[str, Any]
     proposed_spec: dict[str, Any] | None
     patch_changes: list[dict[str, Any]]
-
-    # Shadow-mode metadata (written but never executed)
-    would_call_tool: str
-    would_call_args: dict[str, Any]
 
     # Generation
     generation_job: dict[str, Any] | None

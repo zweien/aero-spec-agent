@@ -1,14 +1,13 @@
-from services.api.app.graph.design_graph import (
-    build_design_graph,
-    classify_message_intent,
-    run_shadow_classification,
-)
+"""Tests for design_graph.classify_message_intent (backward-compat adapter).
+
+The shadow-mode graph (build_design_graph / run_shadow_classification) has
+been retired. classify_message_intent remains as a thin adapter over the
+unified classifier; intent classification itself is tested in
+test_intent_classifier.py.
+"""
+
+from services.api.app.graph.design_graph import classify_message_intent
 from services.api.app.graph.state import DesignGraphState
-
-
-def test_build_design_graph_compiles():
-    compiled = build_design_graph()
-    assert compiled is not None
 
 
 def test_design_graph_state_keeps_selected_refs():
@@ -23,8 +22,9 @@ def test_design_graph_state_keeps_selected_refs():
 
 
 # ---------------------------------------------------------------------------
-# classify_message_intent (backward-compat)
+# classify_message_intent (backward-compat adapter over the unified classifier)
 # ---------------------------------------------------------------------------
+
 
 def test_classify_no_spec_as_generate_design():
     assert classify_message_intent(
@@ -52,29 +52,5 @@ def test_classify_selected_ref_message_as_modify_selected_part():
     ) == "modify_selected_part"
 
 
-# ---------------------------------------------------------------------------
-# LangGraph shadow classification
-# ---------------------------------------------------------------------------
-
-def test_shadow_classification_generate():
-    result = run_shadow_classification("设计一架无人机", has_current_spec=False)
-    assert result["intent"] == "generate_design"
-    assert result["tool_name"] == "generate_design"
-
-
-def test_shadow_classification_modify():
-    result = run_shadow_classification(
-        "把翼展改成15米",
-        selected_refs=[],
-        has_current_spec=True,
-    )
-    assert result["intent"] == "modify_design"
-
-
-def test_shadow_classification_selected_part():
-    result = run_shadow_classification(
-        "加长2米",
-        selected_refs=["part:wing"],
-        has_current_spec=True,
-    )
-    assert result["intent"] == "modify_selected_part"
+def test_classify_informational_as_conversation():
+    assert classify_message_intent("什么是升阻比") == "conversation"

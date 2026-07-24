@@ -1,125 +1,32 @@
-"""Design graph — LangGraph StateGraph for design orchestration."""
+"""Design graph helpers.
+
+Historically this module built a separate LangGraph (``build_design_graph``)
+for shadow-mode intent comparison against the legacy ChatService classifier.
+Shadow mode has been retired (see architecture review #1): there is now a
+single intent classifier in ``graph/nodes/classify_intent.py``.
+
+What remains is :func:`classify_message_intent`, a thin string-returning
+adapter over the unified classifier, kept for callers (ChatService debug
+logging, router scope guards) that compare against a ``DesignIntent`` literal.
+"""
 
 from __future__ import annotations
 
-import logging
-from typing import Any
-
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.graph import END, START, StateGraph
-
-from services.api.app.graph.state import DesignGraphState
-from services.api.app.graph.nodes.load_context import load_context
-from services.api.app.graph.nodes.classify_intent import classify_intent
-from services.api.app.graph.nodes.generate_design import generate_design
-from services.api.app.graph.nodes.modify_design import modify_design
-from services.api.app.graph.nodes.modify_selected_part import modify_selected_part
-from services.api.app.graph.nodes.save_state import save_state
-
-logger = logging.getLogger(__name__)
+from services.api.app.graph.nodes.classify_intent import _classify
+from services.api.app.graph.state import DesignIntent
 
 
-def _route_by_intent(state: DesignGraphState) -> str:
-    """Conditional edge: route to the tool node matching classified intent."""
-    intent = state.get("intent", "unknown")
-    routing = {
-        "generate_design": "generate_design",
-        "modify_design": "modify_design",
-        "modify_selected_part": "modify_selected_part",
-        "conversation": "save_state",
-        "unknown": "save_state",
-    }
-    target = routing.get(intent, "save_state")
-    logger.debug("graph routing: intent=%s → node=%s", intent, target)
-    return target
-
-
-def build_design_graph(
-    checkpointer: InMemorySaver | None = None,
-) -> StateGraph:
-    """Build the design orchestration graph.
-
-    Flow:
-        START → load_context → classify_intent
-        → {generate|modify|modify_selected_part} → save_state → END
-
-    In shadow mode, only load_context and classify_intent execute meaningfully.
-    Tool nodes return would_call_tool/would_call_args for divergence comparison.
-
-    Args:
-        checkpointer: Optional InMemorySaver for thread-based state persistence.
-            When provided, invoke with config={"configurable": {"thread_id": "..."}}.
-    """
-    graph = StateGraph(DesignGraphState)
-
-    # Add nodes
-    graph.add_node("load_context", load_context)
-    graph.add_node("classify_intent", classify_intent)
-    graph.add_node("generate_design", generate_design)
-    graph.add_node("modify_design", modify_design)
-    graph.add_node("modify_selected_part", modify_selected_part)
-    graph.add_node("save_state", save_state)
-
-    # Entry: START → load_context
-    graph.add_edge(START, "load_context")
-
-    # Linear: load_context → classify_intent
-    graph.add_edge("load_context", "classify_intent")
-
-    # Conditional: classify_intent → tool node or save_state
-    graph.add_conditional_edges(
-        "classify_intent",
-        _route_by_intent,
-        {
-            "generate_design": "generate_design",
-            "modify_design": "modify_design",
-            "modify_selected_part": "modify_selected_part",
-            "save_state": "save_state",
-        },
-    )
-
-    # All tool nodes → save_state
-    graph.add_edge("generate_design", "save_state")
-    graph.add_edge("modify_design", "save_state")
-    graph.add_edge("modify_selected_part", "save_state")
-
-    # save_state → END
-    graph.add_edge("save_state", END)
-
-    return graph.compile(checkpointer=checkpointer)
-
-
-def run_shadow_classification(
-    message: str,
-    selected_refs: list[str] | None = None,
-    has_current_spec: bool = False,
-) -> dict[str, Any]:
-    """Run the LangGraph for shadow-mode intent classification.
-
-    Returns the graph state after execution for divergence comparison.
-    """
-    g = build_design_graph()
-    initial_state: DesignGraphState = {
-        "conversation_id": "shadow",
-        "user_message": message,
-        "selected_refs": selected_refs or [],
-        "current_spec": {} if has_current_spec else None,
-    }
-    result = g.invoke(initial_state)
-    return {
-        "intent": result.get("intent", "unknown"),
-        "tool_name": result.get("tool_name"),
-        "would_call_tool": result.get("would_call_tool"),
-        "would_call_args": result.get("would_call_args"),
-    }
-
-
-# Backward-compatible alias for ChatService
 def classify_message_intent(
     message: str,
     selected_refs: list[str] | None = None,
     has_current_spec: bool = False,
-) -> str:
-    """Legacy intent classifier, delegates to the classify_intent node logic."""
-    from services.api.app.graph.nodes.classify_intent import _classify
-    return _classify(message, selected_refs, has_current_spec)
+) -> DesignIntent:
+    """Classify a message and return the intent literal.
+
+    Thin adapter over the unified classifier (:func:`_classify`). Returns the
+    intent string (or ``"conversation"`` when no design intent is detected) so
+    callers can compare against ``DesignIntent`` literals without handling the
+    full :class:`IntentResult`.
+    """
+    result = _classify(message, selected_refs, has_current_spec)
+    return result.intent if result is not None else "conversation"

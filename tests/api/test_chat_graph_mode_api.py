@@ -10,7 +10,7 @@ import json
 import os
 import threading
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -119,52 +119,6 @@ class TestLegacyMode:
 # ---------------------------------------------------------------------------
 # Shadow mode
 # ---------------------------------------------------------------------------
-
-
-class TestShadowMode:
-    def test_shadow_writes_logs(self, job_runner, tmp_path):
-        """Shadow mode should write divergence to shadow_logs."""
-        os.environ["CHAT_GRAPH_MODE"] = "shadow"
-
-        from services.api.app.services.shadow_logger import ShadowLogger
-        log_dir = tmp_path / "shadow_logs"
-        logger = ShadowLogger(storage_root=log_dir)
-
-        with (
-            patch("services.api.app.routers.designs.runner", job_runner),
-            patch("services.api.app.routers.chat.shadow_logger", logger),
-            patch("services.api.app.routers.chat.chat_service.chat_stream", _fake_chat_stream),
-        ):
-            client = TestClient(app)
-            resp = client.post("/api/chat", json={
-                "conversation_id": "shadow-conv",
-                "message": "生成一架无人机",
-            })
-            assert resp.status_code == 200
-
-        log_files = list(log_dir.glob("*.jsonl"))
-        assert len(log_files) >= 1
-
-    def test_shadow_returns_legacy_stream(self, job_runner, tmp_path):
-        """Shadow mode should still return the legacy SSE stream to user."""
-        os.environ["CHAT_GRAPH_MODE"] = "shadow"
-
-        from services.api.app.services.shadow_logger import ShadowLogger
-        logger = ShadowLogger(storage_root=tmp_path / "shadow_logs")
-
-        with (
-            patch("services.api.app.routers.designs.runner", job_runner),
-            patch("services.api.app.routers.chat.shadow_logger", logger),
-            patch("services.api.app.routers.chat.chat_service.chat_stream", _fake_chat_stream),
-        ):
-            client = TestClient(app)
-            resp = client.post("/api/chat", json={
-                "conversation_id": "shadow-conv-2",
-                "message": "你好",
-            })
-            assert resp.status_code == 200
-            events = _collect_sse(resp.content)
-            assert any(e["event"] == "message" for e in events)
 
 
 # ---------------------------------------------------------------------------

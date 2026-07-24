@@ -38,7 +38,7 @@ async def compare_variants(req: CompareRequest, background_tasks: BackgroundTask
     store = _get_store()
     mode = get_graph_mode()
 
-    if mode in ("partial", "shadow"):
+    if mode == "partial":
         return await _compare_with_graph(req, runner, background_tasks)
 
     # legacy path

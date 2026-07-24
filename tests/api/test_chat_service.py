@@ -208,7 +208,7 @@ async def test_chat_stream_emits_error_event_when_llm_client_fails(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_chat_stream_logs_shadow_intent_for_selected_part_message(
+async def test_chat_stream_logs_debug_intent_for_selected_part_message(
     tmp_path,
     monkeypatch,
     caplog,
@@ -230,11 +230,11 @@ async def test_chat_stream_logs_shadow_intent_for_selected_part_message(
         ]
 
     assert events[0].startswith("event: error")
-    assert "shadow_intent=modify_selected_part" in caplog.text
+    assert "debug_intent=modify_selected_part" in caplog.text
 
 
 @pytest.mark.anyio
-async def test_chat_stream_logs_shadow_intent_with_actual_tool(
+async def test_chat_stream_logs_debug_intent_with_actual_tool(
     tmp_path,
     monkeypatch,
     caplog,
@@ -308,7 +308,7 @@ async def test_chat_stream_logs_shadow_intent_with_actual_tool(
         ]
 
     assert any(event.startswith("event: generation_complete") for event in events)
-    assert '"shadow_intent": "modify_selected_part"' in caplog.text
+    assert '"debug_intent": "modify_selected_part"' in caplog.text
     assert '"actual_tool": "modify_selected_part"' in caplog.text
 
 

@@ -1,76 +1,24 @@
-"""No-tool-call fallback — rule-based intent detection for models without function calling.
+"""No-tool-call fallback — args-builders for models without function calling.
 
-When the LLM does not return tool_calls (e.g. MiniMax-M2.5 on VLLM), this module
-detects user intent from keywords and constructs minimal tool args so the existing
-generation pipeline can proceed.
+When the LLM does not return tool_calls, the intent is classified by the
+single classifier in ``services/api/app/graph/nodes/classify_intent.py``
+(:func:`_classify` → :class:`IntentResult`). This module then constructs the
+matching tool *arguments* (extracting dimensions, engine count, etc.) so the
+existing generation pipeline can proceed.
+
+Classification and args extraction used to be fused in one function
+(``detect_generation_intent``). They are now separate: one rule set answers
+"what intent", these builders answer "what args for that intent".
 """
 
 from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Negative-signal patterns (must NOT trigger fallback)
-# ---------------------------------------------------------------------------
-
-_NEGATIVE_PREFIXES = (
-    "什么是", "为什么", "如何", "怎么", "能不能", "是否",
-    "what is", "what are", "why", "how", "explain",
-    "请解释", "请介绍", "请说明",
-)
-
-_NEGATIVE_CONTAINS = (
-    "有哪些", "有什么", "的区别", "的特点", "的优势", "的缺点",
-    "介绍一下", "告诉我", "讲一下", "说说", "解释一下",
-    "什么意思", "是什么意思",
-    "tell me about", "describe",
-)
-
-_NEGATIVE_KEYWORDS = (
-    "不要生成", "不要设计", "只给我讲", "不要做",
-    "概念", "原理", "定义",
-    "导出报告", "导出模型", "下载", "查看模型", "显示当前",
-    "export", "download", "view model",
-)
-
-_QUESTION_ENDINGS = ("？", "?")
-
-# ---------------------------------------------------------------------------
-# Positive-signal patterns
-# ---------------------------------------------------------------------------
-
-_GENERATE_KEYWORDS = (
-    "设计一架", "设计一个", "生成一架", "生成一个",
-    "创建一架", "创建一个", "新建一架", "新建一个",
-    "做一架", "搞一架", "帮我设计", "帮我生成",
-    "无人机", "飞机", "飞行器", "固定翼",
-    "fixed wing", "uav", "aircraft", "design a",
-)
-
-_MODIFY_KEYWORDS = (
-    "修改", "改为", "调整", "优化", "变更",
-    "换成", "改成", "加大", "减小", "增大", "减少",
-    "增加", "缩短", "加长", "扩大",
-    "把翼展", "把机身", "把发动机",
-    "increase", "decrease", "change", "modify", "optimize",
-)
-
-_MODIFY_DESIGN_FIELDS = (
-    "翼展", "机身", "发动机", "尾翼", "机翼",
-    "上单翼", "下单翼", "中单翼", "双发", "单发",
-    "长航时", "高速",
-)
-
-_PART_KEYWORDS = (
-    "这个", "选中", "当前选中", "这段",
-    "this", "selected",
-)
-
-# ---------------------------------------------------------------------------
-# Dimension extraction patterns
+# Dimension extraction patterns (used by args-builders, not by classification)
 # ---------------------------------------------------------------------------
 
 _DIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -79,7 +27,7 @@ _DIM_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("fuselage_length", re.compile(r"机身(?:长度)?\s*(\d+(?:\.\d+)?)\s*米?", re.I)),
     ("fuselage_length", re.compile(r"fuselage\s*(?:length)?\s*(\d+(?:\.\d+)?)\s*m", re.I)),
     ("engine_count", re.compile(r"(\d+)\s*发", re.I)),
-    ("engine_count", re.compile(r"(?:twin|dual|single|triple)\s*engine", re.I)),
+    ("engine_count", re.compile(r"(twin|dual|single|triple)\s*engine", re.I)),
     ("wing_position", re.compile(r"(上单翼|下单翼|中单翼)", re.I)),
     ("wing_position", re.compile(r"(high|low|mid)\s*wing", re.I)),
     ("tail_type", re.compile(r"(v尾|v形尾|v字尾)", re.I)),
@@ -105,18 +53,6 @@ _MODIFY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 
 # ---------------------------------------------------------------------------
-# Data class
-# ---------------------------------------------------------------------------
-
-@dataclass
-class ToolFallbackIntent:
-    tool_name: str
-    args: dict[str, Any]
-    confidence: float
-    source: str = "no_tool_call_fallback"
-
-
-# ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
@@ -124,75 +60,8 @@ def is_fallback_enabled() -> bool:
     return os.getenv("NO_TOOL_CALL_FALLBACK", "true").strip().lower() in ("true", "1", "yes")
 
 
-def _min_confidence() -> float:
-    try:
-        return float(os.getenv("NO_TOOL_CALL_FALLBACK_MIN_CONFIDENCE", "0.6"))
-    except ValueError:
-        return 0.6
-
-
 # ---------------------------------------------------------------------------
-# Intent detection
-# ---------------------------------------------------------------------------
-
-def detect_generation_intent(
-    user_message: str,
-    assistant_text: str | None = None,
-    has_current_design: bool = False,
-    selected_part: str | None = None,
-) -> ToolFallbackIntent | None:
-    if not user_message or len(user_message.strip()) < 4:
-        return None
-
-    msg = user_message.strip()
-
-    if _is_negative(msg):
-        return None
-
-    # Try modify_selected_part first (most specific)
-    if selected_part and _has_any_keyword(msg, _PART_KEYWORDS):
-        confidence = 0.75
-        if _has_any_keyword(msg, _MODIFY_KEYWORDS):
-            confidence = 0.85
-        if confidence >= _min_confidence():
-            return ToolFallbackIntent(
-                tool_name="modify_selected_part",
-                args=build_modify_selected_part_args(selected_part, msg),
-                confidence=confidence,
-            )
-
-    # Try modify_design
-    if has_current_design and _has_any_keyword(msg, _MODIFY_KEYWORDS):
-        if _has_any_keyword(msg, _MODIFY_DESIGN_FIELDS) or re.search(r"\d", msg):
-            confidence = 0.75
-            if confidence >= _min_confidence():
-                return ToolFallbackIntent(
-                    tool_name="modify_design",
-                    args=build_modify_design_args(msg),
-                    confidence=confidence,
-                )
-
-    # Try generate_design
-    if _has_any_keyword(msg, _GENERATE_KEYWORDS):
-        confidence = 0.7
-        if re.search(r"\d+(?:\.\d+)?", msg):
-            confidence = 0.85
-        if assistant_text and any(
-            kw in assistant_text for kw in ("参数", "spec", "翼展", "机身", "设计参数")
-        ):
-            confidence = min(confidence + 0.05, 0.95)
-        if confidence >= _min_confidence():
-            return ToolFallbackIntent(
-                tool_name="generate_design",
-                args=build_generate_design_args(msg, assistant_text),
-                confidence=confidence,
-            )
-
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Args builders
+# Args-builders — one per intent. Pure: message (+assistant text) → args dict.
 # ---------------------------------------------------------------------------
 
 def build_generate_design_args(
@@ -308,43 +177,22 @@ def build_modify_selected_part_args(
     return args
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def build_args_for_intent(
+    intent: str,
+    user_message: str,
+    assistant_text: str | None = None,
+    selected_part: str | None = None,
+) -> dict[str, Any]:
+    """Dispatch to the right args-builder for a classified intent.
 
-def _has_any_keyword(text: str, keywords: tuple[str, ...]) -> bool:
-    lower = text.lower()
-    return any(kw in lower for kw in keywords)
-
-
-def _is_negative(msg: str) -> bool:
-    lower = msg.lower().strip()
-
-    # Explicit refusal
-    for kw in _NEGATIVE_KEYWORDS:
-        if kw in lower:
-            return True
-
-    # Question patterns that are purely informational
-    # Only negative if the message doesn't ALSO contain design keywords
-    has_design_signal = _has_any_keyword(msg, _GENERATE_KEYWORDS) or _has_any_keyword(msg, _MODIFY_KEYWORDS)
-    if not has_design_signal:
-        for prefix in _NEGATIVE_PREFIXES:
-            if lower.startswith(prefix):
-                return True
-        for phrase in _NEGATIVE_CONTAINS:
-            if phrase in lower:
-                return True
-        # Short question ending without design intent
-        if len(lower) < 15 and lower.endswith(_QUESTION_ENDINGS):
-            return True
-    else:
-        # Even with design keywords, informational patterns are negative
-        for phrase in _NEGATIVE_CONTAINS:
-            if phrase in lower:
-                return True
-        for prefix in _NEGATIVE_PREFIXES:
-            if lower.startswith(prefix):
-                return True
-
-    return False
+    Convenience entry point for the fallback path: after
+    :func:`classify_intent._classify` returns an intent, call this to get the
+    matching tool args.
+    """
+    if intent == "generate_design":
+        return build_generate_design_args(user_message, assistant_text)
+    if intent == "modify_design":
+        return build_modify_design_args(user_message)
+    if intent == "modify_selected_part":
+        return build_modify_selected_part_args(selected_part or "", user_message)
+    raise ValueError(f"no args-builder for intent: {intent}")

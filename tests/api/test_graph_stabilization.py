@@ -3,14 +3,13 @@
 import os
 from pathlib import Path
 
-import pytest
 import yaml
 
 from services.api.app.graph.checkpoint import make_sqlite_checkpointer
 from services.api.app.graph.mode import get_graph_mode
 from services.api.app.graph.partial_graph import build_partial_design_graph
 from services.api.app.graph.sse_adapter import convert_sse_events, sse_event
-from services.api.app.graph.tracing import get_tracing_config, is_tracing_enabled
+from services.api.app.graph.tracing import get_tracing_config
 from services.api.app.services.job_runner import JobRunner
 from services.api.app.services.version_store import VersionStore
 
@@ -29,14 +28,6 @@ def _load_spec_dict() -> dict:
 
 def test_default_mode_is_legacy():
     assert get_graph_mode() == "legacy"
-
-
-def test_shadow_mode():
-    os.environ["CHAT_GRAPH_MODE"] = "shadow"
-    try:
-        assert get_graph_mode() == "shadow"
-    finally:
-        del os.environ["CHAT_GRAPH_MODE"]
 
 
 def test_partial_mode():

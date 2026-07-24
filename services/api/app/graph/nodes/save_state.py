@@ -6,9 +6,9 @@ from services.api.app.graph.state import DesignGraphState
 
 
 def save_state(state: DesignGraphState) -> dict:
-    """Persist state to storage.
+    """Terminal node in the partial design graph.
 
-    In shadow mode, state is saved by the old ChatService.
-    This node is a passthrough.
+    State persistence is handled by ChatService / the partial-graph job path;
+    this node exists as the graph's END-adjacent step and is a passthrough.
     """
     return {}

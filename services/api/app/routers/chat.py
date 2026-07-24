@@ -2,17 +2,14 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from services.api.app.graph.design_graph import run_shadow_classification
 from services.api.app.graph.design_graph import classify_message_intent
 from services.api.app.graph.mode import get_graph_mode
 from services.api.app.graph.sse_adapter import convert_sse_events, sse_message_event
 from services.api.app.graph.tracing import get_tracing_config
 from services.api.app.services.chat_service import ChatService
-from services.api.app.services.shadow_logger import ShadowLogger
 
 router = APIRouter(prefix="/api", tags=["chat"])
 chat_service = ChatService()
-shadow_logger = ShadowLogger()
 
 
 class ChatRequest(BaseModel):
@@ -32,43 +29,7 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks):
     if mode == "partial":
         return await _chat_partial(req, background_tasks)
 
-    if mode == "shadow":
-        return await _chat_shadow(req, background_tasks)
-
     # legacy (default)
-    return StreamingResponse(
-        chat_service.chat_stream(
-            conversation_id=req.conversation_id,
-            message=req.message,
-            selected_refs=req.selected_refs,
-            background_tasks=background_tasks,
-        ),
-        media_type="text/event-stream",
-    )
-
-
-async def _chat_shadow(req: ChatRequest, background_tasks: BackgroundTasks):
-    """Shadow mode: legacy ChatService + LangGraph shadow logging."""
-    state = chat_service.get_or_create_state(req.conversation_id)
-    old_intent = classify_message_intent(
-        req.message,
-        selected_refs=req.selected_refs or None,
-        has_current_spec=state.current_spec is not None,
-    )
-
-    new_result = run_shadow_classification(
-        req.message,
-        selected_refs=req.selected_refs or None,
-        has_current_spec=state.current_spec is not None,
-    )
-
-    shadow_logger.log_divergence(
-        conversation_id=req.conversation_id,
-        user_message=req.message,
-        old_result={"intent": old_intent},
-        new_result={"intent": new_result["intent"], "tool_name": new_result.get("tool_name")},
-    )
-
     return StreamingResponse(
         chat_service.chat_stream(
             conversation_id=req.conversation_id,
@@ -146,7 +107,6 @@ async def _chat_partial(req: ChatRequest, background_tasks: BackgroundTasks):
         if sse_events:
             sse_lines = convert_sse_events(sse_events)
             # Add legacy chat response after SSE events
-            import asyncio
 
             async def _partial_stream():
                 for line in sse_lines:
@@ -203,12 +163,6 @@ async def _chat_partial(req: ChatRequest, background_tasks: BackgroundTasks):
         )
 
 
-@router.post("/chat/shadow")
-async def chat_shadow(req: ChatRequest, background_tasks: BackgroundTasks):
-    """Explicit shadow endpoint — always runs shadow regardless of CHAT_GRAPH_MODE."""
-    return await _chat_shadow(req, background_tasks)
-
-
 @router.post("/chat/stream")
 async def chat_graph_stream(req: ChatRequest, background_tasks: BackgroundTasks):
     """Graph-native streaming: full lifecycle observation via JobEventBus.
@@ -218,7 +172,6 @@ async def chat_graph_stream(req: ChatRequest, background_tasks: BackgroundTasks)
     all from the graph, no frontend polling needed.
     """
     import asyncio
-    import json
     import logging
     logger = logging.getLogger(__name__)
 
@@ -259,7 +212,7 @@ async def chat_graph_stream(req: ChatRequest, background_tasks: BackgroundTasks)
         from services.api.app.routers.designs import _get_job_runner
         from services.api.app.graph.partial_graph import build_partial_design_graph
         from services.api.app.services.job_events import (
-            JobEventType, get_job_event_bus,
+            get_job_event_bus,
         )
 
         job_runner = _get_job_runner()
@@ -458,7 +411,6 @@ async def _tool_generate(state, args: dict, background_tasks: BackgroundTasks):
 
 async def _tool_modify(state, args: dict, background_tasks: BackgroundTasks):
     from services.api.app.routers.designs import _get_job_runner
-    from services.api.app.services.chat_service import _flat_args_to_spec
     from services.api.app.services.spec_patch import apply_patch
 
     if state.current_spec is None:

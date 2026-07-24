@@ -42,10 +42,7 @@ _CHAT_GENERATION_EXECUTOR = ThreadPoolExecutor(
 # ---------------------------------------------------------------------------
 
 from services.api.app.services.spec_defaults import ensure_required_defaults  # noqa: E402
-from services.api.app.services.tool_fallback import (  # noqa: E402
-    detect_generation_intent,
-    is_fallback_enabled,
-)
+from services.api.app.services.tool_fallback import is_fallback_enabled  # noqa: E402
 
 
 def _flat_args_to_spec(args: dict[str, Any]) -> AircraftSpec:
@@ -397,14 +394,14 @@ class ChatService:
         state = self.get_or_create_state(conversation_id)
         if selected_refs is not None:
             state.selected_refs = list(selected_refs)
-        shadow_intent = classify_message_intent(
+        debug_intent = classify_message_intent(
             message,
             selected_refs=state.selected_refs,
             has_current_spec=state.current_spec is not None,
         )
         logger.debug(
-            "chat shadow_intent=%s conversation_id=%s selected_refs=%s",
-            shadow_intent,
+            "chat debug_intent=%s conversation_id=%s selected_refs=%s",
+            debug_intent,
             conversation_id,
             state.selected_refs,
         )
@@ -477,39 +474,49 @@ class ChatService:
 
             if not tool_calls_collected:
                 if is_fallback_enabled():
-                    intent = detect_generation_intent(
-                        user_message=message,
+                    from services.api.app.graph.nodes.classify_intent import _classify
+                    from services.api.app.services.tool_fallback import build_args_for_intent
+
+                    result = _classify(
+                        message,
+                        state.selected_refs if state.selected_refs else None,
+                        state.current_spec is not None,
                         assistant_text=collected_content,
-                        has_current_design=state.current_spec is not None,
-                        selected_part=state.selected_refs[0] if state.selected_refs else None,
                     )
-                    if intent:
+                    if result:
+                        tool_name = result.intent
+                        args = build_args_for_intent(
+                            tool_name,
+                            user_message=message,
+                            assistant_text=collected_content,
+                            selected_part=state.selected_refs[0] if state.selected_refs else None,
+                        )
                         logger.info(
                             "no-tool-call fallback: tool=%s confidence=%.2f msg=%.60s",
-                            intent.tool_name,
-                            intent.confidence,
+                            tool_name,
+                            result.confidence,
                             message,
                         )
                         yield _sse_event("fallback_tool_detected", {
-                            "tool_name": intent.tool_name,
-                            "confidence": intent.confidence,
-                            "source": intent.source,
+                            "tool_name": tool_name,
+                            "confidence": result.confidence,
+                            "source": "no_tool_call_fallback",
                         })
                         yield _sse_event("tool_call", {
-                            "name": intent.tool_name,
-                            "arguments": json.dumps(intent.args, ensure_ascii=False),
+                            "name": tool_name,
+                            "arguments": json.dumps(args, ensure_ascii=False),
                         })
                         handler_map = {
                             "generate_design": self._handle_generate_design,
                             "modify_design": self._handle_modify_design,
                             "modify_selected_part": self._handle_modify_selected_part,
                         }
-                        handler = handler_map.get(intent.tool_name)
+                        handler = handler_map.get(tool_name)
                         if handler:
                             async for event in handler(
                                 state,
-                                intent.args,
-                                f"fallback-{intent.tool_name}",
+                                args,
+                                f"fallback-{tool_name}",
                                 background_tasks=background_tasks,
                             ):
                                 yield event
@@ -524,12 +531,12 @@ class ChatService:
 
                 yield _sse_event("tool_call", {"name": tool_name, "arguments": tool_args_str})
                 logger.debug(
-                    "chat shadow_intent_actual_tool=%s",
+                    "chat debug_intent_actual_tool=%s",
                     json.dumps(
                         {
                             "message": message,
                             "selected_refs": state.selected_refs,
-                            "shadow_intent": shadow_intent,
+                            "debug_intent": debug_intent,
                             "actual_tool": tool_name,
                         },
                         ensure_ascii=False,
