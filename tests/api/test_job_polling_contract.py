@@ -43,7 +43,7 @@ def test_job_files_are_record_string_to_string(client: TestClient):
 def test_failed_job_includes_error_message(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     """Frontend shows error_message when job status is failed."""
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("CAD engine crashed: out of memory")
 
     failing_runner = JobRunner(

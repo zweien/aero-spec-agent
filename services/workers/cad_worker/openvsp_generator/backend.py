@@ -24,10 +24,27 @@ ProgressCallback = Callable[[str, int], None]
 
 @dataclass(frozen=True)
 class CadArtifacts:
+    """Output of a CAD generation run.
+
+    The explicit fields (components / applied_parameters / validation /
+    openvsp_errors) are the contract every adapter must populate — previously
+    these lived in an untyped ``metadata: dict[str, Any]`` escape hatch, so the
+    fake adapter could omit them and downstream code silently fell back to spec
+    defaults (making fake validation always-true). Keeping them as real fields
+    with empty-dict defaults means callers can rely on their presence while
+    adapters that have nothing to report (fake) leave them empty.
+    """
+
     vsp3: Path
     step: Path | None = None
     glb: Path | None = None
     extra_files: dict[str, Path] = field(default_factory=dict)
+    components: dict[str, str] = field(default_factory=dict)
+    applied_parameters: dict[str, Any] = field(default_factory=dict)
+    validation: dict[str, Any] = field(default_factory=dict)
+    openvsp_errors: list[Any] = field(default_factory=list)
+    # Lightweight/conditional metadata that doesn't warrant a top-level field:
+    # backend name, vspaero_analysis result (when run).
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -120,9 +137,9 @@ class OpenVspBackend:
         if layout == "twin_boom" and spec.boom is not None:
             from services.workers.cad_worker.openvsp_generator.create_boom import create_booms
             build_results.extend(create_booms(adapter, spec))
-        if on_progress: on_progress("booms_created", 70)
-        if fail_stage == "creating_booms":
-            raise RuntimeError(f"OpenVSP failure injection at stage: creating_booms")
+            if on_progress: on_progress("booms_created", 70)
+            if fail_stage == "creating_booms":
+                raise RuntimeError(f"OpenVSP failure injection at stage: creating_booms")
 
         # Canard (canard / three_surface layouts)
         if layout in ("canard", "three_surface") and spec.canard is not None:
@@ -236,12 +253,12 @@ class OpenVspBackend:
             step=step,
             glb=glb,
             extra_files={"obj": obj},
+            components=_components(build_results),
+            applied_parameters=applied_parameters,
+            validation=validation,
+            openvsp_errors=adapter.errors,
             metadata={
                 "backend": "openvsp",
-                "components": _components(build_results),
-                "applied_parameters": applied_parameters,
-                "validation": validation,
-                "openvsp_errors": adapter.errors,
                 "vspaero_analysis": vspaero_data,
             },
         )

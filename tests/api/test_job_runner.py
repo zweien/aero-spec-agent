@@ -118,7 +118,7 @@ def test_enqueue_generate_sets_timestamps(tmp_path: Path):
 
 def test_failed_async_job_is_not_listed_as_usable_version(tmp_path: Path):
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("cad failed")
 
     store = VersionStore(root=tmp_path / "storage")
@@ -152,7 +152,7 @@ def test_successful_job_writes_succeeded_version_status(tmp_path: Path):
 
 def test_failed_job_writes_failed_version_status(tmp_path: Path):
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("cad failed")
 
     store = VersionStore(root=tmp_path / "storage")
@@ -179,7 +179,7 @@ def test_list_versions_excludes_failed_and_pending(tmp_path: Path):
 
     # Version 2: failed
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("fail")
 
     runner_fail = JobRunner(store=store, backend=FailingBackend())

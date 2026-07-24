@@ -147,7 +147,7 @@ def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_step_and_obj(
     assert artifacts.extra_files["obj"].name == "aircraft.obj"
     assert artifacts.extra_files["obj"].read_text(encoding="utf-8") == "fake export 11\n"
     assert artifacts.metadata["backend"] == "openvsp"
-    assert artifacts.metadata["components"] == {
+    assert artifacts.components == {
         "fuselage": "geom-1",
         "main_wing": "geom-2",
         "horizontal_tail": "geom-3",
@@ -155,19 +155,19 @@ def test_openvsp_backend_orchestrates_builders_and_returns_vsp3_step_and_obj(
         "left_engine": "geom-5",
         "right_engine": "geom-6",
     }
-    assert artifacts.metadata["applied_parameters"]["wing.span"] == 12.0
-    assert artifacts.metadata["applied_parameters"]["wing.root_chord"] == 1.2
-    assert artifacts.metadata["applied_parameters"]["fuselage.length"] == 7.0
-    assert artifacts.metadata["applied_parameters"]["engine.count"] == 2
-    assert artifacts.metadata["applied_parameters"]["left_engine.diameter"] == 0.375
-    assert artifacts.metadata["applied_parameters"]["left_engine.fineness_ratio"] == pytest.approx(
+    assert artifacts.applied_parameters["wing.span"] == 12.0
+    assert artifacts.applied_parameters["wing.root_chord"] == 1.2
+    assert artifacts.applied_parameters["fuselage.length"] == 7.0
+    assert artifacts.applied_parameters["engine.count"] == 2
+    assert artifacts.applied_parameters["left_engine.diameter"] == 0.375
+    assert artifacts.applied_parameters["left_engine.fineness_ratio"] == pytest.approx(
         6.4
     )
-    assert artifacts.metadata["validation"]["vsp3"]["status"] == "pass"
-    assert artifacts.metadata["validation"]["vsp3.exists"]["status"] == "pass"
-    assert artifacts.metadata["validation"]["step.exists"]["status"] == "pass"
-    assert artifacts.metadata["validation"]["obj.exists"]["status"] == "pass"
-    assert artifacts.metadata["validation"]["glb.exists"]["status"] == "pass"
+    assert artifacts.validation["vsp3"]["status"] == "pass"
+    assert artifacts.validation["vsp3.exists"]["status"] == "pass"
+    assert artifacts.validation["step.exists"]["status"] == "pass"
+    assert artifacts.validation["obj.exists"]["status"] == "pass"
+    assert artifacts.validation["glb.exists"]["status"] == "pass"
 
 
 def test_openvsp_backend_updates_model_before_writing_vsp3(tmp_path: Path):
@@ -190,7 +190,7 @@ def test_openvsp_backend_engine_y_offset_affects_left_right_applied_parameters_s
         vsp_module=fake_vsp,
     ).generate(_spec_with_engine_offsets(), tmp_path)
 
-    applied = artifacts.metadata["applied_parameters"]
+    applied = artifacts.applied_parameters
     assert applied["engine.x_offset"] == pytest.approx(0.2)
     assert applied["engine.y_offset"] == pytest.approx(0.5)
     assert applied["engine.z_offset"] == pytest.approx(-0.1)
@@ -253,31 +253,29 @@ def test_generate_aircraft_prefers_applied_parameters_over_backend_validation(
     tmp_path: Path,
 ):
     class StaleValidationBackend:
-        def generate(self, _spec, output_dir: Path) -> CadArtifacts:
+        def generate(self, _spec, output_dir: Path, *, on_progress=None) -> CadArtifacts:
             output_dir.mkdir(parents=True, exist_ok=True)
             vsp3 = output_dir / "aircraft.vsp3"
             vsp3.write_text("fake openvsp model\n", encoding="utf-8")
             return CadArtifacts(
                 vsp3=vsp3,
-                metadata={
-                    "backend": "openvsp",
-                    "applied_parameters": {
-                        "wing.span": 12.0,
-                        "engine.count": 2,
+                applied_parameters={
+                    "wing.span": 12.0,
+                    "engine.count": 2,
+                },
+                validation={
+                    "wing.span": {
+                        "expected": 12.0,
+                        "actual": 99.0,
+                        "status": "fail",
                     },
-                    "validation": {
-                        "wing.span": {
-                            "expected": 12.0,
-                            "actual": 99.0,
-                            "status": "fail",
-                        },
-                        "engine.count": {
-                            "expected": 2,
-                            "actual": 99,
-                            "status": "fail",
-                        },
+                    "engine.count": {
+                        "expected": 2,
+                        "actual": 99,
+                        "status": "fail",
                     },
                 },
+                metadata={"backend": "openvsp"},
             )
 
     result = generate_aircraft(

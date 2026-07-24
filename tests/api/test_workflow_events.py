@@ -77,5 +77,6 @@ def test_publish_artifact_generated_emits_event():
 def test_cad_stage_labels_has_expected_entries():
     assert "fuselage_created" in CAD_STAGE_LABELS
     assert "wing_created" in CAD_STAGE_LABELS
+    assert "booms_created" in CAD_STAGE_LABELS
     assert "preview_ready" in CAD_STAGE_LABELS
-    assert len(CAD_STAGE_LABELS) == 8
+    assert len(CAD_STAGE_LABELS) == 9

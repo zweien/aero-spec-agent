@@ -46,6 +46,7 @@ const STAGE_LABELS: Record<string, string> = {
   // CAD sub-stages
   fuselage_created: "生成机身",
   wing_created: "生成机翼",
+  booms_created: "生成尾撑",
   tail_created: "生成尾翼",
   engine_created: "生成发动机",
   vsp_model_saved: "保存模型",

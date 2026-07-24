@@ -110,7 +110,7 @@ def test_failed_backend_job_is_queryable_but_not_listed_as_usable_version(
     monkeypatch: pytest.MonkeyPatch,
 ):
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("cad failed")
 
     spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
@@ -184,7 +184,7 @@ def test_diagnostics_endpoint_returns_job_and_version_details(client: TestClient
 
 def test_diagnostics_endpoint_for_failed_job(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("cad exploded")
 
     spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")

@@ -26,6 +26,7 @@ ARTIFACT_LABELS: dict[str, str] = {
 CAD_STAGE_LABELS: dict[str, str] = {
     "fuselage_created": "正在生成机身",
     "wing_created": "正在生成机翼",
+    "booms_created": "正在生成尾撑",
     "tail_created": "正在生成尾翼",
     "engine_created": "正在生成发动机",
     "vsp_model_saved": "正在保存模型",

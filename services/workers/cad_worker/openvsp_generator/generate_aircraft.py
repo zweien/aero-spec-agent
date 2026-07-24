@@ -63,24 +63,13 @@ def _glb_parseable_entry(path: Path) -> dict[str, Any]:
 
 
 def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend, *, on_progress: ProgressCallback | None = None) -> GenerationResult:
-    # NOTE: many test doubles define generate(self, spec, output_dir) without
-    # on_progress. Until the CadBackend contract is made explicit (#2) and all
-    # doubles conform, keep this compat shim. Removing it here would break ~10
-    # tests whose mocks predate the on_progress parameter.
-    try:
-        artifacts = backend.generate(spec, output_dir, on_progress=on_progress)
-    except TypeError:
-        artifacts = backend.generate(spec, output_dir)
+    artifacts = backend.generate(spec, output_dir, on_progress=on_progress)
     artifact_files = _artifact_files(artifacts)
     backend_name = str(artifacts.metadata.get("backend", backend.__class__.__name__))
     generation_log_path = output_dir / "generation_log.json"
     validation_report_path = output_dir / "validation_report.json"
-    applied_parameters = artifacts.metadata.get("applied_parameters", {})
-    if not isinstance(applied_parameters, dict):
-        applied_parameters = {}
-    backend_validation = artifacts.metadata.get("validation", {})
-    if not isinstance(backend_validation, dict):
-        backend_validation = {}
+    applied_parameters = artifacts.applied_parameters
+    backend_validation = artifacts.validation
     wing_span_actual = applied_parameters.get("wing.span", float(spec.wing.span.value))
     engine_count_actual = applied_parameters.get("engine.count", int(spec.engine.count.value))
     validation_report = {
@@ -157,8 +146,14 @@ def generate_aircraft(spec: AircraftSpec, output_dir: Path, backend: CadBackend,
     generation_log = {
         "aircraft": spec.aircraft.name,
         "backend": backend_name,
-        "backend_metadata": artifacts.metadata,
-        "components": artifacts.metadata.get("components", {}),
+        "backend_metadata": {
+            **artifacts.metadata,
+            "components": artifacts.components,
+            "applied_parameters": artifacts.applied_parameters,
+            "validation": artifacts.validation,
+            "openvsp_errors": artifacts.openvsp_errors,
+        },
+        "components": artifacts.components,
         "applied_parameters": applied_parameters,
         "files": {key: str(path) for key, path in artifact_files.items()},
     }

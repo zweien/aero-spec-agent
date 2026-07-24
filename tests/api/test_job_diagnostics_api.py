@@ -54,7 +54,7 @@ def test_diagnostics_for_failed_job_shows_error(client: TestClient, monkeypatch:
     _generate(client, "diag-fail")
 
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("cad exploded")
 
     monkeypatch.setattr(

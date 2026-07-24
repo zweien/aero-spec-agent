@@ -104,7 +104,7 @@ def test_aggregate_after_completion(tmp_path):
 
 def test_aggregate_handles_failed_variant(tmp_path):
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("cad failed")
 
     store = VersionStore(root=tmp_path / "storage")

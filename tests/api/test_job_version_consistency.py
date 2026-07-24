@@ -27,7 +27,7 @@ def test_succeeded_job_version_status_consistency(tmp_path: Path):
 
 def test_failed_job_version_status_consistency(tmp_path: Path):
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("boom")
 
     store = VersionStore(root=tmp_path / "storage")
@@ -63,7 +63,7 @@ def test_mixed_statuses_list_versions_only_succeeded(tmp_path: Path):
     store.create_version_dir("demo")
     # v3: failed
     class Fail(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("x")
     runner = JobRunner(store=store, backend=Fail())
     job = runner.enqueue_generate(design_id="demo", spec=spec)
@@ -80,7 +80,7 @@ def test_concurrent_mixed_success_failure_isolation(tmp_path: Path):
     spec = load_aircraft_spec(EXAMPLE)
 
     class FailingBackend(FakeCadBackend):
-        def generate(self, spec, output_dir):
+        def generate(self, spec, output_dir, *, on_progress=None):
             raise RuntimeError("intentional failure")
 
     results: list[tuple[str, int, str]] = []  # (job_id, version_no, status)
