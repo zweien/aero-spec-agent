@@ -67,19 +67,8 @@ class VspaeroReport:
         return d
 
 
-LAYOUT_ANALYSIS_NAMES: dict[str, list[str]] = {
-    "conventional": [],
-    "twin_boom": [],
-    "flying_wing": [],
-    "blended_wing_body": [],
-    "canard": ["canard"],
-    "three_surface": ["canard"],
-    "tandem_wing": ["rear_wing"],
-    "joined_wing": ["rear_wing"],
-    "biplane": ["lower_wing"],
-    "box_wing": ["box_lower_wing"],
-    "multi_fuselage": [],
-}
+# Layout → analysis-surface knowledge now lives in layout_plan.LayoutPlan
+# (extra_analysis_surfaces). This module reads it via get_layout_plan().
 
 
 
@@ -393,8 +382,8 @@ def _resolve_geoms_from_vsp3(vsp_path: str, spec: AircraftSpec) -> list[str]:
     _ensure_vspaero_path(vsp)
     vsp.ClearVSPModel()
     vsp.ReadVSPFile(vsp_path)
-    layout = spec.aircraft.layout.lower()
-    extra_names = LAYOUT_ANALYSIS_NAMES.get(layout, [])
+    from services.workers.cad_worker.openvsp_generator.layout_plan import get_layout_plan
+    plan = get_layout_plan(spec.aircraft.layout)
 
     all_geoms = list(vsp.FindGeoms())
     wing_ids = [g for g in all_geoms if str(vsp.GetGeomTypeName(g)).lower() == "wing"]
@@ -404,7 +393,7 @@ def _resolve_geoms_from_vsp3(vsp_path: str, spec: AircraftSpec) -> list[str]:
     # main_wing is the first WING geom; extras (canard/rear_wing/lower_wing)
     # follow in build order. This mirrors create_* builders' registration order.
     result = [wing_ids[0]]
-    for _name in extra_names:
+    for _name in plan.extra_analysis_surfaces:
         # For layouts with a second wing, take the next available WING geom.
         if len(wing_ids) > len(result):
             result.append(wing_ids[len(result)])

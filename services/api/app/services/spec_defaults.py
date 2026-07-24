@@ -90,67 +90,92 @@ def _resolve(spec_data: dict[str, Any], dotted_path: str) -> dict[str, Any] | No
 
 
 def _layout_aware_defaults(spec_data: dict[str, Any]) -> None:
-    """Add layout-specific sections when the layout requires them but they are absent."""
-    layout = ""
+    """Add layout-specific sections when the layout requires them but they are absent.
+
+    Which sections a layout needs is declared by LayoutPlan.extra_sections
+    (single source of truth). The scalar defaults per section live in the
+    _SECTION_DEFAULTS dispatch below — keyed by the same section names.
+    """
     aircraft = spec_data.get("aircraft")
+    layout = ""
     if isinstance(aircraft, dict):
         layout = str(aircraft.get("layout", "")).lower()
-
     if not layout:
         return
 
-    # Canard / three_surface → need canard section
-    if layout in ("canard", "three_surface") and "canard" not in spec_data:
-        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
-        spec_data["canard"] = {
-            "span": _spec_scalar({"value": round(span * 0.4, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-            "chord": _spec_scalar({"value": 0.5, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-        }
+    # Late import avoids a services→workers cycle at module load.
+    from services.workers.cad_worker.openvsp_generator.layout_plan import get_layout_plan
 
-    # Tandem wing / joined wing → need rear_wing section
-    if layout in ("tandem_wing", "joined_wing") and "rear_wing" not in spec_data:
-        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
-        spec_data["rear_wing"] = {
-            "span": _spec_scalar({"value": round(span * 0.7, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-            "chord": _spec_scalar({"value": 0.6, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-        }
+    plan = get_layout_plan(layout)
+    wing_span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
 
-    # Biplane → need second_wing section
-    if layout == "biplane" and "second_wing" not in spec_data:
-        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
-        spec_data["second_wing"] = {
-            "span": _spec_scalar({"value": round(span * 0.85, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-            "chord": _spec_scalar({"value": 0.8, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-            "gap": _spec_scalar({"value": 1.2, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-        }
+    for section in plan.extra_sections:
+        if section in spec_data:
+            continue  # already provided
+        builder = _SECTION_DEFAULTS.get(section)
+        if builder is not None:
+            spec_data[section] = builder(wing_span)
 
-    # Multi-fuselage → need multi_fuselage section
-    if layout == "multi_fuselage" and "multi_fuselage" not in spec_data:
-        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
-        spec_data["multi_fuselage"] = {
-            "spacing": _spec_scalar({"value": round(span * 0.5, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-        }
 
-    # Box wing → need box_wing_config section
-    if layout == "box_wing" and "box_wing_config" not in spec_data:
-        spec_data["box_wing_config"] = {
-            "gap": _spec_scalar({"value": 1.5, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-        }
+def _canard_defaults(span: float) -> dict[str, Any]:
+    return {
+        "span": _spec_scalar({"value": round(span * 0.4, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        "chord": _spec_scalar({"value": 0.5, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+    }
 
-    # Twin boom → need boom section
-    if layout == "twin_boom" and "boom" not in spec_data:
-        span = spec_data.get("wing", {}).get("span", {}).get("value", 6.0)
-        spec_data["boom"] = {
-            "length": _spec_scalar({"value": 2.0, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-            "span": _spec_scalar({"value": round(span * 0.6, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-        }
 
-    # Blended wing body → need body section
-    if layout == "blended_wing_body" and "body" not in spec_data:
-        spec_data["body"] = {
-            "width": _spec_scalar({"value": 2.0, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-            "height": _spec_scalar({"value": 0.6, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
-        }
+def _rear_wing_defaults(span: float) -> dict[str, Any]:
+    return {
+        "span": _spec_scalar({"value": round(span * 0.7, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        "chord": _spec_scalar({"value": 0.6, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+    }
+
+
+def _second_wing_defaults(span: float) -> dict[str, Any]:
+    return {
+        "span": _spec_scalar({"value": round(span * 0.85, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        "chord": _spec_scalar({"value": 0.8, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        "gap": _spec_scalar({"value": 1.2, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+    }
+
+
+def _multi_fuselage_defaults(span: float) -> dict[str, Any]:
+    return {
+        "spacing": _spec_scalar({"value": round(span * 0.5, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+    }
+
+
+def _box_wing_config_defaults(span: float) -> dict[str, Any]:
+    return {
+        "gap": _spec_scalar({"value": 1.5, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+    }
+
+
+def _boom_defaults(span: float) -> dict[str, Any]:
+    return {
+        "length": _spec_scalar({"value": 2.0, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        "span": _spec_scalar({"value": round(span * 0.6, 2), "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+    }
+
+
+def _body_defaults(span: float) -> dict[str, Any]:
+    return {
+        "width": _spec_scalar({"value": 2.0, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+        "height": _spec_scalar({"value": 0.6, "unit": "m", "source": "rule_default", "confidence": 0.5, "reason": "LLM 未提供，系统按规则补全"}),
+    }
+
+
+# section name → default-value generator (takes wing span). Keyed by the same
+# section names declared in LayoutPlan.extra_sections.
+_SECTION_DEFAULTS: dict[str, "Any"] = {
+    "canard": _canard_defaults,
+    "rear_wing": _rear_wing_defaults,
+    "second_wing": _second_wing_defaults,
+    "multi_fuselage": _multi_fuselage_defaults,
+    "box_wing_config": _box_wing_config_defaults,
+    "boom": _boom_defaults,
+    "body": _body_defaults,
+}
 
 
 def ensure_required_defaults(spec_data: dict[str, Any]) -> None:

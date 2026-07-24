@@ -12,6 +12,7 @@ from services.workers.cad_worker.openvsp_generator.create_fuselage import create
 from services.workers.cad_worker.openvsp_generator.create_tail import create_tail
 from services.workers.cad_worker.openvsp_generator.create_wing import create_main_wing
 from services.workers.cad_worker.openvsp_generator.geometry import GeometryBuildResult
+from services.workers.cad_worker.openvsp_generator.layout_plan import get_layout_plan
 from services.workers.cad_worker.openvsp_generator.obj_to_glb import convert_obj_to_glb
 from services.workers.cad_worker.openvsp_generator.openvsp_adapter import OpenVspAdapter
 from services.workers.cad_worker.openvsp_generator.verify_model import (
@@ -107,18 +108,20 @@ class OpenVspBackend:
         adapter.clear_model()
 
         layout = str(spec.aircraft.layout).lower()
+        plan = get_layout_plan(layout)
 
         build_results: list[GeometryBuildResult] = []
 
-        # Fuselage (not for flying_wing; BWB uses flat_body; multi_fuselage uses paired fuselages)
-        if layout == "multi_fuselage" and spec.multi_fuselage is not None:
+        # Fuselage — mode is layout-driven (LayoutPlan.fuselage_mode).
+        if plan.fuselage_mode == "multi_fuselage" and spec.multi_fuselage is not None:
             from services.workers.cad_worker.openvsp_generator.create_multi_fuselage import create_multi_fuselage
             build_results.extend(create_multi_fuselage(adapter, spec))
-        elif layout == "blended_wing_body" and spec.body is not None:
+        elif plan.fuselage_mode == "flat_body" and spec.body is not None:
             from services.workers.cad_worker.openvsp_generator.create_body import create_flat_body
             build_results.append(create_flat_body(adapter, spec))
-        elif layout != "flying_wing":
+        elif plan.fuselage_mode == "standard":
             build_results.append(create_fuselage(adapter, spec))
+        # fuselage_mode == "none" (flying_wing): build nothing
         if on_progress: on_progress("fuselage_created", 62)
         if fail_stage == "creating_fuselage":
             raise RuntimeError(f"OpenVSP failure injection at stage: creating_fuselage")
@@ -133,39 +136,36 @@ class OpenVspBackend:
         if fail_stage == "creating_wing":
             raise RuntimeError(f"OpenVSP failure injection at stage: creating_wing")
 
-        # Booms (twin_boom layout only)
-        if layout == "twin_boom" and spec.boom is not None:
+        # Layout-specific extra lifting/non-lifting surfaces (LayoutPlan-driven).
+        # The builder dispatched for each section mirrors the layout's geometry.
+        if "boom" in plan.extra_sections and spec.boom is not None:
             from services.workers.cad_worker.openvsp_generator.create_boom import create_booms
             build_results.extend(create_booms(adapter, spec))
             if on_progress: on_progress("booms_created", 70)
             if fail_stage == "creating_booms":
                 raise RuntimeError(f"OpenVSP failure injection at stage: creating_booms")
 
-        # Canard (canard / three_surface layouts)
-        if layout in ("canard", "three_surface") and spec.canard is not None:
+        if "canard" in plan.extra_sections and spec.canard is not None:
             from services.workers.cad_worker.openvsp_generator.create_canard import create_canard
             build_results.append(create_canard(adapter, spec))
 
-        # Rear wing (tandem_wing / joined_wing layouts)
-        if layout in ("tandem_wing", "joined_wing") and spec.rear_wing is not None:
+        if "rear_wing" in plan.extra_sections and spec.rear_wing is not None:
             from services.workers.cad_worker.openvsp_generator.create_tandem_wing import create_rear_wing
             build_results.append(create_rear_wing(adapter, spec))
 
-        # Second/lower wing (biplane layout)
-        if layout == "biplane" and spec.second_wing is not None:
+        if "second_wing" in plan.extra_sections and spec.second_wing is not None:
             from services.workers.cad_worker.openvsp_generator.create_biplane import create_lower_wing
             build_results.append(create_lower_wing(adapter, spec))
 
-        # Box wing lower wing + endplates (box_wing layout)
-        if layout == "box_wing" and spec.box_wing_config is not None:
+        if "box_wing_config" in plan.extra_sections and spec.box_wing_config is not None:
             from services.workers.cad_worker.openvsp_generator.create_box_wing import (
                 create_box_lower_wing, create_endplates,
             )
             build_results.append(create_box_lower_wing(adapter, spec))
             build_results.extend(create_endplates(adapter, spec))
 
-        # Tail (not for flying_wing, BWB, tandem_wing, joined_wing)
-        if layout not in ("flying_wing", "blended_wing_body", "tandem_wing", "joined_wing"):
+        # Tail — skipped for tailless layouts (LayoutPlan.skip_tail).
+        if not plan.skip_tail:
             build_results.extend(create_tail(adapter, spec))
         if on_progress: on_progress("tail_created", 72)
         if fail_stage == "creating_tail":
@@ -191,11 +191,9 @@ class OpenVspBackend:
         vspaero_data: dict[str, Any] = {}
         if _vspaero_enabled():
             from services.workers.cad_worker.openvsp_generator.vspaero_analysis import (
-                LAYOUT_ANALYSIS_NAMES,
                 run_vspaero_analysis_with_timeout,
             )
-            layout = spec.aircraft.layout.lower()
-            all_names = ["main_wing"] + LAYOUT_ANALYSIS_NAMES.get(layout, [])
+            all_names = ["main_wing", *plan.extra_analysis_surfaces]
             component_map = _components(build_results)
             try:
                 # Run in an isolated subprocess with a hard timeout: the
