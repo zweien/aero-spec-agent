@@ -1,6 +1,6 @@
 {
   "name": "@aero-spec-agent/web",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p ${WEB_PORT:-3900}",

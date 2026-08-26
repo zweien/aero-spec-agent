@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed demo design data for v0.1.0 showcase.
+"""Seed demo design data for v0.3.0 showcase.
 
 Generates 3 aircraft designs using the configured CAD backend (default: fake).
 Demo design_ids use 'demo-' prefix to isolate from production data.
