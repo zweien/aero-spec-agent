@@ -27,6 +27,34 @@ export function extractLayout(spec: AircraftPreviewSpec | null): string {
     : "conventional";
 }
 
+const PLANFORM_LABELS: Record<string, string> = {
+  delta: "三角翼",
+  tapered: "梯形翼",
+  rectangular: "矩形翼",
+  elliptical: "椭圆翼",
+};
+
+function extractPlanform(spec: AircraftPreviewSpec | null): string | null {
+  if (!spec) return null;
+  const wingObj = (spec as Record<string, unknown>).wing as Record<string, unknown> | undefined;
+  const raw = wingObj?.planform;
+  const str = typeof raw === "string" ? raw : (raw as Scalar | null | undefined)?.value;
+  return typeof str === "string" && str.trim() ? str.trim().toLowerCase() : null;
+}
+
+// Badge label combining the layout taxonomy with the wing planform so that
+// e.g. a delta-wing design requested in chat shows "常规布局 · 三角翼"
+// instead of a bare "常规布局" that reads like the request was ignored.
+export function layoutBadgeLabel(spec: AircraftPreviewSpec | null): string {
+  const layout = LAYOUT_LABELS[extractLayout(spec)] ?? extractLayout(spec);
+  const planform = extractPlanform(spec);
+  const planformLabel = planform ? PLANFORM_LABELS[planform] : null;
+  if (planformLabel && extractLayout(spec) === "conventional") {
+    return `${layout} · ${planformLabel}`;
+  }
+  return layout;
+}
+
 export type AircraftPreviewSpec = {
   layout?: Scalar | null;
   fuselage: {

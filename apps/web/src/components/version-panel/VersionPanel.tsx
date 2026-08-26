@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import type { DesignRuleEntry, PerformanceEstimateEntry, VspaeroAnalysisEntry } from "@/app/page";
 import { VersionCompare } from "./VersionCompare";
 import { AddToCompareButton } from "@/components/compare/AddToCompareButton";
 import type { CompareItem, CompareMetrics } from "@/components/compare/types";
 import { DesignMetricsCard } from "@/components/metrics/DesignMetricsCard";
+import { AeroSweepCharts } from "./AeroSweepChart";
 
 type VersionResponse = {
   files: string[];
@@ -61,6 +62,13 @@ export function VersionPanel({
 }: VersionPanelProps) {
   const [compareMode, setCompareMode] = useState(false);
   const [selectedFirst, setSelectedFirst] = useState<number | null>(null);
+  // Accordion: only one bottom section expands at a time. Previously all four
+  // could stack into a wall of content that covered most of the workspace and
+  // was hard to dismiss.
+  const [openSection, setOpenSection] = useState<string | null>(null);
+  const toggleSection = useCallback((key: string) => {
+    setOpenSection((prev) => (prev === key ? null : key));
+  }, []);
 
   const hasContent = (designRules && designRules.length > 0) || (perfEstimates && perfEstimates.length > 0) || aeroAnalysis || designMetrics;
   const hasVersions = versionList && versionList.length > 0;
@@ -159,13 +167,33 @@ export function VersionPanel({
       ) : (
         <>
           {designRules && designRules.length > 0 && (
-            <DesignRulesSummary rules={designRules} />
+            <DesignRulesSummary
+              rules={designRules}
+              open={openSection === "rules"}
+              onToggle={() => toggleSection("rules")}
+            />
           )}
           {perfEstimates && perfEstimates.length > 0 && (
-            <PerformanceEstimateSummary estimates={perfEstimates} />
+            <PerformanceEstimateSummary
+              estimates={perfEstimates}
+              open={openSection === "perf"}
+              onToggle={() => toggleSection("perf")}
+            />
           )}
-          {aeroAnalysis && <VspaeroSummary analysis={aeroAnalysis} />}
-          {designMetrics && <DesignMetricsSummary metrics={designMetrics} />}
+          {aeroAnalysis && (
+            <VspaeroSummary
+              analysis={aeroAnalysis}
+              open={openSection === "aero"}
+              onToggle={() => toggleSection("aero")}
+            />
+          )}
+          {designMetrics && (
+            <DesignMetricsSummary
+              metrics={designMetrics}
+              open={openSection === "metrics"}
+              onToggle={() => toggleSection("metrics")}
+            />
+          )}
         </>
       )}
 
@@ -178,8 +206,16 @@ export function VersionPanel({
   );
 }
 
-function DesignRulesSummary({ rules }: { rules: DesignRuleEntry[] }) {
-  const [expanded, setExpanded] = useState(false);
+type SectionToggleProps = {
+  open: boolean;
+  onToggle: () => void;
+};
+
+function SectionArrow({ open }: { open: boolean }) {
+  return <span className="design-rules-arrow">{open ? "▾" : "▸"}</span>;
+}
+
+function DesignRulesSummary({ rules, open, onToggle }: { rules: DesignRuleEntry[] } & SectionToggleProps) {
   const counts = { pass: 0, warn: 0, fail: 0, skip: 0 };
   for (const r of rules) {
     counts[r.status]++;
@@ -190,7 +226,8 @@ function DesignRulesSummary({ rules }: { rules: DesignRuleEntry[] }) {
       <button
         type="button"
         className="design-rules-toggle"
-        onClick={() => setExpanded(!expanded)}
+        onClick={onToggle}
+        aria-expanded={open}
       >
         设计检查
         {counts.fail > 0 && (
@@ -208,11 +245,9 @@ function DesignRulesSummary({ rules }: { rules: DesignRuleEntry[] }) {
             {counts.pass}
           </span>
         )}
-        <span className="design-rules-arrow">
-          {expanded ? "▾" : "▸"}
-        </span>
+        <SectionArrow open={open} />
       </button>
-      {expanded && (
+      {open && (
         <div className="design-rules-list">
           <div className="design-rules-bar">
             <span className="design-rule-pill design-rule-pill-pass">
@@ -270,8 +305,7 @@ const PERF_STATUS_ICON: Record<string, string> = {
   unusual: "✗",
 };
 
-function PerformanceEstimateSummary({ estimates }: { estimates: PerformanceEstimateEntry[] }) {
-  const [expanded, setExpanded] = useState(false);
+function PerformanceEstimateSummary({ estimates, open, onToggle }: { estimates: PerformanceEstimateEntry[] } & SectionToggleProps) {
   const counts = { reasonable: 0, warning: 0, unusual: 0 };
   for (const e of estimates) {
     counts[e.status]++;
@@ -282,7 +316,8 @@ function PerformanceEstimateSummary({ estimates }: { estimates: PerformanceEstim
       <button
         type="button"
         className="design-rules-toggle"
-        onClick={() => setExpanded(!expanded)}
+        onClick={onToggle}
+        aria-expanded={open}
       >
         性能估算
         {counts.unusual > 0 && (
@@ -300,11 +335,9 @@ function PerformanceEstimateSummary({ estimates }: { estimates: PerformanceEstim
             {counts.reasonable}
           </span>
         )}
-        <span className="design-rules-arrow">
-          {expanded ? "▾" : "▸"}
-        </span>
+        <SectionArrow open={open} />
       </button>
-      {expanded && (
+      {open && (
         <div className="design-rules-list">
           <div className="design-rules-bar">
             <span className="design-rule-pill design-rule-pill-pass">
@@ -341,28 +374,60 @@ function PerformanceEstimateSummary({ estimates }: { estimates: PerformanceEstim
   );
 }
 
-function VspaeroSummary({ analysis }: { analysis: VspaeroAnalysisEntry }) {
-  const [expanded, setExpanded] = useState(false);
+type AeroBadge = {
+  label: string;
+  className: string;
+  note?: string;
+};
+
+// Distinguish "real solver" from "not run / failed / simulated data" —
+// previously a skipped or fake analysis rendered the same green pill as a
+// successful VSPAERO run.
+function aeroBadge(analysis: VspaeroAnalysisEntry): AeroBadge {
+  if (analysis.status === "failed") {
+    return { label: "✗ 求解失败", className: "design-rule-pill-fail" };
+  }
+  if (analysis.status === "skipped") {
+    return {
+      label: "○ 未运行",
+      className: "design-rule-pill-skip",
+      note: "气动分析未启用或本次生成已跳过；以下数值不可用。",
+    };
+  }
+  if (analysis.method === "fake_vspaero") {
+    return {
+      label: "⚠ 模拟数据",
+      className: "design-rule-pill-warn",
+      note: "当前为模拟气动数据（fake 后端），并非真实求解结果。",
+    };
+  }
+  return { label: "✓ VSPAERO", className: "design-rule-pill-pass" };
+}
+
+function VspaeroSummary({ analysis, open, onToggle }: { analysis: VspaeroAnalysisEntry } & SectionToggleProps) {
+  const badge = aeroBadge(analysis);
   const isOk = analysis.status === "success";
-  const methodLabel = analysis.method === "VSPAERO_panel" ? "面元法" : analysis.method === "fake_vspaero" ? "模拟" : analysis.method;
 
   return (
     <span className="design-rules">
       <button
         type="button"
         className="design-rules-toggle"
-        onClick={() => setExpanded(!expanded)}
+        onClick={onToggle}
+        aria-expanded={open}
       >
         气动分析
-        <span className={`design-rule-pill ${isOk ? "design-rule-pill-pass" : "design-rule-pill-fail"}`}>
-          {isOk ? "✓" : "✗"} {methodLabel}
-        </span>
-        <span className="design-rules-arrow">
-          {expanded ? "▾" : "▸"}
-        </span>
+        <span className={`design-rule-pill ${badge.className}`}>{badge.label}</span>
+        <SectionArrow open={open} />
       </button>
-      {expanded && (
+      {open && (
         <div className="design-rules-list">
+          {badge.note && (
+            <div className={`design-rule-row ${analysis.status === "failed" ? "design-rule-fail" : "design-rule-warn"}`}>
+              <span className="design-rule-icon">{analysis.status === "failed" ? "✗" : "⚠"}</span>
+              <span className="design-rule-msg">{badge.note}</span>
+            </div>
+          )}
           {analysis.error_message && (
             <div className="design-rule-row design-rule-fail">
               <span className="design-rule-icon">✗</span>
@@ -392,6 +457,9 @@ function VspaeroSummary({ analysis }: { analysis: VspaeroAnalysisEntry }) {
                   </span>
                 )}
               </div>
+              {analysis.alpha_sweep.length >= 3 && (
+                <AeroSweepCharts sweep={analysis.alpha_sweep} optimalAlpha={analysis.optimal_alpha} />
+              )}
               {analysis.alpha_sweep.length > 0 && (
                 <table className="aero-sweep-table">
                   <thead>
@@ -424,8 +492,7 @@ function VspaeroSummary({ analysis }: { analysis: VspaeroAnalysisEntry }) {
   );
 }
 
-function DesignMetricsSummary({ metrics }: { metrics: CompareMetrics }) {
-  const [expanded, setExpanded] = useState(false);
+function DesignMetricsSummary({ metrics, open, onToggle }: { metrics: CompareMetrics } & SectionToggleProps) {
   const metricCount = [
     metrics.wingspan_m,
     metrics.fuselage_length_m,
@@ -442,17 +509,16 @@ function DesignMetricsSummary({ metrics }: { metrics: CompareMetrics }) {
       <button
         type="button"
         className="design-rules-toggle"
-        onClick={() => setExpanded(!expanded)}
+        onClick={onToggle}
+        aria-expanded={open}
       >
         设计指标
         <span className="design-rule-pill design-rule-pill-pass">
           {metricCount}
         </span>
-        <span className="design-rules-arrow">
-          {expanded ? "▾" : "▸"}
-        </span>
+        <SectionArrow open={open} />
       </button>
-      {expanded && (
+      {open && (
         <div className="design-rules-list" style={{ padding: 8 }}>
           <DesignMetricsCard metrics={metrics} />
         </div>

@@ -273,12 +273,29 @@ function loadImportedModel(
   );
 }
 
+export type CadViewPreset = "iso" | "top" | "front" | "side";
+
+export type CadViewRequest = {
+  preset: CadViewPreset;
+  /** Incrementing counter so repeated clicks on the same preset still fire. */
+  nonce: number;
+};
+
+const VIEW_PRESET_POSITIONS: Record<CadViewPreset, [number, number, number]> = {
+  iso: [-7, -10, 5.2],
+  top: [0, -0.01, 12],
+  front: [0, -12, 1.2],
+  side: [12, 0, 1.2],
+};
+
 type AircraftThreePreviewProps = {
   modelFormat?: CadPreviewFormat;
   modelUrl?: string;
   onStatusChange?: (status: CadPreviewStatus) => void;
   onSelectPart?: (partRef: string | null) => void;
   spec: AircraftPreviewSpec;
+  /** When the nonce changes, snap the camera to the requested preset. */
+  viewRequest?: CadViewRequest | null;
 };
 
 export function AircraftThreePreview({
@@ -287,6 +304,7 @@ export function AircraftThreePreview({
   onSelectPart,
   onStatusChange,
   spec,
+  viewRequest,
 }: AircraftThreePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [rendererError, setRendererError] = useState<string | null>(null);
@@ -306,6 +324,20 @@ export function AircraftThreePreview({
   useEffect(() => {
     onSelectPartRef.current = onSelectPart;
   }, [onSelectPart]);
+
+  // Snap camera to a preset view when requested from the parent toolbar.
+  const appliedViewNonceRef = useRef(0);
+  useEffect(() => {
+    if (!viewRequest || viewRequest.nonce === appliedViewNonceRef.current) return;
+    appliedViewNonceRef.current = viewRequest.nonce;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const camera = controls.object;
+    const pos = VIEW_PRESET_POSITIONS[viewRequest.preset];
+    camera.position.set(pos[0], pos[1], pos[2]);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  }, [viewRequest]);
 
   // Scene setup — runs once
   useEffect(() => {

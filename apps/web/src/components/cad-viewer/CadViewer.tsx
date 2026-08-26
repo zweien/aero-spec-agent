@@ -11,11 +11,11 @@ import {
 } from "./cadPreviewStatus";
 import {
   buildAircraftPreview,
-  extractLayout,
-  LAYOUT_LABELS,
+  layoutBadgeLabel,
   type AircraftPreviewSpec,
   type PreviewElement,
 } from "./previewGeometry";
+import type { CadViewPreset, CadViewRequest } from "./AircraftThreePreview";
 
 type CadViewerRuntimeStatus = {
   status: "idle" | "running" | "completed" | "failed";
@@ -68,10 +68,17 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
   const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
   const [drawingsPct, setDrawingsPct] = useState(28);
   const [topPct, setTopPct] = useState(50);
+  const [viewRequest, setViewRequest] = useState<CadViewRequest | null>(null);
+  const viewNonceRef = useRef(0);
   const preview = spec ? buildAircraftPreview(spec) : null;
   const surfaceRef = useRef<HTMLDivElement>(null);
   const drawingsRef = useRef<HTMLDivElement>(null);
   const dragTarget = useRef<"surface" | "drawings" | null>(null);
+
+  const requestView = useCallback((preset: CadViewPreset) => {
+    viewNonceRef.current += 1;
+    setViewRequest({ preset, nonce: viewNonceRef.current });
+  }, []);
 
   const handleStatusChange = useCallback((status: CadPreviewStatus) => {
     setPreviewStatus(status);
@@ -133,13 +140,33 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
         <span>CAD 预览</span>
         {spec && preview ? (
           <>
-            <span className="layout-badge">
-              {LAYOUT_LABELS[extractLayout(spec)] ?? extractLayout(spec)}
-            </span>
+            <span className="layout-badge">{layoutBadgeLabel(spec)}</span>
             <small>
               {preview.labels.wingSpan} / {preview.labels.engineCount} 发
             </small>
           </>
+        ) : null}
+        {spec && preview ? (
+          <div className="viewer-toolbar" role="toolbar" aria-label="视角控制">
+            {(
+              [
+                ["iso", "等轴"],
+                ["top", "俯视"],
+                ["front", "前视"],
+                ["side", "侧视"],
+              ] as Array<[CadViewPreset, string]>
+            ).map(([preset, label]) => (
+              <button
+                key={preset}
+                type="button"
+                className="viewer-toolbar-btn"
+                onClick={() => requestView(preset)}
+                title={`${label}视角`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         ) : null}
       </header>
       <div className="viewer-surface" ref={surfaceRef}>
@@ -155,6 +182,7 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
                 onSelectPart={onSelectPart}
                 onStatusChange={handleStatusChange}
                 spec={spec}
+                viewRequest={viewRequest}
               />
               <span className="preview-source-status">
                 {cadPreviewStatusLabel(previewStatus)}
@@ -243,7 +271,10 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
             </div>
           </div>
         ) : (
-          <span>等待生成模型</span>
+          <div className="viewer-empty">
+            <span>等待生成模型</span>
+            <small>在左侧对话中描述设计需求即可生成；历史会话的设计会自动恢复。</small>
+          </div>
         )}
         <CADLoadingOverlay
           currentStage={overlayStage}

@@ -4,9 +4,16 @@ import {
   type JSX,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+
+import {
+  filterSessions,
+  groupSessions,
+  sessionDisplayTitle,
+} from "./sessionGroups";
 
 export type SessionItem = {
   conversation_id: string;
@@ -67,6 +74,14 @@ export function SessionSidebar({
 
   // Delete error state (per-item)
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Search filter over session titles
+  const [search, setSearch] = useState("");
+
+  const visibleGroups = useMemo(
+    () => groupSessions(filterSessions(sessions, search)),
+    [sessions, search],
+  );
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -228,6 +243,16 @@ export function SessionSidebar({
         </div>
       </div>
 
+      <div className="session-sidebar-search">
+        <input
+          type="text"
+          className="session-sidebar-search-input"
+          placeholder="搜索会话…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
       <div className="session-sidebar-items">
         {loading && (
           <div className="session-sidebar-status">加载中...</div>
@@ -250,107 +275,116 @@ export function SessionSidebar({
           <div className="session-sidebar-status">暂无会话</div>
         )}
 
-        {sessions.map((item) => {
-          const isActive = item.conversation_id === activeId;
-          const isHovered = item.conversation_id === hoveredId;
-          const isRenaming = item.conversation_id === renamingId;
-          const isDeleting = item.conversation_id === deletingId;
+        {!loading && !error && sessions.length > 0 && visibleGroups.length === 0 && (
+          <div className="session-sidebar-status">无匹配「{search.trim()}」的会话</div>
+        )}
 
-          return (
-            <div
-              key={item.conversation_id}
-              className={`session-sidebar-item${isActive ? " active" : ""}`}
-              onMouseEnter={() => setHoveredId(item.conversation_id)}
-              onMouseLeave={() => {
-                setHoveredId(null);
-                if (!isRenaming) cancelRename();
-              }}
-            >
-              <button
-                type="button"
-                className="session-sidebar-item-main"
-                onClick={() => onSelect(item.conversation_id)}
-              >
-                <span className="session-sidebar-item-title">
-                  {isRenaming ? (
-                    <input
-                      ref={renameInputRef}
-                      className="session-sidebar-rename"
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={handleRenameKeyDown}
-                      onBlur={() => void saveRename()}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    truncate(item.title, 30)
+        {visibleGroups.map((group) => (
+          <div key={group.key} className="session-sidebar-group">
+            <div className="session-sidebar-group-label">{group.label}</div>
+            {group.items.map((item) => {
+              const isActive = item.conversation_id === activeId;
+              const isHovered = item.conversation_id === hoveredId;
+              const isRenaming = item.conversation_id === renamingId;
+              const isDeleting = item.conversation_id === deletingId;
+
+              return (
+                <div
+                  key={item.conversation_id}
+                  className={`session-sidebar-item${isActive ? " active" : ""}`}
+                  onMouseEnter={() => setHoveredId(item.conversation_id)}
+                  onMouseLeave={() => {
+                    setHoveredId(null);
+                    if (!isRenaming) cancelRename();
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="session-sidebar-item-main"
+                    onClick={() => onSelect(item.conversation_id)}
+                  >
+                    <span className="session-sidebar-item-title">
+                      {isRenaming ? (
+                        <input
+                          ref={renameInputRef}
+                          className="session-sidebar-rename"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={handleRenameKeyDown}
+                          onBlur={() => void saveRename()}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        truncate(sessionDisplayTitle(item), 30)
+                      )}
+                    </span>
+                    <span className="session-sidebar-item-meta">
+                      {item.message_count > 0 && `${item.message_count} 条`}
+                      {" · "}
+                      {relativeTime(item.updated_at)}
+                    </span>
+                  </button>
+
+                  {isHovered && !isRenaming && !isDeleting && (
+                    <div className="session-sidebar-item-actions">
+                      <button
+                        type="button"
+                        className="session-sidebar-action"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startRename(item);
+                        }}
+                        aria-label="重命名"
+                      >
+                        ✏
+                      </button>
+                      <button
+                        type="button"
+                        className="session-sidebar-action danger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startDelete(item.conversation_id);
+                        }}
+                        aria-label="删除"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   )}
-                </span>
-                <span className="session-sidebar-item-meta">
-                  {item.message_count > 0 && `${item.message_count} 条`}
-                  {" · "}
-                  {relativeTime(item.updated_at)}
-                </span>
-              </button>
 
-              {isHovered && !isRenaming && !isDeleting && (
-                <div className="session-sidebar-item-actions">
-                  <button
-                    type="button"
-                    className="session-sidebar-action"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startRename(item);
-                    }}
-                    aria-label="重命名"
-                  >
-                    ✏
-                  </button>
-                  <button
-                    type="button"
-                    className="session-sidebar-action danger"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startDelete(item.conversation_id);
-                    }}
-                    aria-label="删除"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {isDeleting && (
-                <div className="session-sidebar-delete-confirm">
-                  <span>确认删除？</span>
-                  <button
-                    type="button"
-                    className="session-sidebar-action danger"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void confirmDelete();
-                    }}
-                  >
-                    删除
-                  </button>
-                  <button
-                    type="button"
-                    className="session-sidebar-action"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      cancelDelete();
-                    }}
-                  >
-                    取消
-                  </button>
-                  {deleteError && (
-                    <span className="session-sidebar-error">{deleteError}</span>
+                  {isDeleting && (
+                    <div className="session-sidebar-delete-confirm">
+                      <span>确认删除？</span>
+                      <button
+                        type="button"
+                        className="session-sidebar-action danger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void confirmDelete();
+                        }}
+                      >
+                        删除
+                      </button>
+                      <button
+                        type="button"
+                        className="session-sidebar-action"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          cancelDelete();
+                        }}
+                      >
+                        取消
+                      </button>
+                      {deleteError && (
+                        <span className="session-sidebar-error">{deleteError}</span>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        ))}
       </div>
     </aside>
   );

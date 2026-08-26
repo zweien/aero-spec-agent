@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getLlmSettings,
   getProfiles,
@@ -24,6 +24,27 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
   const [vspaero, setVspaero] = useState(false);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on outside click / Escape — previously the dropdown stayed open
+  // until the toggle was clicked again, blocking the right panel.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   // LLM settings
   const [llmModel, setLlmModel] = useState("");
@@ -164,7 +185,7 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
   }, [llmModel, llmApiKey, llmBaseUrl, saveLlm]);
 
   return (
-    <div className="settings-panel">
+    <div className="settings-panel" ref={rootRef}>
       <button
         type="button"
         className="settings-toggle"

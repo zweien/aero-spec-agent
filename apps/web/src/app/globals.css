@@ -1622,14 +1622,36 @@ select:focus {
    RESPONSIVE
    ============================================= */
 
+/* Compact desktop: slim the fixed-width panels instead of crushing the
+   CAD viewport (previously ~200px wide at 1280 and fully broken at 960). */
+@media (max-width: 1440px) {
+  .right-panel { width: 320px; }
+  .chat-column { min-width: 280px; }
+}
+
+@media (max-width: 1280px) {
+  .right-panel { width: 300px; }
+  .session-sidebar { width: 190px; min-width: 160px; }
+}
+
+@media (max-width: 1120px) {
+  /* Schematic drawings cost vertical space; keep the 3D viewport usable. */
+  .preview-drawings { display: none; }
+  .three-preview-frame { flex: 1 1 100% !important; }
+  .right-panel { width: 280px; }
+  .chat-column { min-width: 260px; }
+}
+
 @media (max-width: 960px) {
   .workbench {
     grid-template-rows: auto 1fr auto;
+    height: 100vh;
   }
 
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 2px;
     padding: 12px 16px;
   }
@@ -1637,6 +1659,15 @@ select:focus {
   .main-content {
     flex-direction: column;
     padding: 8px;
+    overflow-y: auto;
+  }
+
+  .session-sidebar {
+    width: 100%;
+    min-width: 0;
+    max-height: 180px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-weak, #2a2a3e);
   }
 
   .chat-column {
@@ -1648,7 +1679,23 @@ select:focus {
 
   .resize-handle { display: none; }
 
-  .workspace { padding-left: 0; }
+  .workspace {
+    padding-left: 0;
+    flex-direction: column;
+    height: auto;
+  }
+
+  .workspace-cad {
+    flex: none;
+    height: 380px;
+  }
+
+  .right-panel {
+    width: 100%;
+    min-height: 320px;
+    border-left: none;
+    border-top: 1px solid var(--border-default);
+  }
 
   .bottom-panel {
     flex-wrap: wrap;
@@ -3695,4 +3742,172 @@ select:focus {
   display: flex;
   gap: 4px;
   align-items: center;
+}
+
+/* =============================================
+   UX FIXES (viewer toolbar / aero charts / sidebar search / cad flash)
+   ============================================= */
+
+.viewer-toolbar {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.viewer-toolbar-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.viewer-toolbar-btn:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-bright);
+}
+
+.viewer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  color: var(--text-dim);
+}
+
+.viewer-empty small {
+  color: var(--text-tertiary, #6b7280);
+  font-size: 12px;
+  max-width: 320px;
+  line-height: 1.6;
+}
+
+/* Brief highlight when 查看模型 focuses the CAD panel */
+.workspace-cad-flash .viewer-surface {
+  animation: cad-flash 1.4s ease-out;
+  border-color: var(--accent);
+}
+
+@keyframes cad-flash {
+  0% { box-shadow: 0 0 0 2px var(--accent); }
+  70% { box-shadow: 0 0 0 2px var(--accent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.parameter-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+
+.parameter-empty-hint {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.8;
+  text-align: center;
+  padding: 0 12px;
+}
+
+.parameter-empty-hint small {
+  color: var(--text-tertiary, #6b7280);
+}
+
+/* --- Aero sweep charts --- */
+
+.aero-charts {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.aero-chart {
+  margin: 0;
+  flex: 1 1 220px;
+  min-width: 200px;
+  max-width: 360px;
+}
+
+.aero-chart figcaption {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.aero-chart svg {
+  width: 100%;
+  height: auto;
+}
+
+.aero-chart-plot {
+  fill: rgba(148, 163, 184, 0.04);
+  stroke: none;
+}
+
+.aero-chart-axis {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.aero-chart-tick {
+  stroke: var(--border-strong);
+}
+
+.aero-chart-tick-label,
+.aero-chart-axis-label {
+  fill: var(--text-muted);
+  font-size: 9px;
+  text-anchor: middle;
+}
+
+.aero-chart-axis-label {
+  text-anchor: end;
+}
+
+.aero-chart-line {
+  fill: none;
+  stroke: var(--accent, #6366f1);
+  stroke-width: 1.6;
+}
+
+.aero-chart-optimal {
+  fill: var(--accent-bright, #a5b4fc);
+  stroke: #fff;
+  stroke-width: 0.8;
+}
+
+/* --- Session sidebar: search + groups --- */
+
+.session-sidebar-search {
+  padding: 8px 10px 4px;
+}
+
+.session-sidebar-search-input {
+  width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary, #0f1420);
+  color: var(--text-default, #e5e7eb);
+  font-size: 12px;
+}
+
+.session-sidebar-search-input:focus {
+  outline: none;
+  border-color: var(--accent-border);
+}
+
+.session-sidebar-group-label {
+  padding: 8px 12px 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary, #6b7280);
 }

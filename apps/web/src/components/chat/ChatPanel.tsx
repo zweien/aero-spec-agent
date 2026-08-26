@@ -595,7 +595,15 @@ export function ChatPanel({
                   durationMs: stage.startedAt ? now - stage.startedAt : null,
                 };
               });
-              parts[i] = { ...part, output, runtimeStages, state: "done" };
+              parts[i] = {
+                ...part,
+                output,
+                runtimeStages,
+                // Snapshot the true total duration for the completed header —
+                // without this a run with no late stage events showed "0.0s".
+                runtimeElapsedTime: now - (part.runtimeStartedAt ?? now),
+                state: "done",
+              };
               break;
             }
           }
@@ -633,6 +641,7 @@ export function ChatPanel({
                 ...part,
                 state: "done",
                 runtimeStages,
+                runtimeElapsedTime: now - (part.runtimeStartedAt ?? now),
                 runtimeError: errorMsg,
                 output: {
                   ...output,

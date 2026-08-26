@@ -105,6 +105,59 @@ def test_patch_spec_endpoint_returns_accepted_job_and_new_version(client: TestCl
     assert spec_echo["fuselage"]["length"]["value"] == 8.0
 
 
+def test_patch_spec_with_base_version_patches_viewed_version_not_latest(
+    client: TestClient,
+):
+    spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
+    first_job = client.post("/api/designs/demo-patch-base/generate", content=spec_text).json()
+    _wait_for_job(client, first_job["id"])
+    base_version = first_job["version_no"]
+
+    # Second version diverges the latest state away from the base version.
+    second_job = client.patch(
+        "/api/designs/demo-patch-base/spec",
+        json={"changes": [{"path": "fuselage.length.value", "value": 9.5}]},
+    ).json()
+    _wait_for_job(client, second_job["id"])
+    assert second_job["version_no"] == base_version + 1
+
+    # The user is still viewing the base version and edits it.
+    response = client.patch(
+        "/api/designs/demo-patch-base/spec",
+        json={
+            "changes": [{"path": "wing.span.value", "value": 11.0}],
+            "base_version": base_version,
+        },
+    )
+    assert response.status_code == 202
+    data = response.json()
+    _wait_for_job(client, data["id"])
+
+    version_response = client.get(f"/api/designs/demo-patch-base/versions/{data['version_no']}")
+    assert version_response.status_code == 200
+    spec_echo = version_response.json()["validation_report"]["spec_echo"]
+    # Span change applied on top of the viewed (base) version…
+    assert spec_echo["wing"]["span"]["value"] == 11.0
+    # …while the divergence made in the latest version is NOT inherited.
+    assert spec_echo["fuselage"]["length"]["value"] == 7.0
+
+
+def test_patch_spec_rejects_unknown_base_version(client: TestClient):
+    spec_text = Path("packages/aircraft-schema/examples/twin_engine_uav.yaml").read_text(encoding="utf-8")
+    first_job = client.post("/api/designs/demo-patch-bad-base/generate", content=spec_text).json()
+    _wait_for_job(client, first_job["id"])
+
+    response = client.patch(
+        "/api/designs/demo-patch-bad-base/spec",
+        json={
+            "changes": [{"path": "wing.span.value", "value": 10.0}],
+            "base_version": 999,
+        },
+    )
+
+    assert response.status_code == 404
+
+
 def test_failed_backend_job_is_queryable_but_not_listed_as_usable_version(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

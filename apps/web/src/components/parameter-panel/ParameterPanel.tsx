@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Scalar = {
-  value: string | number;
-  unit?: string;
-  source: string;
-  confidence: number;
-  reason?: string;
-};
+import {
+  PARAM_SECTION_LABELS as SECTION_LABELS,
+  paramDisplayValue,
+  paramFieldLabel,
+} from "./parameterLabels";
+import type { Scalar } from "./parameterValueTypes";
 
 type SpecSection = {
   [key: string]: Scalar | SpecSection | undefined;
@@ -29,31 +28,6 @@ type ParameterPanelProps = {
   onApplyChanges?: () => void;
   pendingCount?: number;
   isApplying?: boolean;
-};
-
-const SECTION_LABELS: Record<string, string> = {
-  mission: "任务需求",
-  fuselage: "机身",
-  wing: "机翼",
-  tail: "尾翼",
-  engine: "发动机",
-};
-
-const FIELD_LABELS: Record<string, string> = {
-  cruise_speed: "巡航速度",
-  payload: "载荷",
-  priority: "优先级",
-  length: "长度",
-  max_diameter: "最大直径",
-  position: "位置",
-  span: "翼展",
-  root_chord: "根弦长",
-  tip_chord: "尖弦长",
-  sweep: "后掠角",
-  dihedral: "上反角",
-  airfoil: "翼型",
-  type: "类型",
-  count: "数量",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -98,7 +72,7 @@ function extractParameters(
     if (!section) continue;
     for (const [fieldKey, fieldValue] of Object.entries(section)) {
       if (fieldValue !== undefined && isScalar(fieldValue)) {
-        const label = FIELD_LABELS[fieldKey] ?? fieldKey;
+        const label = paramFieldLabel(fieldKey);
         params.push({
           label: `${sectionLabel} · ${label}`,
           path: `${sectionKey}.${fieldKey}.value`,
@@ -156,8 +130,9 @@ function EditableValue({
           draftRef.current = String(committedRef.current);
           setEditing(true);
         }}
+        title="点击编辑"
       >
-        {scalar.value}
+        {paramDisplayValue(scalar)}
         {scalar.unit ? ` ${scalar.unit}` : ""}
       </strong>
     );
@@ -221,7 +196,17 @@ export function ParameterPanel({
   const parameters = spec ? extractParameters(spec) : [];
   const [collapsed, setCollapsed] = useState(false);
 
-  if (parameters.length === 0) return null;
+  if (parameters.length === 0) {
+    return (
+      <section className="panel parameter-panel parameter-panel-empty">
+        <p className="parameter-empty-hint">
+          生成或加载设计后，可在此查看并编辑全部设计参数。
+          <br />
+          <small>也可以直接在对话中用自然语言修改（例如「把翼展增加到 14 米」）。</small>
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -250,7 +235,7 @@ export function ParameterPanel({
               />
             ) : (
               <strong>
-                {item.scalar.value}
+                {paramDisplayValue(item.scalar)}
                 {item.scalar.unit ? ` ${item.scalar.unit}` : ""}
               </strong>
             )}

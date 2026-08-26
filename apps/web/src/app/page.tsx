@@ -23,6 +23,10 @@ import {
   SessionSidebar,
   type SessionItem,
 } from "@/components/chat/SessionSidebar";
+import {
+  buildDesignReportMarkdown,
+  downloadTextFile,
+} from "@/lib/reportExport";
 
 type VersionResponse = {
   files: string[];
@@ -156,28 +160,6 @@ export default function Home() {
     };
   }, []);
 
-  // Auto-load most recent conversation or create new on mount
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/api/conversations`)
-      .then((r) => (r.ok ? (r.json() as Promise<{ conversations: SessionItem[] }>) : null))
-      .then((data) => {
-        if (data && data.conversations.length > 0) {
-          setConversationId(data.conversations[0].conversation_id);
-        } else {
-          const newId = crypto.randomUUID();
-          setConversationId(newId);
-          fetch(`${API_BASE_URL}/api/conversations`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ conversation_id: newId }),
-          }).catch(() => {});
-        }
-      })
-      .catch(() => {
-        setConversationId(crypto.randomUUID());
-      });
-  }, []);
-
   const handleDragStart = useCallback(() => {
     dragging.current = true;
     document.body.style.cursor = "col-resize";
@@ -211,34 +193,6 @@ export default function Home() {
     setGenerationError(null);
     setSelectedRefs([]);
   }, []);
-
-  const handleSwitchConversation = useCallback(
-    (id: string) => {
-      if (id !== conversationId) {
-        resetDesignState();
-        setConversationId(id);
-        // Restore design state from backend
-        fetch(`${API_BASE_URL}/api/conversations/${encodeURIComponent(id)}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data) => {
-            if (!data) return;
-            if (data.design_id) {
-              setDesignId(data.design_id);
-            }
-            if (data.current_spec) {
-              const spec = data.current_spec as AircraftSpecData;
-              setSpecData(spec);
-              setPreviewSpec(spec as unknown as AircraftPreviewSpec);
-            }
-            if (data.selected_refs?.length) {
-              setSelectedRefs(data.selected_refs);
-            }
-          })
-          .catch(() => {});
-      }
-    },
-    [conversationId, resetDesignState],
-  );
 
   const handleNewConversation = useCallback(() => {
     resetDesignState();
@@ -330,6 +284,94 @@ export default function Home() {
     [fetchVersionList],
   );
 
+  // Restore design state (spec + latest version artifacts) for a conversation.
+  // Without this, switching sessions or refreshing the page leaves the CAD
+  // viewer at "等待生成模型" and the parameter panel empty even though the
+  // backend still holds the full design.
+  const restoreConversationState = useCallback(async (id: string) => {
+    let detail: {
+      design_id?: string | null;
+      current_spec?: AircraftSpecData | null;
+      selected_refs?: string[];
+    } | null = null;
+    try {
+      const resp = await fetch(
+        `${API_BASE_URL}/api/conversations/${encodeURIComponent(id)}`,
+      );
+      detail = resp.ok ? await resp.json() : null;
+    } catch {
+      detail = null;
+    }
+    if (!detail) return;
+
+    if (detail.design_id) {
+      setDesignId(detail.design_id);
+    }
+    if (detail.selected_refs?.length) {
+      setSelectedRefs(detail.selected_refs);
+    }
+    if (detail.current_spec) {
+      setSpecData(detail.current_spec);
+      setPreviewSpec(detail.current_spec as unknown as AircraftPreviewSpec);
+    }
+
+    const activeDesignId = detail.design_id;
+    if (!activeDesignId) return;
+    try {
+      const resp = await fetch(
+        `${API_BASE_URL}/api/designs/${encodeURIComponent(activeDesignId)}/versions`,
+      );
+      if (!resp.ok) return;
+      const versions = (await resp.json()) as Array<{ version_no: number }>;
+      setVersionList(versions.map((v) => v.version_no));
+      const latest = versions.reduce<number | null>(
+        (max, v) => (max == null || v.version_no > max ? v.version_no : max),
+        null,
+      );
+      if (latest != null) {
+        await loadVersion(activeDesignId, latest);
+      }
+    } catch {
+      // Design restore is best-effort; chat history is already visible.
+    }
+  }, [loadVersion]);
+
+  const handleSwitchConversation = useCallback(
+    (id: string) => {
+      if (id !== conversationId) {
+        resetDesignState();
+        setConversationId(id);
+        void restoreConversationState(id);
+      }
+    },
+    [conversationId, resetDesignState, restoreConversationState],
+  );
+
+  // Auto-load most recent conversation or create new on mount
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/conversations`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ conversations: SessionItem[] }>) : null))
+      .then((data) => {
+        if (data && data.conversations.length > 0) {
+          const recent = data.conversations[0];
+          setConversationId(recent.conversation_id);
+          void restoreConversationState(recent.conversation_id);
+        } else {
+          const newId = crypto.randomUUID();
+          setConversationId(newId);
+          fetch(`${API_BASE_URL}/api/conversations`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conversation_id: newId }),
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {
+        setConversationId(crypto.randomUUID());
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleGenerationComplete = useCallback(
     (data: { design_id?: string; version_no?: number; status?: string; files?: string[] }) => {
       const convId = data.design_id ?? conversationId ?? "";
@@ -342,6 +384,16 @@ export default function Home() {
     [conversationId, loadVersion, fetchVersionList],
   );
 
+  const cadFlashTimer = useRef<number | null>(null);
+  const [cadFlash, setCadFlash] = useState(false);
+  const flashCadPanel = useCallback(() => {
+    setCadFlash(true);
+    if (cadFlashTimer.current != null) {
+      window.clearTimeout(cadFlashTimer.current);
+    }
+    cadFlashTimer.current = window.setTimeout(() => setCadFlash(false), 1500);
+  }, []);
+
   const handleViewModel = useCallback(
     (data: GenerationCompleteData) => {
       const activeDesignId = data.design_id ?? designId;
@@ -349,8 +401,10 @@ export default function Home() {
         void loadVersion(activeDesignId, data.version_no);
       }
       document.querySelector(".workspace-cad")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      // Give visible feedback even when the model is already on screen.
+      flashCadPanel();
     },
-    [designId, loadVersion],
+    [designId, loadVersion, flashCadPanel],
   );
 
   const handleOpenDeepDesign = useCallback(
@@ -362,11 +416,33 @@ export default function Home() {
   );
 
   const handleExportReport = useCallback(
-    (data: GenerationCompleteData) => {
+    async (data: GenerationCompleteData) => {
       const activeDesignId = data.design_id ?? designId;
       if (!activeDesignId || !data.version_no) return;
-      const url = `${API_BASE_URL}/api/designs/${encodeURIComponent(activeDesignId)}/versions/${data.version_no}/files/validation_report.json`;
-      window.open(url, "_blank", "noopener,noreferrer");
+      const url = `${API_BASE_URL}/api/designs/${encodeURIComponent(activeDesignId)}/versions/${data.version_no}`;
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const version = (await resp.json()) as VersionResponse;
+        const markdown = buildDesignReportMarkdown({
+          designId: activeDesignId,
+          versionNo: data.version_no,
+          specEcho: version.validation_report?.spec_echo ?? null,
+          designRules: version.validation_report?.design_rules?.rules ?? null,
+          perfEstimates: version.validation_report?.performance_estimate?.estimates ?? null,
+          aeroAnalysis: version.validation_report?.vspaero_analysis ?? null,
+          designMetrics: version.validation_report?.design_metrics ?? null,
+        });
+        const name = (() => {
+          const aircraft = version.validation_report?.spec_echo?.aircraft;
+          const n = aircraft && typeof aircraft === "object" ? (aircraft as Record<string, unknown>).name : null;
+          return typeof n === "string" && n.trim() ? n : "design";
+        })();
+        downloadTextFile(`${name}-v${data.version_no}-报告.md`, markdown);
+      } catch {
+        // Fallback: raw report in a new tab if the markdown export fails.
+        window.open(`${url}/files/validation_report.json`, "_blank", "noopener,noreferrer");
+      }
     },
     [designId],
   );
@@ -406,7 +482,13 @@ export default function Home() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ changes }),
+          body: JSON.stringify({
+            changes,
+            // Patch the spec the user is actually looking at. Without this the
+            // backend always rebases onto the latest version, so editing an
+            // older version silently discarded the version context.
+            base_version: currentVersionNo ?? undefined,
+          }),
         },
       );
 
@@ -463,6 +545,7 @@ export default function Home() {
     }
   }, [
     conversationId,
+    currentVersionNo,
     designId,
     fetchVersionList,
     isApplyingChanges,
@@ -619,7 +702,7 @@ export default function Home() {
           className="resize-handle"
           onMouseDown={handleDragStart}
         />
-        <div className="workspace">
+        <div className={`workspace${cadFlash ? " workspace-cad-flash" : ""}`}>
           <div className="workspace-cad">
             <CadViewer
               modelFormat={previewSource?.format}

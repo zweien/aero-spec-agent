@@ -299,10 +299,22 @@ async def patch_spec(
         raise HTTPException(status_code=404, detail="no versions found for this design")
 
     latest_no = max(v["version_no"] for v in versions)
-    version_data = runner.store.read_version(design_id=design_id, version_no=latest_no)
+    # Patch the version the user is viewing; without an explicit base_version
+    # the latest version is used (backward-compatible default).
+    base_version = body.get("base_version")
+    if base_version is None:
+        base_no = latest_no
+    else:
+        try:
+            base_no = int(base_version)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="base_version must be an integer") from exc
+        if base_no != latest_no and base_no not in {v["version_no"] for v in versions}:
+            raise HTTPException(status_code=404, detail="base version not found")
+    version_data = runner.store.read_version(design_id=design_id, version_no=base_no)
     spec_echo = version_data.get("validation_report", {}).get("spec_echo")
     if not spec_echo:
-        raise HTTPException(status_code=400, detail="no spec found in latest version")
+        raise HTTPException(status_code=400, detail=f"no spec found in version {base_no}")
 
     try:
         spec = AircraftSpec.model_validate(spec_echo)
