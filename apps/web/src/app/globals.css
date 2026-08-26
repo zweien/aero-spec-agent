@@ -3911,3 +3911,38 @@ select:focus {
   text-transform: uppercase;
   color: var(--text-tertiary, #6b7280);
 }
+
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.version-thumb {
+  width: 30px;
+  height: 20px;
+  display: block;
+  overflow: visible;
+}
+
+.version-thumb .preview-fuselage {
+  fill: rgba(216, 226, 240, 0.55);
+  stroke: rgba(216, 226, 240, 0.8);
+  stroke-width: 0.35;
+}
+
+.version-thumb .preview-wing {
+  fill: rgba(96, 165, 250, 0.45);
+  stroke: rgba(96, 165, 250, 0.85);
+  stroke-width: 0.35;
+}
+
+.version-thumb .preview-tail {
+  fill: rgba(139, 216, 189, 0.45);
+  stroke: rgba(139, 216, 189, 0.85);
+  stroke-width: 0.35;
+}
+
+.version-thumb .preview-engine {
+  fill: rgba(242, 184, 75, 0.75);
+}

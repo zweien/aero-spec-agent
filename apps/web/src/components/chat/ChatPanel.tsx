@@ -18,6 +18,7 @@ import {
 import { AgentRunHeader } from "./AgentRunHeader";
 import { AgentRunActions } from "./AgentRunActions";
 import { AgentRunDetails } from "./AgentRunDetails";
+import { restoreMessages } from "./restoreMessages";
 
 export type GenerationCompleteData = {
   job_id?: string;
@@ -831,21 +832,21 @@ export function ChatPanel({
         const data = await resp.json();
         if (abort.signal.aborted) return;
 
-        const rawMsgs: Array<{ role: string; content?: string | null }> =
-          data.messages ?? [];
-        let nextId = 1;
+        const rawMsgs: Array<{
+          role: string;
+          content?: string | null;
+          tool_calls?: unknown;
+          tool_call_id?: string;
+        }> = data.messages ?? [];
 
-        const restored: ChatMessage[] = rawMsgs
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({
-            id: `msg-${nextId++}`,
-            role: m.role as ChatRole,
-            parts: m.content
-              ? [{ type: "text" as const, text: m.content }]
-              : [],
-          }));
+        // Rebuild the full bubble structure — including tool run cards with
+        // their job results — so reloads keep 查看模型 / 导出报告 / 运行细节
+        // instead of degrading generation history to plain text.
+        const { messages: restored, nextId } = restoreMessages(
+          rawMsgs as never[],
+        );
 
-        setMessages(restored);
+        setMessages(restored as unknown as ChatMessage[]);
         // Advance the live counter past restored ids so newly-sent messages never
         // collide with restored ones (avoids duplicate React keys like "msg-1").
         messageCounterRef.current = Math.max(messageCounterRef.current, nextId);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { DesignRuleEntry, PerformanceEstimateEntry, VspaeroAnalysisEntry } from "@/app/page";
 import { VersionCompare } from "./VersionCompare";
@@ -8,6 +8,8 @@ import { AddToCompareButton } from "@/components/compare/AddToCompareButton";
 import type { CompareItem, CompareMetrics } from "@/components/compare/types";
 import { DesignMetricsCard } from "@/components/metrics/DesignMetricsCard";
 import { AeroSweepCharts } from "./AeroSweepChart";
+import { TopViewThumbnail } from "@/components/cad-viewer/TopViewThumbnail";
+import type { AircraftPreviewSpec } from "@/components/cad-viewer/previewGeometry";
 
 type VersionResponse = {
   files: string[];
@@ -33,6 +35,7 @@ type VersionPanelProps = {
   versionList?: number[];
   currentVersionNo?: number;
   designId?: string | null;
+  apiBaseUrl?: string;
   onCompare?: (v1: number, v2: number) => void;
   onCancelCompare?: () => void;
   onSelectVersion?: (versionNo: number) => void;
@@ -51,6 +54,7 @@ export function VersionPanel({
   versionList,
   currentVersionNo,
   designId,
+  apiBaseUrl,
   onCompare,
   onCancelCompare,
   onSelectVersion,
@@ -69,6 +73,41 @@ export function VersionPanel({
   const toggleSection = useCallback((key: string) => {
     setOpenSection((prev) => (prev === key ? null : key));
   }, []);
+  // Per-version spec silhouettes for the version chips (best-effort).
+  const [thumbSpecs, setThumbSpecs] = useState<Map<number, AircraftPreviewSpec>>(new Map());
+
+  useEffect(() => {
+    if (!designId || !apiBaseUrl || !versionList || versionList.length === 0) {
+      setThumbSpecs(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const entries = await Promise.all(
+        versionList.map(async (v) => {
+          try {
+            const resp = await fetch(
+              `${apiBaseUrl}/api/designs/${encodeURIComponent(designId)}/versions/${v}`,
+            );
+            if (!resp.ok) return null;
+            const data = (await resp.json()) as {
+              validation_report?: { spec_echo?: AircraftPreviewSpec };
+            };
+            const spec = data.validation_report?.spec_echo;
+            return spec ? ([v, spec] as const) : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (!cancelled) {
+        setThumbSpecs(new Map(entries.filter((e): e is readonly [number, AircraftPreviewSpec] => e != null)));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [designId, apiBaseUrl, versionList]);
 
   const hasContent = (designRules && designRules.length > 0) || (perfEstimates && perfEstimates.length > 0) || aeroAnalysis || designMetrics;
   const hasVersions = versionList && versionList.length > 0;
@@ -117,7 +156,11 @@ export function VersionPanel({
                     type="button"
                     className={`version-pill ${isCurrent ? "version-pill-active" : ""} ${isSelected ? "version-pill-selected" : ""}`}
                     onClick={() => handleVersionClick(v)}
+                    title={`版本 v${v}`}
                   >
+                    {thumbSpecs.get(v) && (
+                      <TopViewThumbnail spec={thumbSpecs.get(v)!} />
+                    )}
                     v{v}
                   </button>
                   {onAddToGlobalCompare && (

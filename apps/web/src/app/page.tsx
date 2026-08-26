@@ -769,6 +769,7 @@ export default function Home() {
         versionList={versionList}
         currentVersionNo={currentVersionNo}
         designId={designId}
+        apiBaseUrl={API_BASE_URL}
         onCompare={handleCompare}
         onCancelCompare={handleCancelCompare}
         onSelectVersion={handleSelectVersion}
