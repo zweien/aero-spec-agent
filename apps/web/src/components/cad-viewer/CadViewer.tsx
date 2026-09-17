@@ -28,6 +28,9 @@ type CadViewerRuntimeStatus = {
 type CadViewerProps = {
   modelFormat?: CadPreviewFormat;
   modelUrl?: string;
+  /** True when the CAD backend produces real model files (OpenVSP): suppress
+   *  the visible wireframe until the real model loads. */
+  expectRealModel?: boolean;
   onSelectPart?: (partRef: string | null) => void;
   spec?: AircraftPreviewSpec | null;
   /** @deprecated Use runtimeStatus instead */
@@ -64,7 +67,7 @@ function renderElement(el: PreviewElement, idx: number) {
   }
 }
 
-export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generationStage, generationProgress, isGenerating, runtimeStatus }: CadViewerProps) {
+export function CadViewer({ modelFormat, modelUrl, expectRealModel, onSelectPart, spec, generationStage, generationProgress, isGenerating, runtimeStatus }: CadViewerProps) {
   const [previewStatus, setPreviewStatus] = useState<CadPreviewStatus>({ state: "parameter" });
   const [drawingsPct, setDrawingsPct] = useState(28);
   const [topPct, setTopPct] = useState(50);
@@ -179,6 +182,7 @@ export function CadViewer({ modelFormat, modelUrl, onSelectPart, spec, generatio
               <AircraftThreePreview
                 modelFormat={modelFormat}
                 modelUrl={modelUrl}
+                expectRealModel={expectRealModel}
                 onSelectPart={onSelectPart}
                 onStatusChange={handleStatusChange}
                 spec={spec}

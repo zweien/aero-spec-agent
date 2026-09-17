@@ -25,3 +25,7 @@ test("cadPreviewStatusLabel describes loading and fallback states", () => {
   assert.equal(cadPreviewStatusLabel(fallback), "参数化 3D 预览");
   assert.equal(cadPreviewStatusLabel({ state: "parameter" }), "参数化 3D 预览");
 });
+
+test("cadPreviewStatusLabel describes waiting state for expected real model", () => {
+  assert.equal(cadPreviewStatusLabel({ state: "waiting" }), "等待生成 CAD 模型");
+});

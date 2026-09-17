@@ -43,3 +43,12 @@ test("buildPartRefsFromModel preserves selectable part refs for imported model o
     "part:right_engine",
   ]);
 });
+
+test("shouldUsePickingOverlay is true when a real model is expected (openvsp)", () => {
+  // Before the GLB arrives the wireframe must already be pick-only, so it
+  // never appears as a visible stand-in "model".
+  assert.equal(shouldUsePickingOverlay(false, true), true);
+  assert.equal(shouldUsePickingOverlay(true, true), true);
+  // Default (fake backend): no real model expected → visible wireframe.
+  assert.equal(shouldUsePickingOverlay(false, false), false);
+});

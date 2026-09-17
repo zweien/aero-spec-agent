@@ -2,6 +2,7 @@ import type { CadPreviewFormat } from "./cadPreviewSource";
 
 export type CadPreviewStatus =
   | { state: "parameter" }
+  | { state: "waiting" }
   | { format: CadPreviewFormat; state: "fallback" | "loaded" | "loading" };
 
 function formatLabel(format: CadPreviewFormat): string {
@@ -14,6 +15,9 @@ export function cadPreviewStatusLabel(status: CadPreviewStatus): string {
   }
   if (status.state === "loading") {
     return `正在加载 ${formatLabel(status.format)} 模型`;
+  }
+  if (status.state === "waiting") {
+    return "等待生成 CAD 模型";
   }
   return "参数化 3D 预览";
 }

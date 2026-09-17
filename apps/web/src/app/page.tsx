@@ -104,6 +104,10 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
+  // CAD backend kind ("openvsp" | "fake"): when the backend produces real
+  // model files, the wireframe preview must not stand in as a visible model
+  // while the GLB generates (see CadViewer expectRealModel).
+  const [cadBackend, setCadBackend] = useState<string>("fake");
   const [previewSource, setPreviewSource] = useState<CadPreviewSource | null>(
     null,
   );
@@ -139,6 +143,21 @@ export default function Home() {
   const [chatWidth, setChatWidth] = useState(38);
   const mainRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+
+  // Fetch CAD backend kind once: the viewer needs to know whether real model
+  // files (OpenVSP) are expected before showing a wireframe stand-in.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/settings`)
+      .then(async (resp) => (resp.ok ? resp.json() : null))
+      .then((data: { cad_backend?: string } | null) => {
+        if (!cancelled && data?.cad_backend) setCadBackend(data.cad_backend);
+      })
+      .catch(() => {/* keep default */});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -657,7 +676,10 @@ export default function Home() {
           >
             方案对比{compareState.items.length > 0 ? ` (${compareState.items.length})` : ""}
           </button>
-          <SettingsPanel apiBaseUrl={API_BASE_URL} />
+          <SettingsPanel
+            apiBaseUrl={API_BASE_URL}
+            onSettingsSaved={(s) => setCadBackend(s.cad_backend)}
+          />
         </div>
       </nav>
       <div className="main-content" ref={mainRef}>
@@ -707,6 +729,7 @@ export default function Home() {
             <CadViewer
               modelFormat={previewSource?.format}
               modelUrl={previewSource?.url}
+              expectRealModel={cadBackend === "openvsp"}
               spec={previewSpec}
               onSelectPart={handleSelectPart}
               runtimeStatus={{

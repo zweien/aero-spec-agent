@@ -201,6 +201,23 @@ function makePickingOverlayInvisible(root: THREE.Object3D): void {
   });
 }
 
+/** Undo makePickingOverlayInvisible — used when the real model fails to load
+ *  and the wireframe has to become the visible fallback again. */
+function restoreVisibility(root: THREE.Object3D): void {
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    for (const material of materials) {
+      if (material instanceof THREE.MeshStandardMaterial) {
+        material.transparent = false;
+        material.opacity = 1;
+        material.depthWrite = true;
+        material.colorWrite = true;
+      }
+    }
+  });
+}
+
 function setPartHighlight(root: THREE.Object3D, partId: AircraftPartId, enabled: boolean): void {
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || findPartId(child) !== partId) return;
@@ -294,6 +311,13 @@ type AircraftThreePreviewProps = {
   onStatusChange?: (status: CadPreviewStatus) => void;
   onSelectPart?: (partRef: string | null) => void;
   spec: AircraftPreviewSpec;
+  /**
+   * True when the CAD backend produces real model files (e.g. OpenVSP): a GLB
+   * is expected, so the spec-built wireframe must not appear as a visible
+   * "model" while it generates — it stays an invisible picking overlay until
+   * the real model loads (and becomes visible again if loading fails).
+   */
+  expectRealModel?: boolean;
   /** When the nonce changes, snap the camera to the requested preset. */
   viewRequest?: CadViewRequest | null;
 };
@@ -304,6 +328,7 @@ export function AircraftThreePreview({
   onSelectPart,
   onStatusChange,
   spec,
+  expectRealModel,
   viewRequest,
 }: AircraftThreePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -482,13 +507,18 @@ export function AircraftThreePreview({
 
     const aircraft = createAircraftGroup(model);
 
-    if (shouldUsePickingOverlay(Boolean(importedRef.current))) {
-      // Real model loaded: create transparent picking overlay
+    if (shouldUsePickingOverlay(Boolean(importedRef.current), expectRealModel)) {
+      // Real model loaded (or expected): wireframe only as an invisible
+      // picking overlay, never as the visible "model".
       makePickingOverlayInvisible(aircraft);
       scene.add(aircraft);
       pickingOverlayRef.current = aircraft;
+
+      if (!importedRef.current && (!modelUrl || !modelFormat)) {
+        onStatusChange?.({ state: "waiting" });
+      }
     } else {
-      // No real model: wireframe IS the picking overlay
+      // No real model expected: wireframe IS the visible model and picking overlay
       scene.add(aircraft);
       wireframeRef.current = aircraft;
       pickingOverlayRef.current = aircraft;
@@ -501,7 +531,7 @@ export function AircraftThreePreview({
     if (selectedPartIdRef.current) {
       setPartHighlight(aircraft, selectedPartIdRef.current, true);
     }
-  }, [model, modelUrl, modelFormat, onStatusChange]);
+  }, [model, modelUrl, modelFormat, expectRealModel, onStatusChange]);
 
   // Load imported model (GLB/OBJ) — keeps old model visible until new loads
   useEffect(() => {
@@ -542,12 +572,18 @@ export function AircraftThreePreview({
         onStatusChange?.({ format: modelFormat, state: "loaded" });
       },
       () => {
-        if (isActiveRef.current) {
-          onStatusChange?.({ format: modelFormat, state: "fallback" });
+        if (!isActiveRef.current) return;
+        // Loading failed: bring the wireframe back as the visible fallback so
+        // the viewer never goes blank. Under expectRealModel the wireframe was
+        // added as an invisible picking overlay, so restore its visibility.
+        if (!wireframeRef.current && pickingOverlayRef.current && expectRealModel) {
+          restoreVisibility(pickingOverlayRef.current);
+          wireframeRef.current = pickingOverlayRef.current;
         }
+        onStatusChange?.({ format: modelFormat, state: "fallback" });
       },
     );
-  }, [modelUrl, modelFormat, onStatusChange]);
+  }, [modelUrl, modelFormat, expectRealModel, onStatusChange]);
 
   return (
     <>

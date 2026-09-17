@@ -17,9 +17,12 @@ type LlmTestStatus = "idle" | "testing" | "ok" | "fail";
 
 type SettingsPanelProps = {
   apiBaseUrl: string;
+  /** Notified after a successful settings save so the page can react to a
+   *  CAD backend switch (e.g. toggling wireframe stand-in behaviour). */
+  onSettingsSaved?: (settings: { cad_backend: string; run_vspaero_analysis: boolean }) => void;
 };
 
-export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
+export function SettingsPanel({ apiBaseUrl, onSettingsSaved }: SettingsPanelProps) {
   const [backend, setBackend] = useState<string>("fake");
   const [vspaero, setVspaero] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -95,11 +98,12 @@ export function SettingsPanel({ apiBaseUrl }: SettingsPanelProps) {
           const data = (await resp.json()) as { cad_backend: string; run_vspaero_analysis: boolean };
           setBackend(data.cad_backend);
           setVspaero(data.run_vspaero_analysis);
+          onSettingsSaved?.(data);
         }
       } catch { /* ignore */ }
       setLoading(false);
     },
-    [apiBaseUrl],
+    [apiBaseUrl, onSettingsSaved],
   );
 
   const saveLlm = useCallback(() => {
