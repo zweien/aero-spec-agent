@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getLlmSettings,
   getProfiles,
   getActiveProfileId,
   setActiveProfileId,
@@ -22,47 +21,85 @@ type SettingsPanelProps = {
   onSettingsSaved?: (settings: { cad_backend: string; run_vspaero_analysis: boolean }) => void;
 };
 
+/** Which profile card has its editor expanded (null = none). */
+type Draft = { name: string; modelName: string; apiKey: string; baseUrl: string };
+
+type Creating =
+  | { step: "preset" }
+  | { step: "name"; template: (typeof PRESET_TEMPLATES)[number] };
+
+const EMPTY_DRAFT: Draft = { name: "", modelName: "", apiKey: "", baseUrl: "" };
+
+function draftFromProfile(p: LlmProfile): Draft {
+  return { name: p.name, modelName: p.modelName, apiKey: p.apiKey, baseUrl: p.baseUrl };
+}
+
 export function SettingsPanel({ apiBaseUrl, onSettingsSaved }: SettingsPanelProps) {
-  const [backend, setBackend] = useState<string>("fake");
-  const [vspaero, setVspaero] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // Close on outside click / Escape — previously the dropdown stayed open
-  // until the toggle was clicked again, blocking the right panel.
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  // --- CAD generation settings ---
+  const [backend, setBackend] = useState<string>("fake");
+  const [vspaero, setVspaero] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // LLM settings
-  const [llmModel, setLlmModel] = useState("");
-  const [llmApiKey, setLlmApiKey] = useState("");
-  const [llmBaseUrl, setLlmBaseUrl] = useState("");
+  // --- LLM profiles ---
+  const [profiles, setProfiles] = useState<LlmProfile[]>([]);
+  const [activeId, setActiveId] = useState<string>("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [showKey, setShowKey] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState<Creating | null>(null);
+  const [newName, setNewName] = useState("");
   const [llmTestStatus, setLlmTestStatus] = useState<LlmTestStatus>("idle");
   const [llmTestMsg, setLlmTestMsg] = useState("");
 
-  // Profile management
-  const [profiles, setProfiles] = useState<LlmProfile[]>([]);
-  const [activeId, setActiveId] = useState<string>("");
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newName, setNewName] = useState("");
+  const flushDraft = useCallback(() => {
+    if (expandedId && draft.name.trim()) {
+      updateProfile(expandedId, {
+        name: draft.name.trim(),
+        modelName: draft.modelName.trim(),
+        apiKey: draft.apiKey.trim(),
+        baseUrl: draft.baseUrl.trim(),
+      });
+      setProfiles(getProfiles());
+    }
+  }, [expandedId, draft]);
+
+  const openEditor = useCallback((p: LlmProfile) => {
+    flushDraft(); // persist edits in the previously expanded card first
+    setExpandedId(p.id);
+    setDraft(draftFromProfile(p));
+    setLlmTestStatus("idle");
+    setLlmTestMsg("");
+    setShowKey(false);
+    setDeletingId(null);
+  }, [flushDraft]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        flushDraft();
+        setOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, flushDraft]);
+
+  // Open on request from elsewhere (e.g. the chat input's model indicator)
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("aerospec-open-settings", onOpen);
+    return () => window.removeEventListener("aerospec-open-settings", onOpen);
+  }, []);
 
   useEffect(() => {
+    if (!open) return;
     void (async () => {
       try {
         const resp = await fetch(`${apiBaseUrl}/api/settings`);
@@ -73,17 +110,19 @@ export function SettingsPanel({ apiBaseUrl, onSettingsSaved }: SettingsPanelProp
         }
       } catch { /* ignore */ }
     })();
-
-    // Load profiles and active settings
     const p = getProfiles();
     setProfiles(p);
     const aid = getActiveProfileId() ?? "";
     setActiveId(aid);
-    const settings = getLlmSettings();
-    setLlmModel(settings.modelName);
-    setLlmApiKey(settings.apiKey);
-    setLlmBaseUrl(settings.baseUrl);
-  }, [apiBaseUrl]);
+    const active = p.find((x) => x.id === aid);
+    if (active) {
+      setExpandedId(active.id);
+      setDraft(draftFromProfile(active));
+    } else {
+      setExpandedId(null);
+      setDraft(EMPTY_DRAFT);
+    }
+  }, [apiBaseUrl, open]);
 
   const save = useCallback(
     async (updates: { cad_backend?: string; run_vspaero_analysis?: boolean }) => {
@@ -106,62 +145,63 @@ export function SettingsPanel({ apiBaseUrl, onSettingsSaved }: SettingsPanelProp
     [apiBaseUrl, onSettingsSaved],
   );
 
-  const saveLlm = useCallback(() => {
-    if (activeId) {
-      updateProfile(activeId, { modelName: llmModel, apiKey: llmApiKey, baseUrl: llmBaseUrl });
-    }
-  }, [activeId, llmModel, llmApiKey, llmBaseUrl]);
+  const handleFieldBlur = useCallback(() => {
+    flushDraft();
+    setSavedFlash(true);
+    window.setTimeout(() => setSavedFlash(false), 1200);
+  }, [flushDraft]);
 
-  const handleSelectProfile = useCallback((id: string) => {
+  const activate = useCallback((id: string) => {
+    flushDraft();
     setActiveProfileId(id);
     setActiveId(id);
-    const p = getProfiles().find((p) => p.id === id);
-    if (p) {
-      setLlmModel(p.modelName);
-      setLlmApiKey(p.apiKey);
-      setLlmBaseUrl(p.baseUrl);
+    if (!id) {
+      setExpandedId(null);
+      setDraft(EMPTY_DRAFT);
     }
-  }, []);
+  }, [flushDraft]);
 
-  const handleAddProfile = useCallback(() => {
-    if (!newName.trim()) return;
-    const p = addProfile(newName.trim(), { modelName: llmModel, apiKey: llmApiKey, baseUrl: llmBaseUrl });
-    setProfiles(getProfiles());
-    setActiveId(p.id);
-    setShowAddForm(false);
-    setNewName("");
-  }, [newName, llmModel, llmApiKey, llmBaseUrl]);
-
-  const handleRemoveProfile = useCallback(() => {
-    if (!activeId) return;
-    removeProfile(activeId);
+  const handleDelete = useCallback((id: string) => {
+    removeProfile(id);
     const updated = getProfiles();
     setProfiles(updated);
-    if (updated.length > 0) {
-      handleSelectProfile(updated[0].id);
-    } else {
+    setDeletingId(null);
+    if (activeId === id) {
+      // Removing the active profile falls back to the server default.
+      setActiveProfileId("");
       setActiveId("");
-      setLlmModel("");
-      setLlmApiKey("");
-      setLlmBaseUrl("");
+      setExpandedId(null);
+      setDraft(EMPTY_DRAFT);
     }
-  }, [activeId, handleSelectProfile]);
+    if (expandedId === id) {
+      setExpandedId(null);
+      setDraft(EMPTY_DRAFT);
+    }
+  }, [activeId, expandedId]);
 
-  const handlePreset = useCallback((template: { modelName: string; baseUrl: string }) => {
-    setLlmModel(template.modelName);
-    setLlmBaseUrl(template.baseUrl);
-    if (!showAddForm && activeId) {
-      updateProfile(activeId, { modelName: template.modelName, baseUrl: template.baseUrl });
-    }
-  }, [activeId, showAddForm]);
+  const handleCreate = useCallback(() => {
+    if (creating?.step !== "name" || !newName.trim()) return;
+    const t = creating.template;
+    const p = addProfile(newName.trim(), {
+      modelName: t.modelName,
+      apiKey: "",
+      baseUrl: t.baseUrl,
+    });
+    setProfiles(getProfiles());
+    setActiveId(p.id);
+    setExpandedId(p.id);
+    setDraft({ name: p.name, modelName: p.modelName, apiKey: "", baseUrl: p.baseUrl });
+    setCreating(null);
+    setNewName("");
+  }, [creating, newName]);
 
   const testLlm = useCallback(async () => {
-    if (!llmApiKey && !llmBaseUrl) {
+    if (!draft.apiKey && !draft.baseUrl) {
       setLlmTestStatus("fail");
       setLlmTestMsg("请先填写 API Key 或 Base URL");
       return;
     }
-    saveLlm();
+    flushDraft();
     setLlmTestStatus("testing");
     setLlmTestMsg("");
     try {
@@ -169,9 +209,9 @@ export function SettingsPanel({ apiBaseUrl, onSettingsSaved }: SettingsPanelProp
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          modelName: llmModel || undefined,
-          apiKey: llmApiKey || undefined,
-          baseUrl: llmBaseUrl || undefined,
+          modelName: draft.modelName || undefined,
+          apiKey: draft.apiKey || undefined,
+          baseUrl: draft.baseUrl || undefined,
         }),
       });
       const data = (await resp.json()) as { ok: boolean; error?: string };
@@ -186,7 +226,12 @@ export function SettingsPanel({ apiBaseUrl, onSettingsSaved }: SettingsPanelProp
       setLlmTestStatus("fail");
       setLlmTestMsg(err instanceof Error ? err.message : "连接失败");
     }
-  }, [llmModel, llmApiKey, llmBaseUrl, saveLlm]);
+  }, [draft, flushDraft]);
+
+  const closeDrawer = useCallback(() => {
+    flushDraft();
+    setOpen(false);
+  }, [flushDraft]);
 
   return (
     <div className="settings-panel" ref={rootRef}>
@@ -198,149 +243,240 @@ export function SettingsPanel({ apiBaseUrl, onSettingsSaved }: SettingsPanelProp
         设置
       </button>
       {open && (
-        <div className="settings-dropdown">
-          <div className="settings-section-title">CAD 后端</div>
-          <label className="settings-row">
-            <span className="settings-label">后端</span>
-            <select
-              value={backend}
-              disabled={loading}
-              onChange={(e) => void save({ cad_backend: e.target.value })}
-            >
-              <option value="fake">Fake（模拟）</option>
-              <option value="openvsp">OpenVSP</option>
-            </select>
-          </label>
-          <label className="settings-row">
-            <span className="settings-label">气动分析</span>
-            <input
-              type="checkbox"
-              checked={vspaero}
-              disabled={loading}
-              onChange={(e) => void save({ run_vspaero_analysis: e.target.checked })}
-            />
-          </label>
-
-          <div className="settings-section-title settings-section-spaced">LLM 配置</div>
-
-          {/* Profile selector */}
-          <div className="settings-row settings-profile-row">
-            <select
-              value={activeId}
-              onChange={(e) => handleSelectProfile(e.target.value)}
-              className="settings-profile-select"
-            >
-              <option value="">（默认）</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="toolbar-button"
-              title="添加配置"
-            >
-              +
-            </button>
-            {activeId && profiles.length > 0 && (
+        <>
+          <div className="settings-drawer-mask" onClick={closeDrawer} />
+          <div className="settings-drawer" role="dialog" aria-label="设置">
+            <div className="settings-drawer-header">
+              <strong>设置</strong>
               <button
                 type="button"
-                onClick={handleRemoveProfile}
-                className="toolbar-button toolbar-button-danger"
-                title="删除当前配置"
+                className="settings-drawer-close"
+                onClick={closeDrawer}
+                aria-label="关闭设置"
               >
-                &times;
-              </button>
-            )}
-          </div>
-
-          {/* Add profile form */}
-          {showAddForm && (
-            <div className="settings-row settings-new-profile-row">
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="配置名称"
-                className="settings-field-input"
-                onKeyDown={(e) => { if (e.key === "Enter") handleAddProfile(); }}
-              />
-              <button
-                type="button"
-                onClick={handleAddProfile}
-                disabled={!newName.trim()}
-                className="toolbar-button"
-              >
-                保存
+                ×
               </button>
             </div>
-          )}
 
-          {/* Quick-fill presets */}
-          <div className="settings-row settings-preset-row">
-            {PRESET_TEMPLATES.map((t) => (
-              <button
-                key={t.name}
-                type="button"
-                onClick={() => handlePreset(t)}
-                className="settings-preset"
+            <div className="settings-drawer-body">
+              {/* ---------- 模型配置 ---------- */}
+              <div className="settings-section-title">模型配置</div>
+
+              {/* Server default card */}
+              <div
+                className={`llm-card${activeId === "" ? " llm-card-active" : ""}`}
+                onClick={() => activate("")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter") activate(""); }}
               >
-                {t.name}
-              </button>
-            ))}
-          </div>
+                <div className="llm-card-main">
+                  <span className="llm-card-name">服务器默认</span>
+                  <span className="llm-card-meta">使用服务器端 .env 配置的模型</span>
+                </div>
+                {activeId === "" && <span className="llm-card-badge">使用中</span>}
+              </div>
 
-          {/* LLM fields */}
-          <label className="settings-row">
-            <span className="settings-label">模型</span>
-            <input
-              type="text"
-              value={llmModel}
-              onChange={(e) => setLlmModel(e.target.value)}
-              onBlur={saveLlm}
-              placeholder="留空使用默认"
-              className="settings-inline-field"
-            />
-          </label>
-          <label className="settings-row">
-            <span className="settings-label">API Key</span>
-            <input
-              type="password"
-              value={llmApiKey}
-              onChange={(e) => setLlmApiKey(e.target.value)}
-              onBlur={saveLlm}
-              placeholder="留空使用默认"
-              className="settings-inline-field"
-            />
-          </label>
-          <label className="settings-row">
-            <span className="settings-label">Base URL</span>
-            <input
-              type="text"
-              value={llmBaseUrl}
-              onChange={(e) => setLlmBaseUrl(e.target.value)}
-              onBlur={saveLlm}
-              placeholder="留空使用默认"
-              className="settings-inline-field"
-            />
-          </label>
-          <div className="settings-row settings-actions-row">
-            {llmTestMsg && (
-              <span className={`llm-test-result ${llmTestStatus === "ok" ? "llm-test-ok" : "llm-test-fail"}`}>
-                {llmTestMsg}
-              </span>
-            )}
-            <button
-              type="button"
-              className="llm-test-btn"
-              disabled={llmTestStatus === "testing"}
-              onClick={() => void testLlm()}
-            >
-              {llmTestStatus === "testing" ? "测试中…" : "测试连接"}
-            </button>
+              {/* Profile cards */}
+              {profiles.map((p) => {
+                const isActive = p.id === activeId;
+                const isExpanded = p.id === expandedId;
+                return (
+                  <div
+                    key={p.id}
+                    className={`llm-card${isActive ? " llm-card-active" : ""}${isExpanded ? " llm-card-expanded" : ""}`}
+                    onClick={() => {
+                      if (isActive && isExpanded) {
+                        // collapse: flush edits first
+                        flushDraft();
+                        setExpandedId(null);
+                      } else {
+                        activate(p.id);
+                        openEditor(p);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") activate(p.id); }}
+                  >
+                    <div className="llm-card-row">
+                      <div className="llm-card-main">
+                        <span className="llm-card-name">{p.name}</span>
+                        <span className="llm-card-meta">
+                          {p.modelName || "（未设置模型）"}
+                          {p.baseUrl ? ` · ${p.baseUrl.replace(/^https?:\/\//, "")}` : ""}
+                        </span>
+                      </div>
+                      {isActive && <span className="llm-card-badge">使用中</span>}
+                    </div>
+
+                    {isExpanded && (
+                      <div className="llm-card-editor" onClick={(e) => e.stopPropagation()}>
+                        <label className="settings-row">
+                          <span className="settings-label">配置名称</span>
+                          <input
+                            type="text"
+                            value={draft.name}
+                            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                            onBlur={handleFieldBlur}
+                            className="settings-inline-field"
+                          />
+                        </label>
+                        <label className="settings-row">
+                          <span className="settings-label">模型</span>
+                          <input
+                            type="text"
+                            value={draft.modelName}
+                            onChange={(e) => setDraft({ ...draft, modelName: e.target.value })}
+                            onBlur={handleFieldBlur}
+                            placeholder="如 deepseek-chat"
+                            className="settings-inline-field"
+                          />
+                        </label>
+                        <label className="settings-row">
+                          <span className="settings-label">API Key</span>
+                          <span className="settings-key-field">
+                            <input
+                              type={showKey ? "text" : "password"}
+                              value={draft.apiKey}
+                              onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
+                              onBlur={handleFieldBlur}
+                              placeholder="sk-…"
+                              className="settings-inline-field"
+                              autoComplete="off"
+                            />
+                            <button
+                              type="button"
+                              className="settings-key-toggle"
+                              onClick={() => setShowKey(!showKey)}
+                              aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
+                              title={showKey ? "隐藏" : "显示"}
+                            >
+                              {showKey ? "隐藏" : "显示"}
+                            </button>
+                          </span>
+                        </label>
+                        <label className="settings-row">
+                          <span className="settings-label">Base URL</span>
+                          <input
+                            type="text"
+                            value={draft.baseUrl}
+                            onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
+                            onBlur={handleFieldBlur}
+                            placeholder="https://api.openai.com/v1"
+                            className="settings-inline-field"
+                          />
+                        </label>
+
+                        <div className="settings-actions-row">
+                          {savedFlash && <span className="llm-saved-flash">已保存</span>}
+                          {llmTestMsg && (
+                            <span className={`llm-test-result ${llmTestStatus === "ok" ? "llm-test-ok" : "llm-test-fail"}`}>
+                              {llmTestMsg}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className="llm-test-btn"
+                            disabled={llmTestStatus === "testing"}
+                            onClick={() => void testLlm()}
+                          >
+                            {llmTestStatus === "testing" ? "测试中…" : "测试连接"}
+                          </button>
+                        </div>
+
+                        {deletingId === p.id ? (
+                          <div className="llm-delete-confirm">
+                            <span>删除配置「{p.name}」？</span>
+                            <button type="button" className="llm-delete-yes" onClick={() => handleDelete(p.id)}>删除</button>
+                            <button type="button" className="llm-delete-no" onClick={() => setDeletingId(null)}>取消</button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="llm-delete-btn"
+                            onClick={() => setDeletingId(p.id)}
+                          >
+                            删除此配置
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* New profile flow */}
+              {creating?.step === "preset" ? (
+                <div className="llm-create-box">
+                  <div className="llm-create-title">选择预设</div>
+                  <div className="llm-preset-grid">
+                    {PRESET_TEMPLATES.map((t) => (
+                      <button
+                        key={t.name}
+                        type="button"
+                        className="llm-preset-btn"
+                        onClick={() => { setCreating({ step: "name", template: t }); setNewName(t.name === "自定义" ? "" : t.name); }}
+                      >
+                        <span className="llm-preset-name">{t.name}</span>
+                        {t.modelName && <span className="llm-preset-model">{t.modelName}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="llm-create-cancel" onClick={() => setCreating(null)}>取消</button>
+                </div>
+              ) : creating?.step === "name" ? (
+                <div className="llm-create-box">
+                  <div className="llm-create-title">配置名称</div>
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+                    placeholder="如 我的 DeepSeek"
+                    className="settings-field-input"
+                    autoFocus
+                  />
+                  <div className="llm-create-actions">
+                    <button type="button" className="llm-test-btn" disabled={!newName.trim()} onClick={handleCreate}>创建</button>
+                    <button type="button" className="llm-create-cancel" onClick={() => setCreating(null)}>取消</button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="llm-card llm-card-new"
+                  onClick={() => setCreating({ step: "preset" })}
+                >
+                  + 新建配置
+                </button>
+              )}
+
+              {/* ---------- CAD 生成 ---------- */}
+              <div className="settings-section-title settings-section-spaced">CAD 生成</div>
+              <label className="settings-row">
+                <span className="settings-label">CAD 后端</span>
+                <select
+                  value={backend}
+                  disabled={loading}
+                  onChange={(e) => void save({ cad_backend: e.target.value })}
+                >
+                  <option value="fake">Fake（模拟）</option>
+                  <option value="openvsp">OpenVSP</option>
+                </select>
+              </label>
+              <label className="settings-row">
+                <span className="settings-label">气动分析（VSPAERO）</span>
+                <input
+                  type="checkbox"
+                  checked={vspaero}
+                  disabled={loading}
+                  onChange={(e) => void save({ run_vspaero_analysis: e.target.checked })}
+                />
+              </label>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -24,35 +24,47 @@ const DEFAULTS: LlmSettings = {
   baseUrl: "",
 };
 
-// --- Legacy single-settings (backward compat) ---
+// --- Change notification (for the chat input's current-model indicator) ---
 
+export const LLM_SETTINGS_CHANGED_EVENT = "aerospec-llm-settings-changed";
+
+function notifyChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(LLM_SETTINGS_CHANGED_EVENT));
+}
+
+// --- Active settings resolution ---
+
+/**
+ * Resolve the settings for the NEXT chat request.
+ *
+ * - No profile selected (or the selected id no longer exists) → empty
+ *   settings = "server default": the request goes through the legacy
+ *   FastAPI path using the backend's OPENAI_* env config.
+ * - A profile is selected → that profile's model/key/baseUrl.
+ *
+ * Note: this used to fall back to profiles[0] when nothing was selected,
+ * which made the "（默认）" option a no-op as soon as any profile existed —
+ * the "cannot switch models" bug.
+ */
 export function getLlmSettings(): LlmSettings {
-  // Try active profile first
+  if (typeof window === "undefined") return { ...DEFAULTS };
   const profiles = getProfiles();
   const activeId = getActiveProfileId();
-  if (profiles.length > 0 && activeId) {
+  if (activeId) {
     const p = profiles.find((p) => p.id === activeId);
     if (p) return { modelName: p.modelName, apiKey: p.apiKey, baseUrl: p.baseUrl };
   }
-  if (profiles.length > 0) {
-    const p = profiles[0];
-    return { modelName: p.modelName, apiKey: p.apiKey, baseUrl: p.baseUrl };
-  }
-  // Fallback to old format
-  if (typeof window === "undefined") return { ...DEFAULTS };
-  try {
-    const raw = localStorage.getItem(OLD_KEY);
-    if (!raw) return { ...DEFAULTS };
-    return { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch {
-    return { ...DEFAULTS };
-  }
+  // Server default: legacy single-settings only mattered pre-profiles; when
+  // profiles exist but none is active, the server default is the honest answer.
+  return { ...DEFAULTS };
 }
 
 export function saveLlmSettings(patch: Partial<LlmSettings>): void {
   const current = getLlmSettings();
   const updated = { ...current, ...patch };
   localStorage.setItem(OLD_KEY, JSON.stringify(updated));
+  notifyChanged();
 }
 
 // --- Multi-profile management ---
@@ -73,6 +85,7 @@ export function getProfiles(): LlmProfile[] {
 
 export function saveProfiles(profiles: LlmProfile[]): void {
   localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+  notifyChanged();
 }
 
 export function getActiveProfileId(): string | null {
@@ -82,6 +95,7 @@ export function getActiveProfileId(): string | null {
 
 export function setActiveProfileId(id: string): void {
   localStorage.setItem(ACTIVE_KEY, id);
+  notifyChanged();
 }
 
 export function addProfile(name: string, settings: LlmSettings): LlmProfile {
@@ -102,7 +116,10 @@ export function removeProfile(id: string): void {
   saveProfiles(profiles);
   const activeId = getActiveProfileId();
   if (activeId === id) {
-    setActiveProfileId(profiles.length > 0 ? profiles[0].id : "");
+    // Removing the active profile falls back to the SERVER DEFAULT — never
+    // silently jump to another profile (that was part of the "switching
+    // models doesn't work" confusion). The user picks the next one.
+    setActiveProfileId("");
   }
 }
 

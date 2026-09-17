@@ -343,8 +343,29 @@ export function ChatPanel({
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<"idle" | "streaming">("idle");
+  const [modelLabel, setModelLabel] = useState("服务器默认");
   const scrollRef = useRef<HTMLDivElement>(null);
   const messageCounterRef = useRef(1);
+
+  // Current-model indicator: reads the active LLM profile and refreshes on
+  // settings changes (the settings panel dispatches the event on every
+  // profile/field mutation, so switching models is immediately visible here).
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => {
+      import("@/lib/llmSettings").then(({ getLlmSettings }) => {
+        if (!alive) return;
+        const s = getLlmSettings();
+        setModelLabel(s.modelName ? s.modelName : "服务器默认");
+      });
+    };
+    refresh();
+    window.addEventListener("aerospec-llm-settings-changed", refresh);
+    return () => {
+      alive = false;
+      window.removeEventListener("aerospec-llm-settings-changed", refresh);
+    };
+  }, []);
   const toolCounterRef = useRef(1);
   const runtime = useWorkflowRuntime();
 
@@ -1139,6 +1160,14 @@ export function ChatPanel({
           </button>
         </div>
       )}
+      <button
+        type="button"
+        className="llm-model-indicator"
+        title="当前模型配置，点击打开设置"
+        onClick={() => window.dispatchEvent(new CustomEvent("aerospec-open-settings"))}
+      >
+        模型：{modelLabel}
+      </button>
       <div className="chat-input-row">
         <textarea
           aria-label="设计需求"

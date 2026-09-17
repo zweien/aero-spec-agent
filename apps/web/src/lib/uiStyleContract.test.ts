@@ -37,8 +37,9 @@ test("workspace settings and metrics use semantic UI classes", () => {
   assert.match(page, /className=\{`topbar-compare/);
   assert.doesNotMatch(page, /background: compareState\.items\.length/);
 
-  assert.match(settings, /settings-profile-row/);
-  assert.match(settings, /settings-preset/);
+  assert.match(settings, /settings-drawer/);
+  assert.match(settings, /llm-card/);
+  assert.match(settings, /llm-preset-btn/);
   assert.doesNotMatch(settings, /style=\{\{/);
 
   assert.match(metrics, /design-metrics-card/);
@@ -50,8 +51,10 @@ test("workspace settings and metrics use semantic UI classes", () => {
   assert.match(activeCompareRule, /background:\s*var\(--accent-bg\);/);
   assert.match(activeCompareRule, /color:\s*var\(--accent-bright\);/);
   assert.match(css, /\.toolbar-button-danger:hover:not\(:disabled\) \{[^}]*color:\s*var\(--error\);/);
-  assert.match(css, /\.settings-row \.settings-profile-select \{[^}]*font-size:\s*11px;/);
-  assert.match(css, /\.settings-preset \{/);
+  assert.match(css, /\.settings-drawer \{/);
+  assert.match(css, /\.llm-card \{/);
+  assert.match(css, /\.llm-preset-btn \{/);
+  assert.match(css, /\.llm-model-indicator \{/);
   assert.match(css, /\.design-metrics-card \{/);
   assert.match(css, /\.risk-level-high \{\s*color:\s*var\(--error\);/);
 });
